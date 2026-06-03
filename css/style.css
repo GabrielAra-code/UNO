@@ -1,0 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Nunito:wght=400;700;900&display=swap');
+
+/* --- DESIGN SYSTEM TOTAL DARK & COLORS --- */
+body {
+    font-family: 'Nunito', sans-serif;
+    overflow-x: hidden;
+    user-select: none;
+    color: #94a3b8; /* Grigio ardesia di base, nessun bianco */
+}
+
+/* Sfondo index e globale totalmente nero */
+.gaming-dark-bg {
+    background-color: #000000;
+}
+
+/* Pannelli scuri digitali senza riflessi chiari */
+.glass-panel {
+    background: #090d16;
+    border: 2px solid #1e293b; /* Bordo scuro slate */
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
+}
+
+/* Bottoni Chunky con contrasto scuro/colorato (Zero Bianco) */
+.btn-chunky {
+    border-radius: 1.25rem;
+    border: 3px solid rgba(0, 0, 0, 0.2);
+    transition: all 0.1s cubic-bezier(0.25, 0.8, 0.25, 1);
+    position: relative;
+    transform: translateY(0);
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+}
+
+.btn-yellow { background-color: #facc15; color: #451a03; box-shadow: 0 8px 0 #ca8a04; }
+.btn-pink { background-color: #ec4899; color: #4c0519; box-shadow: 0 8px 0 #be185d; }
+.btn-cyan { background-color: #22d3ee; color: #083344; box-shadow: 0 8px 0 #0891b2; }
+.btn-emerald { background-color: #10b981; color: #022c22; box-shadow: 0 8px 0 #047857; }
+.btn-red { background-color: #ef4444; color: #450a0a; box-shadow: 0 8px 0 #b91c1c; }
+.btn-slate { background-color: #475569; color: #0f172a; box-shadow: 0 8px 0 #1e293b; }
+
+.btn-chunky:hover {
+    transform: translateY(-2px);
+    filter: brightness(1.1);
+}
+
+.btn-chunky:active {
+    transform: translateY(6px);
+    box-shadow: 0 2px 0 transparent !important;
+}
+
+/* Animazioni */
+.modal-enter { animation: spring-up 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+.modal-exit { animation: fade-down 0.15s ease-in forwards; }
+
+@keyframes spring-up {
+    0% { transform: scale(0.85) translateY(50px); opacity: 0; }
+    100% { transform: scale(1) translateY(0); opacity: 1; }
+}
+@keyframes fade-down {
+    0% { transform: scale(1) translateY(0); opacity: 1; }
+    100% { transform: scale(0.9) translateY(30px); opacity: 0; }
+}
+
+/* Scrollbar scura a tema */
+.custom-scroll::-webkit-scrollbar { width: 8px; }
+.custom-scroll::-webkit-scrollbar-track { background: #000000; }
+.custom-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { background: #334155; }

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO? REVOLUTION - Portal</title>
+    
+    <!-- Tailwind CSS v3 (Ultra-stabile, evita conflitti di sfondo) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background-color: #000000 !important; /* Nero assoluto garantito */
+            user-select: none;
+        }
+
+        /* Il pannello di gioco originale: scuro, compatto e stiloso */
+        .game-card {
+            background-color: #0b0f19;
+            border: 2px solid #1e293b;
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.7);
+        }
+
+        /* I mitici Bottoni Spessi "Chunky" 3D da Party Game */
+        .btn-chunky {
+            border-radius: 1.25rem;
+            border: 3px solid rgba(0, 0, 0, 0.15);
+            transition: all 0.1s ease;
+            position: relative;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-yellow { background-color: #facc15; color: #451a03; box-shadow: 0 6px 0 #ca8a04; }
+        .btn-emerald { background-color: #10b981; color: #022c22; box-shadow: 0 6px 0 #047857; }
+
+        .btn-chunky:hover {
+            filter: brightness(1.1);
+        }
+
+        .btn-chunky:active {
+            transform: translateY(4px);
+            box-shadow: 0 2px 0 transparent !important;
+        }
+    </style>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
+            authDomain: "unoforse-a553d.firebaseapp.com",
+            databaseURL: "https://unoforse-a553d-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "unoforse-a553d",
+            storageBucket: "unoforse-a553d.firebasestorage.app",
+            messagingSenderId: "396941322053",
+            appId: "1:396941322053:web:86b8f596b4e05aac8ec02c",
+            measurementId: "G-9SEK0SY996"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.auth = auth;
+        window.db = db;
+        window.signInWithEmailAndPassword = signInWithEmailAndPassword;
+        window.createUserWithEmailAndPassword = createUserWithEmailAndPassword;
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.collection = collection;
+        window.query = query;
+        window.where = where;
+        window.getDocs = getDocs;
+
+        onAuthStateChanged(auth, (user) => {
+            document.getElementById('loading-overlay').classList.add('hidden');
+            document.getElementById('screen-auth').classList.remove('hidden');
+        });
+    </script>
+</head>
+<body class="w-full h-screen text-slate-300 flex items-center justify-center overflow-hidden">
+
+    <!-- Loading Overlay Nero -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black flex flex-col items-center justify-center z-50">
+        <div class="w-12 h-12 border-4 border-amber-500 border-t-transparent rounded-full animate-spin mb-4"></div>
+        <p class="text-xs font-mono tracking-widest text-slate-500 uppercase">Sincronizzazione account...</p>
+    </div>
+
+    <!-- Box di Autenticazione -->
+    <main id="screen-auth" class="hidden w-full max-w-md p-8 game-card rounded-3xl relative z-10 mx-4">
+        <div class="text-center mb-6">
+            <h1 class="text-5xl font-black text-amber-500 tracking-wider uppercase drop-shadow-[0_4px_0_rgba(0,0,0,1)] -rotate-1">UNO?</h1>
+            <p class="text-[10px] text-slate-500 font-mono tracking-widest uppercase mt-1">Revolution Edition</p>
+        </div>
+
+        <!-- Switcher orizzontale compatto -->
+        <div class="flex bg-black/60 p-1 rounded-2xl mb-6 border border-slate-800">
+            <button id="btn-mode-login" onclick="switchAuthMode('login')" class="flex-1 py-2.5 text-xs font-black rounded-xl uppercase tracking-wider bg-slate-800 text-amber-400 cursor-pointer transition-all">
+                Accedi
+            </button>
+            <button id="btn-mode-signup" onclick="switchAuthMode('signup')" class="flex-1 py-2.5 text-xs font-black rounded-xl uppercase tracking-wider text-slate-500 cursor-pointer transition-all">
+                Registrati
+            </button>
+        </div>
+
+        <form id="auth-form" class="space-y-4" onsubmit="eseguiAutenticazione(event)">
+            <!-- Input Nickname -->
+            <div id="wrapper-nickname" class="hidden">
+                <label class="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Nickname</label>
+                <input type="text" id="auth-nickname" placeholder="Scegli il tuo nome" 
+                    class="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-500 text-white font-bold placeholder-slate-700">
+            </div>
+
+            <!-- Input Email -->
+            <div>
+                <label class="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Indirizzo Email</label>
+                <input type="email" id="auth-email" required placeholder="player@domain.com" 
+                    class="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-500 text-white font-bold placeholder-slate-700">
+            </div>
+            
+            <!-- Input Password -->
+            <div>
+                <label class="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Password</label>
+                <input type="password" id="auth-password" required minlength="6" placeholder="••••••••" 
+                    class="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-500 text-white font-bold placeholder-slate-700">
+            </div>
+
+            <!-- Conferma Password -->
+            <div id="wrapper-confirm-password" class="hidden">
+                <label class="block text-[11px] font-black text-slate-400 uppercase tracking-wider mb-1.5">Conferma Password</label>
+                <input type="password" id="auth-confirm-password" placeholder="Ripeti la password" 
+                    class="w-full bg-black border border-slate-800 rounded-xl px-4 py-3 text-sm focus:outline-none focus:border-amber-500 text-white font-bold placeholder-slate-700">
+            </div>
+
+            <div id="auth-error" class="hidden p-3 bg-red-950/80 border border-red-900 text-red-400 text-xs font-bold rounded-xl text-center"></div>
+
+            <!-- IL BOTTONE CHUNKY RIGENERATO -->
+            <button type="submit" id="auth-submit-btn" class="btn-chunky btn-yellow w-full py-4 text-sm mt-3 cursor-pointer shadow-lg">
+                Entra nel Gioco
+            </button>
+        </form>
+    </main>
+
+    <script>
+        let modalitaCorrente = "login";
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playLocalSound(freq, duration) {
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            osc.frequency.setValueAtTime(freq, audioCtx.currentTime);
+            gain.gain.setValueAtTime(0.1, audioCtx.currentTime);
+            gain.gain.exponentialRampToValueAtTime(0.01, audioCtx.currentTime + duration);
+            osc.start(); osc.stop(audioCtx.currentTime + duration);
+        }
+
+        function switchAuthMode(mode) {
+            modalitaCorrente = mode;
+            playLocalSound(550, 0.08);
+            const nickBox = document.getElementById('wrapper-nickname');
+            const confirmBox = document.getElementById('wrapper-confirm-password');
+            const btnLogin = document.getElementById('btn-mode-login');
+            const btnSignup = document.getElementById('btn-mode-signup');
+            const btnSubmit = document.getElementById('auth-submit-btn');
+            
+            document.getElementById('auth-error').classList.add('hidden');
+
+            if(mode === 'login') {
+                nickBox.classList.add('hidden');
+                confirmBox.classList.add('hidden');
+                document.getElementById('auth-nickname').required = false;
+                document.getElementById('auth-confirm-password').required = false;
+                btnLogin.className = "flex-1 py-2.5 text-xs font-black rounded-xl uppercase tracking-wider bg-slate-800 text-amber-400 cursor-pointer";
+                btnSignup.className = "flex-1 py-2.5 text-xs font-black rounded-xl uppercase tracking-wider text-slate-500 cursor-pointer";
+                btnSubmit.className = "btn-chunky btn-yellow w-full py-4 text-sm mt-3 cursor-pointer";
+                btnSubmit.innerText = "Entra nel Gioco";
+            } else {
+                nickBox.classList.remove('hidden');
+                confirmBox.classList.remove('hidden');
+                document.getElementById('auth-nickname').required = true;
+                document.getElementById('auth-confirm-password').required = true;
+                btnSignup.className = "flex-1 py-2.5 text-xs font-black rounded-xl uppercase tracking-wider bg-slate-800 text-emerald-400 cursor-pointer";
+                btnLogin.className = "flex-1 py-2.5 text-xs font-black rounded-xl uppercase tracking-wider text-slate-500 cursor-pointer";
+                btnSubmit.className = "btn-chunky btn-emerald w-full py-4 text-sm mt-3 cursor-pointer";
+                btnSubmit.innerText = "Crea Account e Gioca";
+            }
+        }
+
+        async function eseguiAutenticazione(e) {
+            e.preventDefault();
+            const email = document.getElementById('auth-email').value.trim();
+            const password = document.getElementById('auth-password').value;
+            const errorBox = document.getElementById('auth-error');
+            errorBox.classList.add('hidden');
+
+            if(modalitaCorrente === 'signup') {
+                const nickname = document.getElementById('auth-nickname').value.trim();
+                const confirmPassword = document.getElementById('auth-confirm-password').value;
+
+                if(nickname.length < 3 || nickname.length > 20) {
+                    errorBox.innerText = "Il nickname deve contenere tra 3 e 20 caratteri.";
+                    errorBox.classList.remove('hidden');
+                    return;
+                }
+                if(password !== confirmPassword) {
+                    errorBox.innerText = "Le password inserite non coincidono.";
+                    errorBox.classList.remove('hidden');
+                    return;
+                }
+
+                try {
+                    const q = window.query(window.collection(window.db, "utenti"), window.where("nickname", "==", nickname));
+                    const querySnapshot = await window.getDocs(q);
+                    if(!querySnapshot.empty) {
+                        errorBox.innerText = "Questo nickname è già occupato!";
+                        errorBox.classList.remove('hidden');
+                        return;
+                    }
+
+                    const res = await window.createUserWithEmailAndPassword(window.auth, email, password);
+                    await window.setDoc(window.doc(window.db, "utenti", res.user.uid), {
+                        uid: res.user.uid,
+                        nickname: nickname,
+                        email: email,
+                        avatar: "🦊",
+                        createdAt: new Date().toISOString()
+                    });
+
+                    window.location.href = "lobby.html";
+                } catch(err) {
+                    errorBox.innerText = "Errore: " + err.message;
+                    errorBox.classList.remove('hidden');
+                }
+            } else {
+                try {
+                    await window.signInWithEmailAndPassword(window.auth, email, password);
+                    window.location.href = "lobby.html";
+                } catch(err) {
+                    errorBox.innerText = "Credenziali errate o utente inesistente.";
+                    errorBox.classList.remove('hidden');
+                }
+            }
+        }
+    </script>
+</body>
+</html>

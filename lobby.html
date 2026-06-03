@@ -1,0 +1,883 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>UNO? REVOLUTION - Hub</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
+
+        body {
+            font-family: 'Nunito', sans-serif;
+            background: radial-gradient(circle at center, #0f1e43 0%, #070f24 100%) !important;
+            user-select: none;
+        }
+
+        .game-panel-dark {
+            background-color: #0b111e;
+            border: 2px solid #1e293b;
+        }
+
+        .btn-chunky {
+            border-radius: 1.5rem;
+            border: 3px solid rgba(0, 0, 0, 0.2);
+            transition: all 0.1s ease;
+            position: relative;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-yellow { background-color: #facc15; color: #451a03; box-shadow: 0 8px 0 #ca8a04; }
+        .btn-pink { background-color: #ec4899; color: #ffffff; box-shadow: 0 8px 0 #be185d; }
+        .btn-cyan { background-color: #22d3ee; color: #083344; box-shadow: 0 8px 0 #0891b2; }
+        .btn-purple { background-color: #a855f7; color: #ffffff; box-shadow: 0 8px 0 #7e22ce; }
+        .btn-red { background-color: #ef4444; color: #ffffff; box-shadow: 0 8px 0 #b91c1c; }
+        .btn-slate { background-color: #475569; color: #ffffff; box-shadow: 0 8px 0 #1e293b; }
+        .btn-emerald { background-color: #10b981; color: #ffffff; box-shadow: 0 8px 0 #047857; }
+
+        .btn-chunky:hover {
+            filter: brightness(1.1);
+            transform: translateY(-2px);
+        }
+
+        .btn-chunky:active {
+            transform: translateY(6px);
+            box-shadow: 0 2px 0 transparent !important;
+        }
+
+        .custom-scroll::-webkit-scrollbar { width: 6px; }
+        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
+        .custom-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
+
+        .modal-content:not(.hidden) {
+            animation: modal-pop 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        .room-action-btn,
+        .stats-tab-btn {
+            transition: transform 0.18s ease, filter 0.18s ease, box-shadow 0.18s ease;
+        }
+
+        .room-action-btn:hover,
+        .stats-tab-btn:hover {
+            transform: translateY(-2px) scale(1.025);
+            filter: brightness(1.12) saturate(1.12);
+        }
+
+        .room-action-btn:active,
+        .stats-tab-btn:active {
+            transform: translateY(3px) scale(0.97);
+            box-shadow: 0 2px 0 transparent !important;
+        }
+
+        .stats-panel-animate {
+            animation: tab-slide-fade 0.24s ease both;
+        }
+
+        @keyframes modal-pop {
+            0% { opacity: 0; transform: translateY(14px) scale(0.94); }
+            100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+
+        @keyframes tab-slide-fade {
+            0% { opacity: 0; transform: translateX(18px); }
+            100% { opacity: 1; transform: translateX(0); }
+        }
+    </style>
+
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        // FIX: Importazione corretta da firebase-firestore.js
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
+            authDomain: "unoforse-a553d.firebaseapp.com",
+            databaseURL: "https://unoforse-a553d-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "unoforse-a553d",
+            storageBucket: "unoforse-a553d.firebasestorage.app",
+            messagingSenderId: "396941322053",
+            appId: "1:396941322053:web:86b8f596b4e05aac8ec02c",
+            measurementId: "G-9SEK0SY996"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+
+        window.auth = auth;
+        window.db = db;
+        window.signOut = signOut;
+        window.doc = doc;
+        window.getDoc = getDoc;
+        window.setDoc = setDoc;
+        window.updateDoc = updateDoc;
+        window.collection = collection;
+        window.query = query;
+        window.orderBy = orderBy;
+        window.limit = limit;
+        window.getDocs = getDocs;
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = "index.html";
+            } else {
+                window.currentUserUid = user.uid;
+                await rinfrescaDatiProfiloUtente();
+            }
+        });
+
+        window.rinfrescaDatiProfiloUtente = async function() {
+            try {
+                const docRef = window.doc(window.db, "utenti", window.currentUserUid);
+                const userDoc = await window.getDoc(docRef);
+                
+                let dati;
+                
+                if(!userDoc.exists()) {
+                    const emailUmanizzata = window.auth.currentUser?.email || "giocatore@domain.com";
+                    const nickGenerato = emailUmanizzata.split('@')[0] || "Player";
+                    
+                    dati = {
+                        uid: window.currentUserUid,
+                        nickname: nickGenerato,
+                        email: emailUmanizzata,
+                        avatar: "🦊",
+                        partiteGiocate: 0,
+                        vittorie: 0,
+                        xp: 0,
+                        livello: 1,
+                        carteSbloccate: ["c_0_9", "c_piu2", "c_rev", "c_bloc", "c_cc", "c_piu4"],
+                        createdAt: new Date().toISOString()
+                    };
+                    await window.setDoc(docRef, dati);
+                } else {
+                    dati = userDoc.data();
+                }
+
+                window.carteSbloccateUtente = dati.carteSbloccate || ["c_0_9", "c_piu2", "c_rev", "c_bloc", "c_cc", "c_piu4"];
+
+                document.getElementById('header-nickname').innerText = dati.nickname.toUpperCase();
+                document.getElementById('settings-nickname-input').value = dati.nickname;
+                
+                const nodiAvatar = document.querySelectorAll('.avatar-render');
+                nodiAvatar.forEach(el => {
+                    if(dati.avatar.startsWith('data:image') || dati.avatar.startsWith('http')) {
+                        el.innerHTML = `<img src="${dati.avatar}" class="w-full h-full object-cover rounded-full">`;
+                    } else {
+                        el.innerHTML = dati.avatar;
+                    }
+                });
+
+                const part = dati.partiteGiocate ?? 0;
+                const vitt = dati.vittorie ?? 0;
+                const winRate = part > 0 ? Math.round((vitt / part) * 100) : 0;
+                const liv = dati.livello ?? 1;
+                const xpAttuali = dati.xp ?? 0;
+                const xpTarget = liv * 100;
+                const percentualeXp = Math.min(100, Math.round((xpAttuali / xpTarget) * 100));
+
+                document.getElementById('stat-partite').innerText = part;
+                document.getElementById('stat-vittorie').innerText = vitt;
+                document.getElementById('stat-winrate').innerText = winRate + "%";
+                document.getElementById('stat-livello').innerText = "LIV. " + liv;
+                document.getElementById('stat-xp-bar').style.width = percentualeXp + "%";
+                document.getElementById('stat-xp-testo').innerText = `${xpAttuali}/${xpTarget} XP`;
+
+            } catch(e) {
+                console.error("Errore sincro dati:", e);
+            }
+        }
+    </script>
+</head>
+<body class="w-full h-screen text-white flex items-center justify-center relative p-6">
+
+    <div class="w-full h-full max-w-5xl flex flex-col justify-between relative z-10">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-4">
+            <div>
+                <h1 class="text-5xl font-black text-amber-500 tracking-tight drop-shadow-[0_3px_0_rgba(0,0,0,1)] -rotate-1">UNO?</h1>
+                <span class="bg-pink-600 px-3 py-0.5 rounded-full text-[10px] font-black uppercase shadow-md inline-block text-white tracking-widest">Revolution</span>
+            </div>
+            <div class="flex items-center gap-4 game-panel-dark px-5 py-2 rounded-2xl shadow-xl">
+                <div class="avatar-render w-10 h-10 bg-slate-950 rounded-full flex items-center justify-center text-xl border-2 border-slate-800 cursor-pointer hover:scale-105 transition-transform shadow-inner" onclick="openModal('modal-options')">🦊</div>
+                <div>
+                    <div id="header-nickname" class="font-black text-sm tracking-wide text-white">CARICAMENTO...</div>
+                    <div class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Online</div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Menu Principale -->
+        <main class="flex-1 flex items-center justify-center">
+            <div class="grid grid-cols-2 gap-4 max-w-xl w-full">
+                <button onclick="openModal('modal-create')" class="btn-chunky btn-yellow p-5 flex flex-col items-center justify-center gap-1.5 cursor-pointer" data-sound="bloop">
+                    <span class="text-3xl">🎮</span>
+                    <span class="text-base font-black">Crea Stanza</span>
+                </button>
+                <button onclick="openModal('modal-public-lobbies')" class="btn-chunky btn-cyan p-5 flex flex-col items-center justify-center gap-1.5 cursor-pointer" data-sound="bloop">
+                    <span class="text-3xl">🔍</span>
+                    <span class="text-base font-black">Unisciti</span>
+                </button>
+                <button onclick="openModal('modal-stats')" class="btn-chunky btn-pink p-5 flex flex-col items-center justify-center gap-1.5 cursor-pointer" data-sound="bloop">
+                    <span class="text-3xl">🏆</span>
+                    <span class="text-base font-black">Statistiche & Index</span>
+                </button>
+                <button onclick="openModal('modal-options')" class="btn-chunky btn-purple p-5 flex flex-col items-center justify-center gap-1.5 cursor-pointer" data-sound="bloop">
+                    <span class="text-3xl">⚙️</span>
+                    <span class="text-base font-black">Opzioni</span>
+                </button>
+                
+                <button onclick="openModal('modal-rules')" class="col-span-2 btn-chunky btn-emerald p-4 flex items-center justify-center gap-3 cursor-pointer" data-sound="bloop">
+                    <span class="text-2xl">📋</span>
+                    <span class="text-lg font-black">Regolamento del Server</span>
+                </button>
+            </div>
+        </main>
+    </div>
+
+    <!-- Modali Overlay -->
+    <div id="modal-overlay" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
+
+        <!-- 1. POPUP OPZIONI -->
+        <div id="modal-options" class="modal-content hidden game-panel-dark w-full max-w-md p-6 rounded-3xl flex flex-col gap-5 relative">
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-2xl font-black text-center text-amber-500 tracking-wide">⚙️ OPZIONI MATCH</h2>
+            
+            <div class="bg-black/50 rounded-2xl p-4 space-y-3 border border-slate-900">
+                <div class="flex justify-between text-xs font-bold text-slate-400 uppercase"><span>Effetti Sonori (SFX)</span> <span id="vol-sfx-val" class="text-amber-400">100%</span></div>
+                <input type="range" id="sfx-slider" min="0" max="100" value="100" class="w-full accent-amber-500 cursor-pointer" oninput="cambiaVolumeSFX(this.value)">
+            </div>
+
+            <div class="bg-black/50 rounded-2xl p-4 flex items-center gap-4 border border-slate-900">
+                <div class="avatar-render w-14 h-14 bg-slate-950 rounded-full flex items-center justify-center text-2xl border-2 border-slate-800 cursor-pointer hover:scale-105 transition-transform" onclick="openModal('modal-avatar')" data-sound="bloop">🦊</div>
+                <div class="flex-1">
+                    <label class="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">Nome Profilo</label>
+                    <div class="flex gap-2">
+                        <input type="text" id="settings-nickname-input" class="w-full bg-slate-900 rounded-xl px-3 py-2 text-white font-black text-sm outline-none border border-slate-800 focus:border-amber-500">
+                        <button onclick="window.salvaNuovoNickname()" class="px-4 py-2 bg-amber-500 text-black font-black text-xs rounded-xl hover:bg-amber-400 active:scale-95 transition-all uppercase">Salva</button>
+                    </div>
+                </div>
+            </div>
+
+            <button class="btn-chunky btn-red w-full py-3.5 text-sm cursor-pointer" onclick="openModal('modal-logout')" data-sound="error">Disconnetti Account</button>
+        </div>
+
+        <!-- 2. POPUP MODIFICA AVATAR -->
+        <div id="modal-avatar" class="modal-content hidden game-panel-dark w-full max-w-md p-6 rounded-3xl flex flex-col gap-4 relative">
+            <button onclick="openModal('modal-options')" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-slate flex items-center justify-center text-sm cursor-pointer" data-sound="pop">➔</button>
+            <h2 class="text-xl font-black text-center text-cyan-400">🎭 SCEGLI AVATAR</h2>
+            
+            <div class="overflow-y-auto custom-scroll max-h-[40vh] space-y-4">
+                <div class="grid grid-cols-4 gap-2 bg-black/40 p-3 rounded-2xl border border-slate-900 text-center text-2xl">
+                    <span class="cursor-pointer p-2 hover:bg-slate-800 rounded-xl" onclick="salvaNuovoAvatar('😀')">😀</span>
+                    <span class="cursor-pointer p-2 hover:bg-slate-800 rounded-xl" onclick="salvaNuovoAvatar('😎')">😎</span>
+                    <span class="cursor-pointer p-2 hover:bg-slate-800 rounded-xl" onclick="salvaNuovoAvatar('🤖')">🤖</span>
+                    <span class="cursor-pointer p-2 hover:bg-slate-800 rounded-xl" onclick="salvaNuovoAvatar('🎮')">🎮</span>
+                    <span class="cursor-pointer p-2 hover:bg-slate-800 rounded-xl" onclick="salvaNuovoAvatar('🔥')">🔥</span>
+                    <span class="cursor-pointer p-2 hover:bg-slate-800 rounded-xl" onclick="salvaNuovoAvatar('🎲')">🎲</span>
+                    <span class="cursor-pointer p-2 hover:bg-slate-800 rounded-xl" onclick="salvaNuovoAvatar('👑')">👑</span>
+                    <span class="cursor-pointer p-2 hover:bg-slate-800 rounded-xl" onclick="salvaNuovoAvatar('🃏')">🃏</span>
+                </div>
+                <div class="bg-black/50 p-3 rounded-2xl border border-slate-900">
+                    <label class="btn-chunky btn-cyan w-full py-2.5 flex items-center justify-center gap-2 cursor-pointer text-center text-xs">
+                        📁 Carica file personalizzato
+                        <input type="file" id="avatar-file-input" accept="image/png, image/jpeg, image/webp" class="hidden" onchange="processaCaricamentoFile(event)">
+                    </label>
+                </div>
+            </div>
+        </div>
+
+        <!-- 3. POPUP LOGOUT -->
+        <div id="modal-logout" class="modal-content hidden game-panel-dark w-full max-w-xs p-6 rounded-3xl text-center flex flex-col gap-4 relative">
+            <h2 class="text-xl font-black text-red-500 uppercase">Sei Sicuro?</h2>
+            <p class="text-xs text-slate-400 font-bold">Verrai disconnesso dal server.</p>
+            <div class="flex gap-3 mt-2">
+                <button onclick="openModal('modal-options')" class="flex-1 btn-chunky btn-slate py-2 text-xs cursor-pointer">No</button>
+                <button onclick="eseguiLogoutDefinitivo()" class="flex-1 btn-chunky btn-red py-2 text-xs cursor-pointer">Sì, Esci</button>
+            </div>
+        </div>
+
+        <!-- 4. POPUP STATISTICHE E INDEX CARTE -->
+        <div id="modal-stats" class="modal-content hidden game-panel-dark w-full max-w-md p-6 rounded-3xl relative">
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            
+            <div class="flex gap-3 mb-4">
+                <button id="btn-tab-mie-stats" onclick="switchStatsTab('mie')" class="stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-pink-600 text-white shadow-[0_4px_0_#be185d] cursor-pointer transition-all active:translate-y-1 active:shadow-none">
+                    👤 GIOCATORE
+                </button>
+                <button id="btn-tab-classifica" onclick="switchStatsTab('global')" class="stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_4px_0_#1e293b] cursor-pointer transition-all active:translate-y-1 active:shadow-none">
+                    📊 INDEX
+                </button>
+            </div>
+
+            <!-- Sotto-Pannello 1: GIOCATORE -->
+            <div id="sub-panel-mie-stats" class="space-y-5">
+                <div class="bg-black/40 border border-slate-900 rounded-2xl p-4 text-center">
+                    <div id="stat-livello" class="text-3xl font-black text-pink-500 tracking-wide drop-shadow-[0_2px_0_rgba(0,0,0,1)]">LIV. 1</div>
+                    <div class="w-full bg-slate-950 rounded-full h-3 mt-3 overflow-hidden border border-slate-800 p-0.5">
+                        <div id="stat-xp-bar" class="bg-gradient-to-r from-pink-500 to-purple-500 h-full rounded-full transition-all duration-500" style="width: 0%;"></div>
+                    </div>
+                    <div id="stat-xp-testo" class="text-[10px] text-slate-500 font-mono tracking-widest uppercase mt-1.5">0/100 XP</div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-3">
+                    <div class="bg-black/40 border border-slate-900 rounded-2xl p-3 text-center">
+                        <div class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Partite</div>
+                        <div id="stat-partite" class="text-2xl font-black text-white mt-1">0</div>
+                    </div>
+                    <div class="bg-black/40 border border-slate-900 rounded-2xl p-3 text-center">
+                        <div class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Vittorie</div>
+                        <div id="stat-vittorie" class="text-2xl font-black text-emerald-400 mt-1">0</div>
+                    </div>
+                    <div class="bg-black/40 border border-slate-900 rounded-2xl p-3 text-center">
+                        <div class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Win Rate</div>
+                        <div id="stat-winrate" class="text-2xl font-black text-cyan-400 mt-1">0%</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Sotto-Pannello 2: INDEX CON SEARCH BAR -->
+            <div id="sub-panel-classifica" class="hidden space-y-3">
+                <div class="relative">
+                    <input type="text" id="search-cards-input" placeholder="🔍 Cerca per nome, effetto o tipo..." 
+                        class="w-full bg-slate-950 rounded-2xl px-4 py-2.5 text-white font-bold text-xs outline-none border-2 border-slate-800 focus:border-cyan-500 transition-all placeholder:text-slate-500"
+                        oninput="window.filtraCarteIndex(this.value)">
+                </div>
+                <div id="leaderboard-list" class="overflow-y-auto custom-scroll max-h-[36vh] space-y-2 pr-1">
+                    <!-- Caricato dinamicamente -->
+                </div>
+            </div>
+        </div>
+
+        <!-- 5. POPUP CREAZIONE STANZA -->
+        <div id="modal-create" class="modal-content hidden game-panel-dark w-full max-w-md p-6 rounded-3xl relative">
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-xl font-black mb-1 text-amber-400">CREA NUOVO TAVOLO</h2>
+            <p class="text-xs text-slate-400 font-bold mb-4">Scegli se aprire il tavolo a tutti o proteggerlo con password.</p>
+
+            <div id="room-type-choice" class="grid sm:grid-cols-2 gap-3">
+                <button onclick="selezionaTipoLobby('pubblica')" class="room-action-btn btn-chunky btn-cyan py-4 px-3 text-xs cursor-pointer flex flex-col items-center gap-1" data-sound="bloop">
+                    <span class="text-2xl">🌍</span>
+                    <span>Avvia Lobby Pubblica</span>
+                </button>
+                <button onclick="selezionaTipoLobby('privata')" class="room-action-btn btn-chunky btn-yellow py-4 px-3 text-xs cursor-pointer flex flex-col items-center gap-1" data-sound="bloop">
+                    <span class="text-2xl">🔒</span>
+                    <span>Avvia Lobby Privata</span>
+                </button>
+            </div>
+
+            <div id="room-config-panel" class="hidden mt-4 bg-black/40 border border-slate-900 rounded-2xl p-4 space-y-3">
+                <div class="flex items-center justify-between gap-3">
+                    <div>
+                        <div id="room-config-title" class="text-sm font-black text-cyan-400 uppercase">Lobby Pubblica</div>
+                        <div id="room-config-subtitle" class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Visibile nella lista pubblica</div>
+                    </div>
+                    <span id="room-lock-badge" class="hidden bg-amber-500/15 border border-amber-500/30 text-amber-300 px-2 py-1 rounded-lg text-[10px] font-black">🔒</span>
+                </div>
+                <input id="room-name-input" type="text" maxlength="28" placeholder="Nome lobby" class="w-full bg-slate-950 rounded-xl px-3 py-2.5 text-white font-black text-xs outline-none border border-slate-800 focus:border-amber-500 placeholder:text-slate-600">
+                <div id="room-password-wrapper" class="hidden">
+                    <input id="room-password-input" type="password" minlength="3" placeholder="Password lobby privata" class="w-full bg-slate-950 rounded-xl px-3 py-2.5 text-white font-black text-xs outline-none border border-slate-800 focus:border-amber-500 placeholder:text-slate-600">
+                </div>
+                <div class="flex gap-3 pt-1">
+                    <button onclick="resetCreateRoomFlow()" class="room-action-btn flex-1 btn-chunky btn-slate py-3 text-xs cursor-pointer" data-sound="pop">Indietro</button>
+                    <button onclick="creaLobbySelezionata()" class="room-action-btn flex-1 btn-chunky btn-emerald py-3 text-xs cursor-pointer" data-sound="bloop">Crea Lobby</button>
+                </div>
+                <div id="room-create-error" class="hidden bg-red-950/70 border border-red-900 text-red-300 rounded-xl p-2 text-[11px] font-bold text-center"></div>
+            </div>
+        </div>
+
+        <!-- 6. POPUP LISTA LOBBY -->
+        <div id="modal-public-lobbies" class="modal-content hidden game-panel-dark w-full max-w-md p-6 rounded-3xl relative">
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-xl font-black mb-1 text-cyan-400">LOBBY DISPONIBILI</h2>
+            <p class="text-xs text-slate-400 font-bold mb-4">Le stanze private sono marcate con 🔒 e richiedono password.</p>
+            <div id="public-lobbies-list" class="space-y-2 max-h-[42vh] overflow-y-auto custom-scroll pr-1"></div>
+        </div>
+
+        <!-- 7. POPUP REGOLAMENTO -->
+        <div id="modal-rules" class="modal-content hidden game-panel-dark w-full max-w-2xl p-6 rounded-3xl relative">
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-2xl font-black text-emerald-400 mb-4 tracking-wide text-center uppercase drop-shadow-[0_2px_0_rgba(0,0,0,1)]">📋 REGOLE DI GIOCO</h2>
+            
+            <div class="overflow-y-auto custom-scroll max-h-[62vh] space-y-4 text-xs font-bold text-slate-300 pr-1">
+                <div class="bg-black/40 border border-emerald-900/60 p-3.5 rounded-2xl space-y-3">
+                    <div class="flex items-center justify-between gap-3">
+                        <h3 class="text-emerald-400 font-black text-sm uppercase">🎴 REGOLE CLASSICHE UNO</h3>
+                        <span class="bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 px-2 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest">Base Match</span>
+                    </div>
+                    <p class="text-slate-400 leading-relaxed font-medium">Ogni partita segue il flusso classico di UNO: abbina la carta, svuota la mano e ricordati di dichiarare UNO prima degli altri.</p>
+                    <div class="grid sm:grid-cols-2 gap-2.5 text-[11px]">
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                            <div class="text-amber-400 font-black uppercase mb-1">Setup</div>
+                            <p class="text-slate-300 leading-relaxed font-medium">Ogni giocatore parte con <span class="text-white font-black">7 carte</span>. Una carta viene girata al centro per aprire il mazzo degli scarti.</p>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                            <div class="text-cyan-400 font-black uppercase mb-1">Come giocare</div>
+                            <p class="text-slate-300 leading-relaxed font-medium">Nel tuo turno puoi giocare una carta con lo stesso <span class="text-cyan-300">colore</span>, lo stesso <span class="text-amber-300">numero</span> o lo stesso simbolo della carta a terra.</p>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                            <div class="text-red-400 font-black uppercase mb-1">Se non puoi</div>
+                            <p class="text-slate-300 leading-relaxed font-medium">Pesca una carta dal mazzo. Se la carta pescata è giocabile, puoi calarla subito; altrimenti il turno passa.</p>
+                        </div>
+                        <div class="bg-slate-950/60 p-2.5 rounded-xl border border-slate-800">
+                            <div class="text-emerald-400 font-black uppercase mb-1">Obiettivo</div>
+                            <p class="text-slate-300 leading-relaxed font-medium">Vince chi resta senza carte. Quando rimani con una sola carta devi dichiarare <span class="text-emerald-300 font-black">UNO</span>.</p>
+                        </div>
+                    </div>
+                    <div class="bg-slate-950/60 text-[11px] p-2.5 rounded-xl border border-slate-800 text-slate-300 grid sm:grid-cols-2 gap-2">
+                        <div><span class="text-yellow-400 font-black">+2:</span> il giocatore successivo pesca 2 carte e salta il turno.</div>
+                        <div><span class="text-blue-400 font-black">Cambio giro:</span> inverte la direzione dei turni.</div>
+                        <div><span class="text-red-400 font-black">Salta turno:</span> blocca il giocatore successivo.</div>
+                        <div><span class="text-purple-400 font-black">Jolly:</span> scegli il nuovo colore. Con <span class="text-purple-300">+4</span> fai pescare 4 carte e salti il turno avversario.</div>
+                    </div>
+                    <div class="bg-amber-500/10 border border-amber-500/20 text-amber-200 rounded-xl p-2.5 text-[11px] leading-relaxed font-medium">
+                        Se un giocatore dimentica di dire UNO e viene scoperto prima del turno successivo, pesca <span class="font-black text-white">2 carte</span> di penalità.
+                    </div>
+                    <div class="bg-slate-950/60 text-[11px] p-2.5 rounded-xl border border-slate-800 text-slate-300 space-y-2">
+                        <div class="text-emerald-300 font-black uppercase tracking-wider">Regole extra del tavolo</div>
+                        <div><span class="text-amber-400 font-black">Scala:</span> se hai carte dello stesso colore o incolori in sequenza, puoi buttarle in scala partendo obbligatoriamente dallo <span class="text-white font-black">0</span> e proseguendo in avanti fino al numero disponibile.</div>
+                        <div><span class="text-cyan-400 font-black">SixSeven:</span> puoi buttare <span class="text-white font-black">6</span> e <span class="text-white font-black">7</span> insieme. Se hai più copie di 6 o di 7, puoi giocare anche quelle nella stessa mossa.</div>
+                        <div><span class="text-pink-400 font-black">UNO?:</span> devi dichiarare <span class="text-white font-black">UNO!</span> anche quando giochi una carta <span class="text-pink-300 font-black">1</span>, sia colorata sia incolore.</div>
+                    </div>
+                </div>
+
+                <div class="bg-black/40 border border-slate-900 p-3.5 rounded-2xl space-y-2">
+                    <h3 class="text-amber-400 font-black text-sm uppercase">⚪ CARTE NUMERICHE INCOLORI</h3>
+                    <p class="text-slate-400 leading-relaxed font-medium">Le carte numeriche da 0 a 9 non possiedono alcun effetto di base, ma rispettano vincoli rigidi di posizionamento.</p>
+                    <div class="bg-slate-950/60 text-[11px] p-2.5 rounded-xl border border-slate-800 text-slate-300 space-y-1">
+                        <div>• Possono essere giocate solo se l'ultima carta a terra ha lo <span class="text-amber-400">stesso identico numero</span>.</div>
+                        <div>• Oppure se l'ultima carta sul terreno è una <span class="text-cyan-400">carta speciale incolore</span>.</div>
+                    </div>
+                </div>
+
+                <div class="bg-black/40 border border-slate-900 p-3.5 rounded-2xl space-y-2">
+                    <h3 class="text-red-400 font-black text-sm uppercase">🔫 SISTEMA PROIETTILE & MECCANICHE HP</h3>
+                    <p class="text-slate-400 leading-relaxed font-medium">L'utilizzo di un proiettile avvia una roulette russa letale sul tavolo.</p>
+                    <div class="bg-slate-950/60 text-[11px] p-2.5 rounded-xl border border-slate-800 text-slate-300 space-y-1.5">
+                        <div><span class="text-red-400">Roulette:</span> Seleziona in modo completamente casuale un bersaglio tra i giocatori della stanza.</div>
+                        <div><span class="text-red-400">PistolHP:</span> Ogni utente inizia la sessione con un valore di <span class="text-white bg-red-600 px-1.5 py-0.5 rounded text-[10px]">2 HP</span>. Ogni colpo ricevuto sottrae 1 HP. Se un Proiettile ti eliminerebbe e hai Scudo, lo Scudo si consuma e resti in gioco.</div>
+                    </div>
+                </div>
+
+                <div class="bg-black/40 border border-slate-900 p-3.5 rounded-2xl space-y-2">
+                    <h3 class="text-purple-400 font-black text-sm uppercase">🧠 BRAINROT BATTLES</h3>
+                    <p class="text-slate-400 leading-relaxed font-medium">Le carte di categoria Brainrot congelano la partita per far iniziare una votazione/sfida di potenza.</p>
+                    <div class="bg-slate-950/60 text-[11px] p-2.5 rounded-xl border border-slate-800 text-slate-300 space-y-1.5">
+                        <div>Durante la fase, ogni giocatore può piazzare sul piatto un proprio Brainrot o passare. Risolve e vince la battaglia la carta con il valore <span class="text-purple-400">PT più alto</span>.</div>
+                        <div class="pt-1 text-[10px] grid grid-cols-2 gap-1 text-slate-400">
+                            <div>🟡 <span class="text-white">Giallo:</span> Scarta 2 carte terreno</div>
+                            <div>💗 <span class="text-white">Rosa:</span> Scarta 3 carte terreno</div>
+                            <div>⚪ <span class="text-white">Bianco:</span> Scarta 4 carte terreno</div>
+                            <div>🔵 <span class="text-white">Blu:</span> Scarta 1 carta terreno</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-black/40 border border-slate-900 p-3.5 rounded-2xl space-y-2">
+                    <h3 class="text-cyan-400 font-black text-sm uppercase">👑 VITTORIE ISTANTANEE SPECIALI</h3>
+                    <div class="bg-slate-950/60 text-[11px] p-2.5 rounded-xl border border-slate-800 text-slate-300 space-y-2">
+                        <div>
+                            <span class="text-cyan-400">Blobby:</span> Tenta una vittoria istantanea contro il bersaglio. Se il bersaglio possiede uno <span class="text-emerald-400">Scudo</span>, lo Scudo viene consumato e il bersaglio sopravvive. 
+                            <p class="text-[10px] text-red-400 mt-0.5">⚠️ Interazione Comunismo: Se un avversario risponde con Comunismo, la vittoria si blocca, appare il messaggio "NOI ABBIAMO VINTO" e la partita prosegue in un duello 1vs1.</p>
+                        </div>
+                        <hr class="border-slate-800">
+                        <div>
+                            <span class="text-red-400">Death Note:</span> elimina il bersaglio scelto e <span class="text-white font-black">ignora completamente Scudo</span>.
+                        </div>
+                        <hr class="border-slate-800">
+                        <div>
+                            <span class="text-amber-400">📐 Piani di Proiezione:</span> Se riesci ad accumulare contemporaneamente in mano tutti e 4 i fogli unici (<span class="text-white">P.V, P.L, P.O, L.T</span>), sbloccherai a schermo il tasto <span class="text-emerald-400">"VINCI"</span> per chiudere la lobby con trionfo incontestabile.
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let sfxVolume = parseFloat(localStorage.getItem('sfxVolume') ?? '1.0');
+        document.getElementById('sfx-slider').value = sfxVolume * 100;
+        document.getElementById('vol-sfx-val').innerText = Math.round(sfxVolume * 100) + '%';
+
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSynth(type) {
+            if (sfxVolume <= 0) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            const volumeEffettivo = 0.2 * sfxVolume;
+
+            if (type === 'pop') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+                gainNode.gain.setValueAtTime(volumeEffettivo, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'bloop') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(550, now + 0.15);
+                gainNode.gain.setValueAtTime(volumeEffettivo, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+            } else if (type === 'click') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(750, now);
+                gainNode.gain.setValueAtTime(volumeEffettivo * 0.3, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+                osc.start(now); osc.stop(now + 0.04);
+            } else if (type === 'error') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(160, now);
+                osc.frequency.exponentialRampToValueAtTime(110, now + 0.25);
+                gainNode.gain.setValueAtTime(volumeEffettivo * 0.5, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now); osc.stop(now + 0.25);
+            }
+        }
+
+        function cambiaVolumeSFX(valore) {
+            sfxVolume = parseInt(valore) / 100;
+            localStorage.setItem('sfxVolume', sfxVolume);
+            document.getElementById('vol-sfx-val').innerText = valore + '%';
+            playSynth('click');
+        }
+
+        function inizializzaAscoltatoriSuoni() {
+            document.querySelectorAll('button, [data-sound]').forEach(elemento => {
+                elemento.addEventListener('mouseenter', () => playSynth('click'));
+                elemento.addEventListener('click', (e) => {
+                    const soundType = e.currentTarget.getAttribute('data-sound') || 'pop';
+                    playSynth(soundType);
+                });
+            });
+        }
+        setTimeout(inizializzaAscoltatoriSuoni, 500);
+
+        const overlay = document.getElementById('modal-overlay');
+        let modalAttiva = null;
+        let tipoLobbySelezionata = null;
+
+        function openModal(id) {
+            playSynth('bloop');
+            if(modalAttiva) {
+                document.getElementById(modalAttiva).classList.add('hidden');
+            }
+            overlay.classList.remove('hidden');
+            const target = document.getElementById(id);
+            target.classList.remove('hidden');
+            modalAttiva = id;
+
+            if(id === 'modal-stats') {
+                switchStatsTab('mie');
+            }
+            if(id === 'modal-create') {
+                resetCreateRoomFlow();
+            }
+            if(id === 'modal-public-lobbies') {
+                renderListaLobby();
+            }
+        }
+
+        function closeModal() {
+            if(!modalAttiva) return;
+            playSynth('pop');
+            document.getElementById(modalAttiva).classList.add('hidden');
+            overlay.classList.add('hidden');
+            modalAttiva = null;
+        }
+
+        window.switchStatsTab = function(tab) {
+            playSynth('click');
+            const btnMie = document.getElementById('btn-tab-mie-stats');
+            const btnGlobal = document.getElementById('btn-tab-classifica');
+            const panelMie = document.getElementById('sub-panel-mie-stats');
+            const panelGlobal = document.getElementById('sub-panel-classifica');
+
+            if(tab === 'mie') {
+                btnMie.className = "stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-pink-600 text-white shadow-[0_4px_0_#be185d,0_0_22px_rgba(236,72,153,0.35)] cursor-pointer transition-all";
+                btnGlobal.className = "stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_4px_0_#1e293b] cursor-pointer transition-all";
+                panelMie.classList.remove('hidden');
+                panelGlobal.classList.add('hidden');
+                panelMie.classList.remove('stats-panel-animate');
+                void panelMie.offsetWidth;
+                panelMie.classList.add('stats-panel-animate');
+            } else {
+                btnGlobal.className = "stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-cyan-600 text-white shadow-[0_4px_0_#0891b2,0_0_22px_rgba(34,211,238,0.35)] cursor-pointer transition-all";
+                btnMie.className = "stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_4px_0_#1e293b] cursor-pointer transition-all";
+                panelMie.classList.add('hidden');
+                panelGlobal.classList.remove('hidden');
+                panelGlobal.classList.remove('stats-panel-animate');
+                void panelGlobal.offsetWidth;
+                panelGlobal.classList.add('stats-panel-animate');
+                
+                document.getElementById('search-cards-input').value = "";
+                caricaDatabaseCarteIndex();
+            }
+        }
+
+        window.selezionaTipoLobby = function(tipo) {
+            tipoLobbySelezionata = tipo;
+            const isPrivata = tipo === 'privata';
+            document.getElementById('room-type-choice').classList.add('hidden');
+            document.getElementById('room-config-panel').classList.remove('hidden');
+            document.getElementById('room-config-panel').classList.remove('stats-panel-animate');
+            void document.getElementById('room-config-panel').offsetWidth;
+            document.getElementById('room-config-panel').classList.add('stats-panel-animate');
+            document.getElementById('room-config-title').innerText = isPrivata ? 'Lobby Privata' : 'Lobby Pubblica';
+            document.getElementById('room-config-title').className = isPrivata ? 'text-sm font-black text-amber-400 uppercase' : 'text-sm font-black text-cyan-400 uppercase';
+            document.getElementById('room-config-subtitle').innerText = isPrivata ? 'Protetta da password e marcata con lucchetto' : 'Visibile e accessibile nella lista pubblica';
+            document.getElementById('room-lock-badge').classList.toggle('hidden', !isPrivata);
+            document.getElementById('room-password-wrapper').classList.toggle('hidden', !isPrivata);
+            document.getElementById('room-create-error').classList.add('hidden');
+            document.getElementById('room-name-input').focus();
+        }
+
+        window.resetCreateRoomFlow = function() {
+            tipoLobbySelezionata = null;
+            document.getElementById('room-type-choice').classList.remove('hidden');
+            document.getElementById('room-config-panel').classList.add('hidden');
+            document.getElementById('room-name-input').value = '';
+            document.getElementById('room-password-input').value = '';
+            document.getElementById('room-create-error').classList.add('hidden');
+        }
+
+        function escapeHtml(value) {
+            return String(value)
+                .replaceAll('&', '&amp;')
+                .replaceAll('<', '&lt;')
+                .replaceAll('>', '&gt;')
+                .replaceAll('"', '&quot;')
+                .replaceAll("'", '&#039;');
+        }
+
+        function leggiLobbySalvate() {
+            try {
+                return JSON.parse(localStorage.getItem('unoLobbyList') || '[]');
+            } catch(e) {
+                return [];
+            }
+        }
+
+        function salvaLobby(lobbies) {
+            localStorage.setItem('unoLobbyList', JSON.stringify(lobbies));
+        }
+
+        window.creaLobbySelezionata = function() {
+            const errore = document.getElementById('room-create-error');
+            const nome = document.getElementById('room-name-input').value.trim() || `${document.getElementById('header-nickname').innerText || 'PLAYER'} ROOM`;
+            const password = document.getElementById('room-password-input').value.trim();
+            const isPrivata = tipoLobbySelezionata === 'privata';
+
+            errore.classList.add('hidden');
+            if(!tipoLobbySelezionata) return;
+            if(isPrivata && password.length < 3) {
+                errore.innerText = 'Inserisci una password di almeno 3 caratteri per la lobby privata.';
+                errore.classList.remove('hidden');
+                playSynth('error');
+                return;
+            }
+
+            const lobbies = leggiLobbySalvate();
+            const nuovaLobby = {
+                id: Math.random().toString(36).slice(2, 8).toUpperCase(),
+                nome,
+                tipo: tipoLobbySelezionata,
+                locked: isPrivata,
+                password: isPrivata ? password : '',
+                owner: document.getElementById('header-nickname').innerText || 'PLAYER',
+                createdAt: Date.now()
+            };
+
+            lobbies.unshift(nuovaLobby);
+            salvaLobby(lobbies.slice(0, 12));
+            playSynth('bloop');
+            closeModal();
+            openModal('modal-public-lobbies');
+        }
+
+        window.entraInLobby = function(id) {
+            const lobby = leggiLobbySalvate().find(item => item.id === id);
+            if(!lobby) return;
+            if(lobby.locked) {
+                const password = prompt('Password lobby privata');
+                if(password !== lobby.password) {
+                    playSynth('error');
+                    alert('Password errata.');
+                    return;
+                }
+            }
+            playSynth('bloop');
+            alert(`Lobby d'attesa: ${lobby.nome}`);
+        }
+
+        function renderListaLobby() {
+            const container = document.getElementById('public-lobbies-list');
+            const lobbies = leggiLobbySalvate();
+            if(!lobbies.length) {
+                container.innerHTML = `
+                    <div class="bg-black/40 border border-slate-900 rounded-2xl p-4 text-center">
+                        <div class="text-2xl mb-1">🎮</div>
+                        <div class="text-sm font-black text-slate-300 uppercase">Nessuna lobby attiva</div>
+                        <div class="text-[10px] text-slate-500 font-bold mt-1">Crea una stanza per farla comparire qui.</div>
+                    </div>`;
+                return;
+            }
+
+            container.innerHTML = lobbies.map(lobby => {
+                const nomeLobby = escapeHtml(lobby.nome);
+                const ownerLobby = escapeHtml(lobby.owner);
+                const idLobby = escapeHtml(lobby.id);
+                return `
+                <button onclick="entraInLobby('${lobby.id}')" class="room-action-btn w-full bg-black/40 border ${lobby.locked ? 'border-amber-500/40' : 'border-cyan-500/30'} rounded-2xl p-3 text-left cursor-pointer shadow-inner" data-sound="bloop">
+                    <div class="flex items-center justify-between gap-3">
+                        <div>
+                            <div class="text-sm font-black text-white uppercase">${lobby.locked ? '🔒 ' : '🌍 '}${nomeLobby}</div>
+                            <div class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Host: ${ownerLobby} • ID ${idLobby}</div>
+                        </div>
+                        <span class="${lobby.locked ? 'text-amber-300 bg-amber-500/15 border-amber-500/30' : 'text-cyan-300 bg-cyan-500/15 border-cyan-500/30'} border px-2 py-1 rounded-lg text-[9px] font-black uppercase">${lobby.locked ? 'Privata' : 'Pubblica'}</span>
+                    </div>
+                </button>
+            `}).join('');
+        }
+
+        const databaseCarte = [
+            { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: "2 per numero", effetto: "Nessuno. Giocabili solo se l'ultimo numero coincide o su carte speciali incolori.", cat: "⚪ Incolore" },
+            { id: "c_piu2", nome: "Classico: +2", quantita: "2 per colore", effetto: "Il bersaglio pesca 2 carte e salta il turno corrente.", cat: "🟥🟨🟩🟦 Classico" },
+            { id: "c_rev", nome: "Classico: Reverse", quantita: "2 per colore", effetto: "Inverte istantaneamente la direzione dei turni di gioco.", cat: "🟥🟨🟩🟦 Classico" },
+            { id: "c_bloc", nome: "Classico: Blocco", quantita: "2 per colore", effetto: "Salto del turno immediato per il giocatore successivo.", cat: "🟥🟨🟩🟦 Classico" },
+            { id: "c_cc", nome: "Nero: Cambio Colore", quantita: "4", effetto: "Scegli il colore dominante del tavolo di gioco.", cat: "⚫ Nero" },
+            { id: "c_piu4", nome: "Nero: +4", quantita: "4", effetto: "Il bersaglio pesca 4 carte e perde il proprio turno.", cat: "⚫ Nero" },
+            { id: "c_jack", nome: "Jack Sparrow", quantita: "1", effetto: "Copia sul momento l'effetto di un +2, +4, Cambio Colore o Reverse.", cat: "⭐ Speciale UNO?" },
+            { id: "c_piu10", nome: "Speciale: +10", quantita: "Da definire", effetto: "Il malcapitato subisce la pesca di 10 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
+            { id: "c_piu16", nome: "Speciale: +16", quantita: "Da definire", effetto: "Il malcapitato subisce la pesca di 16 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
+            { id: "c_scudo", nome: "Scudo", quantita: "4", effetto: "Protegge solo da Blobby e Proiettile. Si consuma quando salva il giocatore.", cat: "⭐ Speciale UNO?" },
+            { id: "c_death", nome: "Death Note", quantita: "1", MD: true, effetto: "Eliminazione immediata di un giocatore a scelta.", cat: "⭐ Speciale UNO?" },
+            { id: "c_blobby", nome: "Blobby", quantita: "1", effetto: "Vittoria istantanea. Se il bersaglio ha Scudo, lo Scudo si consuma e il bersaglio sopravvive.", cat: "⭐ Speciale UNO?" },
+            { id: "c_righello", nome: "Righello o X?", quantita: "4", effetto: "Giocabile fuori dal turno. Annulla interamente l'ultima mossa.", cat: "⭐ Speciale UNO?" },
+            { id: "c_donna", nome: "Donna di Mazze", quantita: "1", effetto: "Resetta e annulla tutte le catene ed effetti attivi globali sul tavolo.", cat: "⭐ Speciale UNO?" },
+            { id: "c_imprevisti", nome: "Imprevisti", quantita: "1", effetto: "Appena entra in mano si gioca da sola. Tutti pescano una carta.", cat: "⚪ Speciale Incolore" },
+            { id: "c_scambio", nome: "Scambio", quantita: "2", effetto: "Scambia l'intera mano di carte con un giocatore bersaglio.", cat: "⭐ Speciale UNO?" },
+            { id: "c_vaff", nome: "Vaffanculo", quantita: "2", effetto: "Annulla l'effetto e la streak attiva. Le carte tornano in mano.", cat: "🌍 Evento (Giallo)" },
+            { id: "c_mari", nome: "Mariguana", quantita: "1", effetto: "Obbliga tutti a giocare Verde o pescare finché non lo si trova.", cat: "🌍 Evento (Verde)" },
+            { id: "c_onde", nome: "Le ONDE", quantita: "2", effetto: "Tutti tranne chi la usa si scambiano le mani in modo casuale.", cat: "🌍 Evento (Blu)" },
+            { id: "c_cuore", nome: "Cuore", quantita: "2", effetto: "Effettua la resurrezione immediata di un player precedentemente eliminato.", cat: "🌍 Evento (Verde)" },
+            { id: "c_comunismo", nome: "Comunismo", quantita: "1", effetto: "Ruba e guarda le carte. Se intercetta Blobby attiva lo scontro 1vs1.", cat: "🌍 Evento (Rosso)" },
+            { id: "c_nazismo", nome: "Nazismo", quantita: "1", effetto: "Seleziona una carta dalla tua mano e cedila forzatamente a un altro.", cat: "🌍 Evento (Rosso)" },
+            { id: "c_proiettile", nome: "Proiettile", quantita: "6", effetto: "Parte una roulette russa: chi viene colpito perde 1 PistolHP (Max 2).", cat: "🔫 Sistema Proiettile" },
+            { id: "c_quagruppo", nome: "QUA GRUPPO!", quantita: "1", effetto: "La metà esatta dei giocatori pesca una carta (arrotondato per eccesso).", cat: "🎯 Cutruzzolà Move" },
+            { id: "c_messa", nome: "La Messa è Finita", quantita: "1", effetto: "Prende tutti i rifiuti e gli scarti accumulati e li rimescola nel deck.", cat: "🎯 Cutruzzolà Move" },
+            { id: "c_piani", nome: "Piani di Proiezione (P.V/P.L/P.O/L.T)", quantita: "1 per tipo", effetto: "Chi unisce tutti e 4 i pezzi sblocca la vittoria suprema.", cat: "📐 Piani di Proiezione" },
+            { id: "c_brainrot", nome: "Brainrot Battle", quantita: "Da definire", effetto: "Inizia una sfida Brainrot globale. Il punteggio PT più alto vince.", cat: "🧠 Brainrot" },
+            { id: "c_specchio", nome: "Specchio", quantita: "Da definire", effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente.", cat: "❓ Non Definita" }
+        ];
+
+        function caricaDatabaseCarteIndex(testoFiltro = "") {
+            const container = document.getElementById('leaderboard-list');
+            container.innerHTML = "";
+            const sbloccate = window.carteSbloccateUtente || [];
+            const queryNorm = testoFiltro.toLowerCase().trim();
+
+            databaseCarte.forEach(carta => {
+                const corrispondeFiltro = carta.nome.toLowerCase().includes(queryNorm) || 
+                                          carta.effetto.toLowerCase().includes(queryNorm) || 
+                                          carta.cat.toLowerCase().includes(queryNorm);
+                
+                if (testoFiltro && !corrispondeFiltro) return;
+
+                const isTrovata = sbloccate.includes(carta.id);
+
+                if (isTrovata) {
+                    const cardTemplate = `
+                        <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 flex flex-col gap-1 transition-all hover:border-cyan-500/40 shadow-inner">
+                            <div class="flex justify-between items-center">
+                                <span class="text-xs font-black tracking-wide text-amber-400 uppercase">${carta.nome}</span>
+                                <span class="text-[9px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded-md font-mono font-bold">QTÀ: ${carta.quantita}</span>
+                            </div>
+                            <div class="text-[10px] text-slate-400 font-bold tracking-tight mt-0.5 leading-relaxed">${carta.effetto}</div>
+                            <div class="text-[9px] text-cyan-400/80 font-black uppercase tracking-wider mt-1">${carta.cat}</div>
+                        </div>
+                    `;
+                    container.innerHTML += cardTemplate;
+                } else {
+                    const cardOscuredTemplate = `
+                        <div class="bg-black/60 border border-dashed border-slate-800/80 rounded-2xl p-4 flex items-center justify-between opacity-50 relative overflow-hidden select-none">
+                            <div class="flex items-center gap-4">
+                                <span class="text-2xl font-black text-pink-500 drop-shadow-[0_2px_0_rgba(0,0,0,1)] animate-pulse">❓</span>
+                                <div class="flex flex-col">
+                                    <span class="text-xs font-black text-slate-600 uppercase tracking-widest">Contenuto Bloccato</span>
+                                    <span class="text-[9px] text-slate-700 font-bold uppercase tracking-tight">Trova questa carta in partita per registrarla</span>
+                                </div>
+                            </div>
+                            <span class="text-2xl font-black text-slate-800/40 select-none">?</span>
+                        </div>
+                    `;
+                    container.innerHTML += cardOscuredTemplate;
+                }
+            });
+        }
+
+        window.filtraCarteIndex = function(valore) {
+            caricaDatabaseCarteIndex(valore);
+        }
+
+        window.salvaNuovoNickname = async function() {
+            const nuovoNick = document.getElementById('settings-nickname-input').value.trim();
+            if(nuovoNick.length < 3 || nuovoNick.length > 20) {
+                alert("Il nome deve avere tra 3 e 20 caratteri!");
+                return;
+            }
+            try {
+                await window.updateDoc(window.doc(window.db, "utenti", window.currentUserUid), {
+                    nickname: nuovoNick
+                });
+                playSynth('bloop');
+                await window.rinfrescaDatiProfiloUtente();
+                alert("Nome aggiornato con successo!");
+            } catch(e) {
+                alert("Impossibile salvare il nome: " + e.message);
+            }
+        }
+
+        async function salvaNuovoAvatar(valoreStringa) {
+            if(!window.currentUserUid) return;
+            try {
+                await window.updateDoc(window.doc(window.db, "utenti", window.currentUserUid), {
+                    avatar: valoreStringa
+                });
+                await window.rinfrescaDatiProfiloUtente();
+                openModal('modal-options');
+            } catch(e) {
+                alert("Errore aggiornamento avatar: " + e.message);
+            }
+        }
+
+        function processaCaricamentoFile(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+            const lettore = new FileReader();
+            lettore.onload = async function(e) {
+                await salvaNuovoAvatar(e.target.result);
+            };
+            lettore.readAsDataURL(file);
+        }
+
+        async function eseguiLogoutDefinitivo() {
+            try {
+                localStorage.removeItem('sfxVolume');
+                await window.signOut(window.auth);
+                window.location.href = "index.html";
+            } catch(e) {
+                alert("Errore disconnessione: " + e.message);
+            }
+        }
+    </script>
+</body>
+</html>
