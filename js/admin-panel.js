@@ -64,12 +64,16 @@ function getAdminProfile() {
 }
 
 function lobbyAperta(lobby) {
-    if (window.LobbyList?.isLobbyJoinable) {
-        return window.LobbyList.isLobbyJoinable(lobby);
-    }
+    if (!lobby?.id) return false;
     const status = String(lobby?.status || 'waiting').toLowerCase();
-    const n = Array.isArray(lobby?.players) ? lobby.players.filter(p => p && (p.nickname || p.uid)).length : 0;
-    return n > 0 && !['closed', 'closed_by_admin', 'deleted', 'destroyed', 'eliminated', 'playing', 'started', 'finished'].includes(status);
+    const closed = ['closed', 'closed_by_admin', 'deleted', 'destroyed', 'eliminated', 'finished'];
+    if (closed.includes(status)) return false;
+    const n = Array.isArray(lobby?.players)
+        ? lobby.players.filter(p => p && (p.nickname || p.uid)).length
+        : 0;
+    if (n === 0) return false;
+    const joinable = ['waiting', 'open', 'playing', 'started', 'in_game'];
+    return joinable.includes(status) || status === '';
 }
 
 function filtraLobby(list, query) {
@@ -113,21 +117,18 @@ function renderAdminLobbies() {
     container.innerHTML = lobbies.map(lobby => {
         const players = Array.isArray(lobby.players) ? lobby.players.length : 0;
         const max = parseInt(lobby.maxPlayers, 10) || 6;
-        const privata = lobby.locked ? 'Privata' : 'Pubblica';
+        const privata = lobby.locked ? 'Privata 🔒' : 'Pubblica';
         const stato = String(lobby.status || 'waiting');
+        const lid = String(lobby.id || '');
         return `
-            <button type="button" data-admin-open-lobby="${escapeHtml(lobby.id)}"
-                class="w-full text-left bg-black/40 border border-red-900/40 rounded-2xl p-3 hover:border-red-500/50 transition-colors cursor-pointer">
+            <button type="button" data-admin-open-lobby="${escapeHtml(lid)}"
+                class="admin-lobby-row w-full text-left bg-black/40 border border-red-900/40 rounded-2xl p-3 hover:border-red-500 hover:bg-red-950/30 transition-colors cursor-pointer touch-manipulation">
                 <div class="text-sm font-black text-white uppercase">${escapeHtml(lobby.nome || 'Lobby')}</div>
                 <div class="text-[10px] text-slate-500 font-bold uppercase mt-1">
-                    Codice: ${escapeHtml(lobby.id)} • ${players}/${max} • ${privata} • ${escapeHtml(stato)}
+                    Codice: ${escapeHtml(lid)} • ${players}/${max} • ${privata} • ${escapeHtml(stato)}
                 </div>
             </button>`;
     }).join('');
-
-    container.querySelectorAll('[data-admin-open-lobby]').forEach(btn => {
-        btn.addEventListener('click', () => openAdminLobbyDetail(btn.getAttribute('data-admin-open-lobby')));
-    });
 }
 
 function renderAdminUsers() {
@@ -220,20 +221,30 @@ function switchAdminTab(tab) {
 }
 
 function openAdminLobbyDetail(lobbyId) {
+    if (!lobbyId) return;
     selectedLobbyId = lobbyId;
     const lobby = cacheLobbies.find(item => item.id === lobbyId);
-    const box = document.getElementById('admin-lobby-detail');
-    if (!box || !lobby) return;
+    if (!lobby) {
+        alert('Lobby non trovata.');
+        return;
+    }
 
-    document.getElementById('admin-lobby-detail-title').innerText = lobby.nome || 'Lobby';
-    document.getElementById('admin-lobby-detail-body').innerHTML = `
+    const title = document.getElementById('admin-lobby-detail-title');
+    const body = document.getElementById('admin-lobby-detail-body');
+    const joinBtn = document.getElementById('admin-btn-join-lobby');
+    const delBtn = document.getElementById('admin-btn-delete-lobby');
+    if (!title || !body) return;
+
+    if (title) title.innerText = lobby.nome || 'Lobby';
+    body.innerHTML = `
         <div class="space-y-2 text-sm">
             <div><span class="text-slate-500 font-bold">Codice:</span> <span class="text-amber-300 font-black">${escapeHtml(lobby.id)}</span></div>
             <div><span class="text-slate-500 font-bold">Giocatori:</span> ${(lobby.players || []).length}/${lobby.maxPlayers || 6}</div>
-            <div><span class="text-slate-500 font-bold">Tipo:</span> ${lobby.locked ? 'Privata' : 'Pubblica'}</div>
+            <div><span class="text-slate-500 font-bold">Tipo:</span> ${lobby.locked ? 'Privata (password ignorata per admin)' : 'Pubblica'}</div>
             <div><span class="text-slate-500 font-bold">Stato:</span> ${escapeHtml(lobby.status || 'waiting')}</div>
         </div>`;
-    box.classList.remove('hidden');
+    if (joinBtn) joinBtn.textContent = 'Entra';
+    if (delBtn) delBtn.textContent = 'Elimina';
     ctx.openModal('modal-admin-lobby-detail');
 }
 
@@ -606,6 +617,14 @@ function initAdminPanel(context) {
     document.getElementById('admin-ban-search')?.addEventListener('input', renderAdminBanList);
     document.getElementById('admin-ban-pick-search')?.addEventListener('input', renderBanPickList);
     document.getElementById('admin-security-search')?.addEventListener('input', renderAdminSecurityEvents);
+
+    document.getElementById('admin-lobbies-list')?.addEventListener('click', (e) => {
+        const row = e.target.closest('[data-admin-open-lobby]');
+        if (!row) return;
+        e.preventDefault();
+        e.stopPropagation();
+        openAdminLobbyDetail(row.getAttribute('data-admin-open-lobby'));
+    });
 
     document.getElementById('admin-btn-delete-lobby')?.addEventListener('click', adminDeleteLobby);
     document.getElementById('admin-btn-join-lobby')?.addEventListener('click', adminJoinLobby);

@@ -18,7 +18,8 @@
     }
 
     function isPendingTimedWindow(pending) {
-        return pending && ['counterWindow', 'brainrotBattle', 'drawStackWindow'].includes(pending.type);
+        return pending && ['counterWindow', 'brainrotBattle', 'drawStackWindow', 'brainrotDiscard'].includes(pending.type)
+            && typeof pending.resolvesAt === 'number';
     }
 
     function brainrotEntryFromCard(playerId, card) {
@@ -168,6 +169,10 @@
         return state.pendingAction?.type === 'counterWindow';
     }
 
+    function isRighelloCard(card) {
+        return !!card && (card.value === 'cancel' || card.defId === 'c_righello');
+    }
+
     function canPlayCounter(state, playerId, card) {
         const pending = state.pendingAction;
         if (!pending || pending.type !== 'counterWindow') return false;
@@ -175,7 +180,7 @@
         if (pending.responses?.[playerId]) return false;
         const rules = COUNTER_RULES[pending.cardValue];
         if (!rules) return false;
-        if (card.value === 'cancel' || card.defId === 'c_righello') return true;
+        if (isRighelloCard(card)) return true;
         if (card.value === 'shield' && rules.allowed.includes('shield')) return true;
         return rules.allowed.includes(card.value);
     }
@@ -446,6 +451,8 @@
             pending.sourcePlayerId = oldDef;
             pending.responses[playerId] = { action: 'mirror', cardValue: 'mirror' };
             addLog(s, `${s.players[playerId]?.nickname} usa Specchio: stack rimandato!`);
+            pending.startedAt = Date.now();
+            pending.resolvesAt = Date.now() + COUNTER_WINDOW_MS;
         } else if (card.value === 'draw2') {
             pending.drawStack += 2;
             pending.defenderId = nextPlayerId(s, pending.defenderId);
@@ -463,6 +470,9 @@
             pending.responses[playerId] = { action: 'stack', addAmount: 4, cardValue: 'wild4' };
             addLog(s, `Stack +4 (totale ${pending.drawStack}).`);
         }
+
+        pending.startedAt = Date.now();
+        pending.resolvesAt = Date.now() + COUNTER_WINDOW_MS;
 
         syncHandCounts(s);
         return { ok: true, state: s };
@@ -521,14 +531,15 @@
         }
     }
 
-    function resolveCounterWindow(state, playerId) {
+    function resolveCounterWindow(state, playerId, options = {}) {
         const s = clone(state);
         const pending = s.pendingAction;
         if (!pending || pending.type !== 'counterWindow') {
             return { ok: false, error: 'Nessuna finestra di contrasto attiva.' };
         }
         const expired = Date.now() >= pending.resolvesAt;
-        if (!expired && playerId !== pending.sourcePlayerId) {
+        const force = options.force === true;
+        if (!force && !expired && playerId !== pending.sourcePlayerId) {
             return { ok: false, error: 'Attendi la fine del countdown.' };
         }
 
@@ -583,6 +594,14 @@
         };
         syncHandCounts(s);
         addLog(s, `${s.players[playerId]?.nickname} gioca contrasto: ${Deck.cardDisplayName(card)}`);
+
+        const rules = COUNTER_RULES[pending.cardValue];
+        const instantCancel = isRighelloCard(card)
+            || (card.value === 'shield' && rules?.allowed?.includes('shield'));
+        if (instantCancel) {
+            return resolveCounterWindow(s, playerId, { force: true });
+        }
+
         return { ok: true, state: s };
     }
 
@@ -721,6 +740,9 @@
         if (state.status !== 'playing') return false;
         const pending = state.pendingAction;
         const pid = playerId || currentPlayerId(state);
+        if (pending?.type === 'counterWindow') {
+            return canPlayCounter(state, pid, card);
+        }
         if (pending?.type === 'brainrotBattle') {
             return isBrainrotCard(card) && canPlayBrainrotResponse(state, pid);
         }
@@ -743,6 +765,9 @@
 
     /** Carta giocabile nel turno corrente (una sola azione di gioco per turno). */
     function canPlayCardThisTurn(state, playerId, card) {
+        if (state.pendingAction?.type === 'counterWindow') {
+            return canPlayCounter(state, playerId, card);
+        }
         if (state.pendingAction?.type === 'mariGreen') {
             return canPlayMariGreen(state, playerId, card);
         }
@@ -976,11 +1001,14 @@
         return comboValueKey(card) || `card:${card.color}:${card.value}:${card.defId || card.label}`;
     }
 
-    /** Identità per copie giocabili insieme (colore+valore numeri; defId+varianti speciali). */
+    /** Identità per copie giocabili insieme (numeri: stesso valore; azioni: colore+tipo; speciali: variante). */
     function cardDuplicateKey(card) {
         if (!card) return '';
         if (card.kind === 'number') {
-            return `num:${card.color}:${card.value}`;
+            return `numVal:${card.value}`;
+        }
+        if (card.kind === 'action') {
+            return `act:${card.color}:${card.value}`;
         }
         const variant = card.righelloLabel || card.planPart || '';
         return `spec:${card.defId || ''}:${card.value}:${variant}`;
@@ -1002,12 +1030,17 @@
         const hand = state.hands[playerId] || [];
         const card = hand.find(c => c.instanceId === instanceId);
         if (!card || !allowsMultiDuplicatePlay(card)) return card ? [card] : [];
+        if (currentPlayerId(state) !== playerId) return [card];
+        syncTurnFlags(state);
+        if (state.turnFlags.played) return [card];
+
         const key = cardDuplicateKey(card);
-        return hand.filter(c =>
+        const batch = hand.filter(c =>
             cardDuplicateKey(c) === key
             && allowsMultiDuplicatePlay(c)
-            && canPlayCardThisTurn(state, playerId, c)
+            && canPlayCard(state, c, playerId)
         );
+        return batch.length ? batch : [card];
     }
 
     function numberRank(card) {
@@ -1062,11 +1095,14 @@
 
     function canPlayDuplicateBatch(state, playerId, cards) {
         if (!cards?.length) return false;
+        if (currentPlayerId(state) !== playerId) return false;
+        syncTurnFlags(state);
+        if (state.turnFlags.played) return false;
         const key = cardDuplicateKey(cards[0]);
         return cards.every(c =>
             cardDuplicateKey(c) === key
             && allowsMultiDuplicatePlay(c)
-            && canPlayCardThisTurn(state, playerId, c)
+            && canPlayCard(state, c, playerId)
         );
     }
 
@@ -1372,7 +1408,7 @@
         if (s.status === 'finished') {
             return { ok: true, state: s, outcome: 'win' };
         }
-        if (['brainrotBattle', 'drawStackWindow', 'brainrotDiscard'].includes(s.pendingAction?.type)) {
+        if (['counterWindow', 'brainrotBattle', 'drawStackWindow', 'brainrotDiscard'].includes(s.pendingAction?.type)) {
             return { ok: true, state: s, defer: true };
         }
         const outcome = checkWinOrUnoPenalty(s, playerId);
@@ -1448,14 +1484,22 @@
                 }
                 return { ok: true, defer: options.chosenColor || !options.chosenColor };
             }
-            case 'draw10':
-                applyDrawToPlayer(state, nextPlayerId(state), 10);
+            case 'draw10': {
+                const defender = nextPlayerId(state);
+                state.drawStack = 10;
+                state.drawStackType = 'draw10';
+                openDrawStackWindow(state, defender, playerId);
                 state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
-                return { ok: true };
-            case 'draw16':
-                applyDrawToPlayer(state, nextPlayerId(state), 16);
+                return { ok: true, defer: true };
+            }
+            case 'draw16': {
+                const defender = nextPlayerId(state);
+                state.drawStack = 16;
+                state.drawStackType = 'draw16';
+                openDrawStackWindow(state, defender, playerId);
                 state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
-                return { ok: true };
+                return { ok: true, defer: true };
+            }
             case 'death': {
                 const target = options.targetId || nextPlayerId(state);
                 openCounterWindow(state, playerId, card, { targetId: target });
@@ -1812,6 +1856,7 @@
         isMyTurn,
         canEndTurn,
         isCounterWindow,
+        isRighelloCard,
         isBrainrotBattle,
         isDrawStackWindow,
         isBrainrotDiscardPhase,

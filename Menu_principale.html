@@ -85,6 +85,15 @@
             max-height: calc(100vh - 4rem);
         }
 
+        #admin-lobbies-list {
+            pointer-events: auto;
+        }
+
+        .admin-lobby-row {
+            cursor: pointer;
+            pointer-events: auto;
+        }
+
         .toggle-switch {
             display: inline-flex;
             align-items: center;
@@ -678,7 +687,7 @@
             <h2 id="admin-lobby-detail-title" class="text-xl font-black text-red-400 mb-3">Lobby</h2>
             <div id="admin-lobby-detail-body" class="mb-4"></div>
             <div class="flex flex-col gap-2">
-                <button type="button" id="admin-btn-join-lobby" class="btn-chunky btn-emerald w-full py-3 text-sm" data-sound="bloop">Unisciti</button>
+                <button type="button" id="admin-btn-join-lobby" class="btn-chunky btn-emerald w-full py-3 text-sm" data-sound="bloop">Entra</button>
                 <button type="button" id="admin-btn-delete-lobby" class="btn-chunky btn-red w-full py-3 text-sm" data-sound="error">Elimina</button>
             </div>
             </div>

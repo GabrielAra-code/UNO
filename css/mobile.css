@@ -163,6 +163,16 @@ html {
         flex-wrap: wrap;
     }
 
+    .uno-menu .admin-lobby-row {
+        pointer-events: auto;
+        position: relative;
+        z-index: 1;
+    }
+
+    .uno-menu #admin-lobbies-list {
+        pointer-events: auto;
+    }
+
     .uno-menu #modal-admin-panel .flex.gap-2 > button {
         flex: 1 1 45%;
         min-width: 0;
@@ -474,6 +484,8 @@ html {
         border-top: 2px solid #334155;
         box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.55);
         box-sizing: border-box;
+        overflow-x: hidden;
+        overflow-y: visible;
     }
 
     .uno-game .hand-section > .max-w-5xl:first-child {
@@ -483,26 +495,33 @@ html {
     .uno-game .hand-scroll-wrap {
         width: 100%;
         max-width: 100%;
-        overflow: visible;
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        touch-action: pan-x;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .uno-game .hand-scroll-hint {
+        font-size: 0.52rem;
+        margin-bottom: 2px;
     }
 
     .uno-game .hand-scroll-wrap::after {
-        width: 20px;
-        bottom: 0;
+        width: 24px;
     }
 
     .uno-game #my-hand {
         min-height: 5.5rem !important;
-        max-height: calc(var(--game-hand-dock) - 72px);
+        max-height: none;
         padding-left: 10px;
         padding-right: 10px;
         padding-top: 0.5rem;
         padding-bottom: 8px;
         gap: 0.45rem;
         touch-action: pan-x;
-        overflow-x: auto !important;
-        overflow-y: visible !important;
-        -webkit-overflow-scrolling: touch;
+        overflow: visible !important;
+        width: max-content;
+        min-width: 100%;
         visibility: visible !important;
         opacity: 1 !important;
     }

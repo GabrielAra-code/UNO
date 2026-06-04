@@ -128,9 +128,8 @@
         }
 
         if (newPending && Engine.isPendingTimedWindow(newPending)
-            && (!oldPending || oldPending.startedAt !== newPending.startedAt || oldPending.type !== newPending.type)) {
+            && (!oldPending || pendingWindowKey(oldPending) !== pendingWindowKey(newPending))) {
             playSound('turn');
-            schedulePendingWindow(newPending);
         }
     }
 
@@ -167,22 +166,21 @@
     }
 
     function schedulePendingWindow(pending) {
+        if (!pending || !Engine.isPendingTimedWindow(pending)) return;
+
         const key = pendingWindowKey(pending);
-        if (counterWindowKey === key && counterResolveTimer) {
-            renderPendingOverlay(pending);
-            return;
-        }
         clearCounterTimers();
         counterWindowKey = key;
         renderPendingOverlay(pending);
 
         const tick = () => {
             const cur = gameState?.pendingAction;
-            if (!cur || cur.type !== pending.type || cur.startedAt !== pending.startedAt) {
+            if (!cur || !Engine.isPendingTimedWindow(cur) || pendingWindowKey(cur) !== key) {
                 hideCounterOverlay();
                 return;
             }
-            const left = Math.max(0, Math.ceil((pending.resolvesAt - Date.now()) / 1000));
+            const resolvesAt = Number(cur.resolvesAt) || 0;
+            const left = Math.max(0, Math.ceil((resolvesAt - Date.now()) / 1000));
             const el = $('counter-timer');
             if (el) el.textContent = String(left);
             if (left <= 0) hideCounterOverlayTick();
@@ -190,7 +188,8 @@
         tick();
         counterTickTimer = setInterval(tick, 200);
 
-        const delay = Math.max(0, pending.resolvesAt - Date.now() + 80);
+        const resolvesAt = Number(pending.resolvesAt) || Date.now() + 5000;
+        const delay = Math.max(0, resolvesAt - Date.now() + 80);
         counterResolveTimer = setTimeout(async () => {
             if (counterWindowKey !== key) return;
             const cur = gameState?.pendingAction;
@@ -231,13 +230,17 @@
         let canAct = false;
         let label = 'Attesa risposte…';
         if (pending.type === 'counterWindow') {
-            label = 'Contrasto — 5 secondi';
+            const effectName = pending.cardValue === 'death' ? 'Death Note' : pending.cardValue === 'blobby' ? 'Blobby' : 'effetto';
+            label = `Contrasto ${effectName} — Righello/Scudo (5s)`;
             canAct = pending.sourcePlayerId !== myPlayerId && !!firstCounterCard();
         } else if (pending.type === 'brainrotBattle') {
             label = 'Brainrot Battle — gioca un Brainrot (5s)';
             canAct = Engine.canPlayBrainrotResponse(gameState, myPlayerId);
         } else if (pending.type === 'drawStackWindow') {
-            label = `Stack +${pending.drawStack} — rispondi (5s)`;
+            const stackLabel = pending.drawStackType === 'draw10' ? '+10'
+                : pending.drawStackType === 'draw16' ? '+16'
+                    : pending.drawStackType === 'wild4' ? '+4' : '+2';
+            label = `Stack ${stackLabel} (${pending.drawStack} carte) — 5s`;
             canAct = Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
         } else if (pending.type === 'brainrotDiscard') {
             label = `Scarta fino a ${pending.maxDiscard} carte numero (5s)`;
@@ -245,8 +248,12 @@
         }
         if (title) title.textContent = label;
         if (btn) {
-            btn.classList.toggle('hidden', !canAct || pending.type !== 'counterWindow');
-            btn.disabled = !canAct || pending.type !== 'counterWindow';
+            const showContrastBtn = pending.type === 'counterWindow' && canAct;
+            btn.classList.toggle('hidden', !showContrastBtn && !(pending.type === 'brainrotDiscard' && pending.winnerId === myPlayerId));
+            btn.disabled = pending.type === 'counterWindow' ? !canAct : false;
+            if (pending.type === 'counterWindow' && canAct) {
+                btn.textContent = 'Gioca Righello / Scudo';
+            }
             if (pending.type === 'brainrotDiscard' && pending.winnerId === myPlayerId) {
                 btn.classList.remove('hidden');
                 btn.textContent = 'Conferma scarto';
@@ -275,25 +282,38 @@
         const n = segments.length;
         if (!n) return;
         const colors = ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2', '#ea580c', '#4f46e5'];
-        const sliceDeg = 360 / n;
-        const stops = [];
-        segments.forEach((_, i) => {
-            const c = colors[i % colors.length];
-            const a0 = (i * sliceDeg).toFixed(2);
-            const a1 = ((i + 1) * sliceDeg).toFixed(2);
-            const edge = (Number(a1) - 0.6).toFixed(2);
-            stops.push(`${c} ${a0}deg ${edge}deg`, `rgba(15, 23, 42, 0.55) ${edge}deg ${a1}deg`);
-        });
-        wheel.style.background = `conic-gradient(from -90deg, ${stops.join(', ')})`;
+        const cx = 50;
+        const cy = 50;
+        const r = 48;
+        const sliceRad = (Math.PI * 2) / n;
+
+        let paths = '';
+        for (let i = 0; i < n; i += 1) {
+            const a0 = -Math.PI / 2 + sliceRad * i;
+            const a1 = -Math.PI / 2 + sliceRad * (i + 1);
+            const x0 = cx + r * Math.cos(a0);
+            const y0 = cy + r * Math.sin(a0);
+            const x1 = cx + r * Math.cos(a1);
+            const y1 = cy + r * Math.sin(a1);
+            const large = sliceRad > Math.PI ? 1 : 0;
+            const fill = colors[i % colors.length];
+            paths += `<path d="M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z" fill="${fill}" stroke="#0f172a" stroke-width="0.35"/>`;
+        }
+
+        wheel.style.background = 'transparent';
         wheel.style.transform = 'rotate(0deg)';
-        wheel.innerHTML = '';
+        wheel.innerHTML = `
+            <svg class="roulette-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+                <circle cx="50" cy="50" r="49" fill="#1e293b"/>
+                ${paths}
+            </svg>`;
 
         segments.forEach((seg, i) => {
-            const midDeg = -90 + (i + 0.5) * sliceDeg;
-            const rad = (midDeg * Math.PI) / 180;
+            const midRad = -Math.PI / 2 + sliceRad * (i + 0.5);
             const radiusPct = 34;
-            const x = 50 + Math.cos(rad) * radiusPct;
-            const y = 50 + Math.sin(rad) * radiusPct;
+            const x = 50 + Math.cos(midRad) * radiusPct;
+            const y = 50 + Math.sin(midRad) * radiusPct;
+            const midDeg = (midRad * 180) / Math.PI;
 
             const label = document.createElement('div');
             label.className = 'roulette-slice-label';
@@ -506,6 +526,7 @@
     function clearPlaySelection() {
         playSelection = null;
         $('play-selection-bar')?.classList.add('hidden');
+        $('btn-play-all-dup')?.classList.add('hidden');
         renderHand();
     }
 
@@ -515,6 +536,9 @@
         const btn = $('btn-confirm-play');
         if (!bar || !playSelection) return;
         bar.classList.remove('hidden');
+        $('btn-play-all-dup')?.classList.add('hidden');
+        $('btn-play-ladder-alt')?.classList.add('hidden');
+
         if (playSelection.mode === 'ladder') {
             const nums = playSelection.cards.map(c => c.value).join(' → ');
             if (label) {
@@ -523,14 +547,37 @@
             if (btn) btn.textContent = 'Gioca scala';
         } else if (playSelection.mode === 'duplicate') {
             const sample = playSelection.cards[0];
-            const lbl = cardLabel(sample);
-            const total = playSelection.batchSize || playSelection.cards.length;
+            const lbl = duplicateSelectionLabel(sample);
+            const total = playSelection.batchSize || playSelection.batch?.length || playSelection.cards.length;
             const n = playSelection.ids.length;
             if (label) {
-                label.textContent = `${lbl} ×${total} — giochi ${n} (${n === 1 ? 'copia' : 'copie'})`;
+                label.textContent = `${lbl} — ${n} di ${total} (clic = +1 copia)`;
             }
-            if (btn) btn.textContent = n === 1 ? 'Gioca 1 carta' : `Gioca ${n} carte`;
+            if (btn) btn.textContent = n === 1 ? 'Gioca 1' : `Gioca ${n}`;
+            const allBtn = $('btn-play-all-dup');
+            if (allBtn && total > 1) {
+                allBtn.classList.remove('hidden');
+                allBtn.textContent = `Gioca tutte (${total})`;
+            }
+            if (playSelection.altLadder?.length > 1) {
+                $('btn-play-ladder-alt')?.classList.remove('hidden');
+            }
         }
+    }
+
+    function duplicateSelectionLabel(card) {
+        if (!card) return '—';
+        if (card.kind === 'number') {
+            return `${card.value} (stesso numero)`;
+        }
+        return `${cardLabel(card)} ×${Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId).length || 1}`;
+    }
+
+    function setDuplicateSelectionCount(count) {
+        if (!playSelection?.batch?.length) return;
+        const max = playSelection.batch.length;
+        const n = Math.max(1, Math.min(max, count));
+        startDuplicateSelection(playSelection.batch, n);
     }
 
     function startLadderSelection(cards) {
@@ -551,8 +598,7 @@
             ids: slice.map(c => c.instanceId),
             cards: slice,
             batchSize: batch.length,
-            batch,
-            batchOrder: batch.map(c => c.instanceId)
+            batch
         };
         updatePlaySelectionBar();
         renderHand();
@@ -560,13 +606,15 @@
 
     function cycleDuplicateSelection(batch, card) {
         const key = Engine.cardDuplicateKey(card);
+        const fresh = Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId);
+        const pool = fresh.length ? fresh : batch;
         if (playSelection?.mode === 'duplicate' && playSelection.key === key) {
-            const max = batch.length;
+            const max = pool.length;
             const next = (playSelection.ids.length % max) + 1;
-            startDuplicateSelection(batch, next);
+            startDuplicateSelection(pool, next);
             return;
         }
-        startDuplicateSelection(batch, 1);
+        startDuplicateSelection(pool, 1);
     }
 
     function swapLadderRankInstance(instanceId) {
@@ -576,8 +624,8 @@
         if (!card || card.kind !== 'number') return;
 
         const rank = Number(card.value);
-        const idx = playSelection.cards.findIndex(c => Number(c.value) === rank && c.color === card.color);
-        if (idx < 0) return;
+        const idx = playSelection.cards.findIndex(c => Number(c.value) === rank);
+        if (idx < 0 || playSelection.cards[idx].color !== card.color) return;
 
         const nextCards = [...playSelection.cards];
         nextCards[idx] = card;
@@ -656,13 +704,9 @@
         const canPlay = gameState?.status === 'playing';
         const hand = myHand();
         const duplicateCounts = {};
-
         hand.forEach(card => {
-            if (!Engine.allowsMultiDuplicatePlay(card)) return;
-            const playableDup = Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId);
-            if (playableDup.length < 2) return;
             const k = Engine.cardDuplicateKey(card);
-            duplicateCounts[k] = playableDup.length;
+            duplicateCounts[k] = (duplicateCounts[k] || 0) + 1;
         });
 
         const counterActive = Engine.isCounterWindow(gameState);
@@ -706,9 +750,13 @@
             const showBattleColor = (brainrotBattle || brainrotDiscard) && card.battleColor;
             const dupKey = Engine.cardDuplicateKey(card);
             const dupSize = duplicateCounts[dupKey] || 0;
-            const showDupBadge = playableTurn && dupSize > 1 && !playSelection;
+            const playableDupSize = playableTurn
+                ? Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId).length
+                : 0;
+            const showDupBadge = playableTurn && playableDupSize > 1 && !playSelection;
             const dupCountSelected = duplicateKey === dupKey ? selIds.size : 0;
             const showSelBadge = duplicateKey === dupKey && dupCountSelected > 0;
+            const effectiveDupSize = playableDupSize > 1 ? playableDupSize : dupSize;
             const lbl = cardLabel(card);
 
             btn.type = 'button';
@@ -721,10 +769,12 @@
                 btn.classList.add('hand-card-dup-group');
             }
             const dupBadge = showDupBadge
-                ? `<small class="hand-dup-badge">×${dupSize}</small>`
-                : '';
+                ? `<small class="hand-dup-badge">×${playableDupSize}</small>`
+                : (playableTurn && dupSize > 1 && !playSelection
+                    ? `<small class="hand-dup-badge opacity-60">×${dupSize}</small>`
+                    : '');
             const selBadge = showSelBadge
-                ? `<small class="hand-dup-sel">${dupCountSelected}/${dupSize}</small>`
+                ? `<small class="hand-dup-sel">${dupCountSelected}/${effectiveDupSize}</small>`
                 : '';
             btn.innerHTML = `<span class="hand-label">${lbl}${dupBadge}${selBadge}</span>`;
             if (playableBrainrotDiscard) {
@@ -733,6 +783,8 @@
                 btn.addEventListener('click', () => onPlayBrainrotResponse(card.instanceId));
             } else if (playableStack) {
                 btn.addEventListener('click', () => onPlayDrawStackResponse(card.instanceId));
+            } else if (playableCounter) {
+                btn.addEventListener('click', () => onPlayCounter(card.instanceId));
             } else if (playSelection?.mode === 'ladder' && playableTurn && card.kind === 'number') {
                 btn.addEventListener('click', () => swapLadderRankInstance(card.instanceId));
             } else if (playSelection?.mode === 'duplicate' && duplicateKey === dupKey && playableTurn) {
@@ -742,15 +794,13 @@
                 });
             } else if ((playableTurn || playableMari) && !playSelection) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
-            } else if (playableCounter) {
-                btn.addEventListener('click', () => onPlayCounter(card.instanceId));
             }
             handEl.appendChild(btn);
         });
         requestAnimationFrame(() => {
-            const el = $('my-hand');
-            if (el && el.scrollWidth > el.clientWidth) {
-                el.scrollLeft = el.scrollWidth - el.clientWidth;
+            const wrap = handEl?.closest('.hand-scroll-wrap');
+            if (wrap && wrap.scrollWidth > wrap.clientWidth) {
+                wrap.scrollLeft = wrap.scrollWidth - wrap.clientWidth;
             }
             syncHandDockHeight();
         });
@@ -1048,15 +1098,20 @@
             return;
         }
 
+        const batch = Engine.getDuplicateBatch(gameState, myPlayerId, instanceId);
         const ladder = Engine.getLadderPlay(gameState, myPlayerId, instanceId);
-        if (ladder.length > 1 && Engine.isValidLadder(ladder)) {
-            startLadderSelection(ladder);
+        const hasLadder = ladder.length > 1 && Engine.isValidLadder(ladder);
+
+        if (batch.length > 1) {
+            cycleDuplicateSelection(batch, card);
+            if (hasLadder) {
+                playSelection.altLadder = ladder;
+            }
             return;
         }
 
-        const batch = Engine.getDuplicateBatch(gameState, myPlayerId, instanceId);
-        if (batch.length > 1) {
-            cycleDuplicateSelection(batch, card);
+        if (hasLadder) {
+            startLadderSelection(ladder);
             return;
         }
 
@@ -1237,6 +1292,17 @@
             if (playSelection?.mode === 'brainrotDiscard') confirmBrainrotDiscard();
             else if (playSelection?.mode === 'duplicate') confirmDuplicatePlay();
             else confirmLadderPlay();
+        });
+        $('btn-play-all-dup')?.addEventListener('click', () => {
+            if (playSelection?.mode !== 'duplicate' || !playSelection.batch?.length) return;
+            playSound('click');
+            setDuplicateSelectionCount(playSelection.batch.length);
+            confirmDuplicatePlay();
+        });
+        $('btn-play-ladder-alt')?.addEventListener('click', () => {
+            if (!playSelection?.altLadder?.length) return;
+            playSound('click');
+            startLadderSelection(playSelection.altLadder);
         });
         $('btn-cancel-play')?.addEventListener('click', () => {
             playSound('click');
