@@ -416,6 +416,23 @@
         .hand-card-ladder-hint {
             outline: 2px dashed #a78bfa;
         }
+        .hand-card-dup-group {
+            outline: 2px dashed rgba(56, 189, 248, 0.65);
+        }
+        .hand-dup-badge,
+        .hand-dup-sel {
+            display: block;
+            font-size: 9px;
+            font-weight: 900;
+            line-height: 1.1;
+            margin-top: 2px;
+        }
+        .hand-dup-badge {
+            color: #fde68a;
+        }
+        .hand-dup-sel {
+            color: #7dd3fc;
+        }
 
         #play-selection-bar {
             display: flex;
@@ -536,35 +553,20 @@
                 0 14px 36px rgba(0,0,0,0.55);
             overflow: hidden;
             will-change: transform;
-        }
-
-        .roulette-slice {
-            position: absolute;
-            width: 50%;
-            height: 50%;
-            left: 50%;
-            top: 50%;
-            transform-origin: 0 0;
-            transform: rotate(calc(-90deg + (360deg / var(--total)) * var(--i)))
-                skewY(calc(90deg - (360deg / var(--total))));
-            border-right: 1px solid rgba(0,0,0,0.35);
-            box-sizing: border-box;
+            background-color: #1e293b;
         }
 
         .roulette-slice-label {
             position: absolute;
-            left: 18%;
-            top: 22%;
-            width: 62%;
-            transform-origin: center center;
-            transform: skewY(calc((360deg / var(--total)) - 90deg))
-                rotate(calc((360deg / var(--total)) / 2));
+            z-index: 2;
+            max-width: 32%;
+            padding: 0 2px;
             font-size: 0.62rem;
             font-weight: 900;
             color: #fff;
             text-align: center;
-            text-shadow: 0 1px 4px rgba(0,0,0,0.85);
-            line-height: 1.1;
+            text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6);
+            line-height: 1.15;
             pointer-events: none;
             overflow: hidden;
             text-overflow: ellipsis;
@@ -712,7 +714,7 @@
     <script src="js/game-firestore.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
@@ -731,6 +733,7 @@
         window.getDoc = getDoc;
         window.updateDoc = updateDoc;
         window.onSnapshot = onSnapshot;
+        window.runTransaction = runTransaction;
         window.deleteDoc = deleteDoc;
     </script>
 </head>

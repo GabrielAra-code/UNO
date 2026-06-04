@@ -976,6 +976,40 @@
         return comboValueKey(card) || `card:${card.color}:${card.value}:${card.defId || card.label}`;
     }
 
+    /** Identità per copie giocabili insieme (colore+valore numeri; defId+varianti speciali). */
+    function cardDuplicateKey(card) {
+        if (!card) return '';
+        if (card.kind === 'number') {
+            return `num:${card.color}:${card.value}`;
+        }
+        const variant = card.righelloLabel || card.planPart || '';
+        return `spec:${card.defId || ''}:${card.value}:${variant}`;
+    }
+
+    function allowsMultiDuplicatePlay(card) {
+        if (!card) return false;
+        if (card.kind === 'number') return true;
+        const v = card.value;
+        if (v === 'cancel') return true;
+        if (['skip', 'reverse', 'draw2'].includes(v) && card.kind === 'action') return true;
+        if (['reset', 'vaff', 'waves', 'halfdraw', 'reshuffle', 'draw10', 'draw16', 'mirror', 'jack'].includes(v)) {
+            return true;
+        }
+        return false;
+    }
+
+    function getDuplicateBatch(state, playerId, instanceId) {
+        const hand = state.hands[playerId] || [];
+        const card = hand.find(c => c.instanceId === instanceId);
+        if (!card || !allowsMultiDuplicatePlay(card)) return card ? [card] : [];
+        const key = cardDuplicateKey(card);
+        return hand.filter(c =>
+            cardDuplicateKey(c) === key
+            && allowsMultiDuplicatePlay(c)
+            && canPlayCardThisTurn(state, playerId, c)
+        );
+    }
+
     function numberRank(card) {
         return Number(card?.value);
     }
@@ -998,58 +1032,57 @@
         if (!card || card.kind !== 'number') return card ? [card] : [];
 
         const color = card.color;
-        const byNum = {};
-        hand.filter(c => c.kind === 'number' && c.color === color).forEach(c => {
-            byNum[numberRank(c)] = c;
-        });
-
-        if (!byNum[0]) return [card];
-        if (!canPlayCard(state, byNum[0])) return [card];
-
-        let maxV = 0;
-        while (byNum[maxV + 1] !== undefined) maxV += 1;
-
         const idx = numberRank(card);
         if (idx < 1) return [card];
 
+        const atRank = rank => hand.filter(c =>
+            c.kind === 'number' && c.color === color && numberRank(c) === rank);
+
+        if (!atRank(0).length || !canPlayCard(state, atRank(0)[0])) return [card];
+
         for (let v = 0; v <= idx; v += 1) {
-            if (!byNum[v]) return [card];
+            if (!atRank(v).length) return [card];
         }
 
         const ladder = [];
-        for (let v = 0; v <= idx; v += 1) ladder.push(byNum[v]);
+        for (let v = 0; v <= idx; v += 1) {
+            if (v === idx) {
+                ladder.push(card);
+            } else {
+                const options = atRank(v);
+                ladder.push(options.find(c => canPlayCard(state, c)) || options[0]);
+            }
+        }
         return ladder.length >= 2 ? ladder : [card];
     }
 
     function getSameNumberBatch(state, playerId, instanceId) {
-        const hand = state.hands[playerId] || [];
-        const card = hand.find(c => c.instanceId === instanceId);
-        if (!card || card.kind !== 'number' || !canPlayCard(state, card)) return card ? [card] : [];
-        return hand.filter(c =>
-            c.kind === 'number'
-            && String(c.value) === String(card.value)
-            && canPlayCard(state, c)
-        );
+        return getDuplicateBatch(state, playerId, instanceId).filter(c => c.kind === 'number');
     }
 
-    function canPlaySameNumberBatch(state, cards) {
+    function canPlayDuplicateBatch(state, playerId, cards) {
         if (!cards?.length) return false;
-        const first = cards[0];
-        if (first.kind !== 'number') return false;
+        const key = cardDuplicateKey(cards[0]);
         return cards.every(c =>
-            c.kind === 'number'
-            && String(c.value) === String(first.value)
-            && canPlayCard(state, c)
+            cardDuplicateKey(c) === key
+            && allowsMultiDuplicatePlay(c)
+            && canPlayCardThisTurn(state, playerId, c)
         );
     }
 
-    function isValidPlayGroup(state, cards) {
+    function canPlaySameNumberBatch(state, playerId, cards) {
         if (!cards?.length) return false;
-        if (cards.length === 1) return canPlayCard(state, cards[0]);
+        return cards.every(c => c.kind === 'number') && canPlayDuplicateBatch(state, playerId, cards);
+    }
+
+    function isValidPlayGroup(state, playerId, cards) {
+        if (!cards?.length) return false;
+        if (cards.length === 1) return canPlayCardThisTurn(state, playerId, cards[0]);
         if (isValidLadder(cards)) {
-            return numberRank(cards[0]) === 0 && canPlayCard(state, cards[0]);
+            const sorted = [...cards].sort((a, b) => numberRank(a) - numberRank(b));
+            return numberRank(sorted[0]) === 0 && canPlayCard(state, sorted[0]);
         }
-        return canPlaySameNumberBatch(state, cards);
+        return canPlayDuplicateBatch(state, playerId, cards);
     }
 
     function getMatchingPlayableCards(state, playerId, instanceId) {
@@ -1267,20 +1300,22 @@
         }
 
         if (cards.length > 1) {
-            if (!isValidPlayGroup(s, cards)) {
-                return { ok: false, error: 'Puoi giocare insieme solo carte con lo stesso numero o una scala 0→1→2…' };
+            if (!isValidPlayGroup(s, playerId, cards)) {
+                return { ok: false, error: 'Puoi giocare insieme solo copie uguali o una scala 0→1→2…' };
             }
             if (isValidLadder(cards)) {
                 cards.sort((a, b) => numberRank(a) - numberRank(b));
+            } else if (!canPlayDuplicateBatch(s, playerId, cards)) {
+                return { ok: false, error: 'Queste carte non possono essere giocate insieme.' };
             }
         }
 
-        const wildOrTarget = cards.some(c =>
+        const needsSinglePlay = cards.some(c =>
             ['wild', 'wild4'].includes(c.value)
-            || ['death', 'swap', 'gift', 'heart', 'communism', 'blobby', 'bullet'].includes(c.value)
+            || ['death', 'swap', 'gift', 'heart', 'communism', 'blobby', 'bullet', 'mari', 'brainrot'].includes(c.value)
         );
-        if (cards.length > 1 && wildOrTarget) {
-            return { ok: false, error: 'Una sola carta speciale per volta.' };
+        if (cards.length > 1 && needsSinglePlay) {
+            return { ok: false, error: 'Una sola carta di questo tipo per volta.' };
         }
 
         if (options.chosenColor && !isValidPlayColor(options.chosenColor)) {
@@ -1314,7 +1349,22 @@
 
         s.turnFlags.played = true;
 
-        const effect = resolveCardEffect(s, playerId, card, options);
+        let effect = { ok: true };
+        const isLadder = cards.length > 1 && isValidLadder(cards);
+        const isDuplicateBatch = cards.length > 1 && canPlayDuplicateBatch(s, playerId, cards) && !isLadder;
+        if (isDuplicateBatch) {
+            for (let i = 0; i < cards.length; i += 1) {
+                effect = resolveCardEffect(s, playerId, cards[i], options);
+                if (!effect.ok) return effect;
+                if (s.pendingAction?.type === 'chooseColor'
+                    || s.pendingAction?.type === 'chooseTarget'
+                    || s.pendingAction?.type === 'defense') {
+                    break;
+                }
+            }
+        } else {
+            effect = resolveCardEffect(s, playerId, card, options);
+        }
         if (!effect.ok) {
             return effect;
         }
@@ -1777,6 +1827,10 @@
         hasPlayableCard,
         hasPlayableCardThisTurn,
         cardStackKey,
+        cardDuplicateKey,
+        allowsMultiDuplicatePlay,
+        getDuplicateBatch,
+        canPlayDuplicateBatch,
         getMatchingPlayableCards,
         getSameNumberBatch,
         getLadderPlay,

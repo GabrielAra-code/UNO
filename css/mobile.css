@@ -600,7 +600,7 @@ html {
 
     .uno-game .roulette-slice-label {
         font-size: 0.52rem;
-        max-width: 52px;
+        max-width: 30%;
     }
 
     .uno-game #end-overlay h2 {

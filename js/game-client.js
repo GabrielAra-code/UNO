@@ -18,6 +18,8 @@
     let counterTickTimer = null;
     let counterWindowKey = null;
     let playSelection = null;
+    let saveInFlight = false;
+    let commitChain = Promise.resolve();
     const AvatarUI = global.AvatarUI;
 
     function leftGameKey(id) {
@@ -273,22 +275,33 @@
         const n = segments.length;
         if (!n) return;
         const colors = ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2', '#ea580c', '#4f46e5'];
-        wheel.style.background = 'transparent';
+        const sliceDeg = 360 / n;
+        const stops = [];
+        segments.forEach((_, i) => {
+            const c = colors[i % colors.length];
+            const a0 = (i * sliceDeg).toFixed(2);
+            const a1 = ((i + 1) * sliceDeg).toFixed(2);
+            const edge = (Number(a1) - 0.6).toFixed(2);
+            stops.push(`${c} ${a0}deg ${edge}deg`, `rgba(15, 23, 42, 0.55) ${edge}deg ${a1}deg`);
+        });
+        wheel.style.background = `conic-gradient(from -90deg, ${stops.join(', ')})`;
         wheel.style.transform = 'rotate(0deg)';
         wheel.innerHTML = '';
 
         segments.forEach((seg, i) => {
-            const slice = document.createElement('div');
-            slice.className = 'roulette-slice';
-            slice.style.setProperty('--i', String(i));
-            slice.style.setProperty('--total', String(n));
-            slice.style.background = colors[i % colors.length];
+            const midDeg = -90 + (i + 0.5) * sliceDeg;
+            const rad = (midDeg * Math.PI) / 180;
+            const radiusPct = 34;
+            const x = 50 + Math.cos(rad) * radiusPct;
+            const y = 50 + Math.sin(rad) * radiusPct;
 
             const label = document.createElement('div');
             label.className = 'roulette-slice-label';
             label.textContent = seg.nickname || seg.id;
-            slice.appendChild(label);
-            wheel.appendChild(slice);
+            label.style.left = `${x}%`;
+            label.style.top = `${y}%`;
+            label.style.transform = `translate(-50%, -50%) rotate(${midDeg + 90}deg)`;
+            wheel.appendChild(label);
         });
 
         const hub = document.createElement('div');
@@ -499,11 +512,24 @@
     function updatePlaySelectionBar() {
         const bar = $('play-selection-bar');
         const label = $('play-selection-label');
+        const btn = $('btn-confirm-play');
         if (!bar || !playSelection) return;
         bar.classList.remove('hidden');
-        const nums = playSelection.cards.map(c => c.value).join(' → ');
-        if (label) {
-            label.textContent = `Scala da 0: ${nums} (${playSelection.cards.length} carte)`;
+        if (playSelection.mode === 'ladder') {
+            const nums = playSelection.cards.map(c => c.value).join(' → ');
+            if (label) {
+                label.textContent = `Scala 0→${nums} (${playSelection.cards.length}) — tocca altra copia stesso valore`;
+            }
+            if (btn) btn.textContent = 'Gioca scala';
+        } else if (playSelection.mode === 'duplicate') {
+            const sample = playSelection.cards[0];
+            const lbl = cardLabel(sample);
+            const total = playSelection.batchSize || playSelection.cards.length;
+            const n = playSelection.ids.length;
+            if (label) {
+                label.textContent = `${lbl} ×${total} — giochi ${n} (${n === 1 ? 'copia' : 'copie'})`;
+            }
+            if (btn) btn.textContent = n === 1 ? 'Gioca 1 carta' : `Gioca ${n} carte`;
         }
     }
 
@@ -513,6 +539,56 @@
             ids: cards.map(c => c.instanceId),
             cards
         };
+        updatePlaySelectionBar();
+        renderHand();
+    }
+
+    function startDuplicateSelection(batch, count) {
+        const slice = batch.slice(0, count);
+        playSelection = {
+            mode: 'duplicate',
+            key: Engine.cardDuplicateKey(batch[0]),
+            ids: slice.map(c => c.instanceId),
+            cards: slice,
+            batchSize: batch.length,
+            batch,
+            batchOrder: batch.map(c => c.instanceId)
+        };
+        updatePlaySelectionBar();
+        renderHand();
+    }
+
+    function cycleDuplicateSelection(batch, card) {
+        const key = Engine.cardDuplicateKey(card);
+        if (playSelection?.mode === 'duplicate' && playSelection.key === key) {
+            const max = batch.length;
+            const next = (playSelection.ids.length % max) + 1;
+            startDuplicateSelection(batch, next);
+            return;
+        }
+        startDuplicateSelection(batch, 1);
+    }
+
+    function swapLadderRankInstance(instanceId) {
+        if (!playSelection || playSelection.mode !== 'ladder') return;
+        const hand = myHand();
+        const card = hand.find(c => c.instanceId === instanceId);
+        if (!card || card.kind !== 'number') return;
+
+        const rank = Number(card.value);
+        const idx = playSelection.cards.findIndex(c => Number(c.value) === rank && c.color === card.color);
+        if (idx < 0) return;
+
+        const nextCards = [...playSelection.cards];
+        nextCards[idx] = card;
+        playSelection.cards = nextCards;
+        playSelection.ids = nextCards.map(c => c.instanceId);
+        if (!Engine.isValidLadder(nextCards)) {
+            playSound('error');
+            showToast('Copia non valida per questa scala');
+            return;
+        }
+        playSound('click');
         updatePlaySelectionBar();
         renderHand();
     }
@@ -579,13 +655,14 @@
         applyHandLayoutSizing();
         const canPlay = gameState?.status === 'playing';
         const hand = myHand();
-        const stackCounts = {};
+        const duplicateCounts = {};
 
         hand.forEach(card => {
-            if (Engine.canPlayCard(gameState, card) && card.kind === 'number') {
-                const k = String(card.value);
-                stackCounts[k] = (stackCounts[k] || 0) + 1;
-            }
+            if (!Engine.allowsMultiDuplicatePlay(card)) return;
+            const playableDup = Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId);
+            if (playableDup.length < 2) return;
+            const k = Engine.cardDuplicateKey(card);
+            duplicateCounts[k] = playableDup.length;
         });
 
         const counterActive = Engine.isCounterWindow(gameState);
@@ -601,6 +678,7 @@
         const ladderHintIds = playSelection?.mode === 'ladder'
             ? new Set(playSelection.ids)
             : null;
+        const duplicateKey = playSelection?.mode === 'duplicate' ? playSelection.key : null;
 
         if (!hand.length && gameState) {
             const empty = document.createElement('p');
@@ -626,8 +704,11 @@
             const playable = playableTurn || playableCounter || playableMari || playableBrainrot
                 || playableStack || playableBrainrotDiscard;
             const showBattleColor = (brainrotBattle || brainrotDiscard) && card.battleColor;
-            const stackSize = card.kind === 'number' ? (stackCounts[String(card.value)] || 1) : 1;
-            const showStack = playableTurn && stackSize > 1 && card.kind === 'number' && !playSelection;
+            const dupKey = Engine.cardDuplicateKey(card);
+            const dupSize = duplicateCounts[dupKey] || 0;
+            const showDupBadge = playableTurn && dupSize > 1 && !playSelection;
+            const dupCountSelected = duplicateKey === dupKey ? selIds.size : 0;
+            const showSelBadge = duplicateKey === dupKey && dupCountSelected > 0;
             const lbl = cardLabel(card);
 
             btn.type = 'button';
@@ -636,13 +717,29 @@
             if (playableMari) btn.classList.add('hand-card-mari');
             if (selIds.has(card.instanceId)) btn.classList.add('hand-card-selected');
             else if (ladderHintIds?.has(card.instanceId)) btn.classList.add('hand-card-ladder-hint');
-            btn.innerHTML = `<span class="hand-label">${lbl}${showStack ? `<small class="block text-[9px] opacity-80">×${stackSize}</small>` : ''}</span>`;
+            if (duplicateKey === dupKey && !selIds.has(card.instanceId) && dupSize > 1) {
+                btn.classList.add('hand-card-dup-group');
+            }
+            const dupBadge = showDupBadge
+                ? `<small class="hand-dup-badge">×${dupSize}</small>`
+                : '';
+            const selBadge = showSelBadge
+                ? `<small class="hand-dup-sel">${dupCountSelected}/${dupSize}</small>`
+                : '';
+            btn.innerHTML = `<span class="hand-label">${lbl}${dupBadge}${selBadge}</span>`;
             if (playableBrainrotDiscard) {
                 btn.addEventListener('click', () => onToggleBrainrotDiscard(card.instanceId));
             } else if (playableBrainrot) {
                 btn.addEventListener('click', () => onPlayBrainrotResponse(card.instanceId));
             } else if (playableStack) {
                 btn.addEventListener('click', () => onPlayDrawStackResponse(card.instanceId));
+            } else if (playSelection?.mode === 'ladder' && playableTurn && card.kind === 'number') {
+                btn.addEventListener('click', () => swapLadderRankInstance(card.instanceId));
+            } else if (playSelection?.mode === 'duplicate' && duplicateKey === dupKey && playableTurn) {
+                btn.addEventListener('click', () => {
+                    playSound('click');
+                    cycleDuplicateSelection(playSelection.batch, card);
+                });
             } else if ((playableTurn || playableMari) && !playSelection) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
             } else if (playableCounter) {
@@ -865,17 +962,30 @@
         else if (lastMsg.includes('gioca')) playSound('card');
     }
 
-    async function commitAction(fn, opts = {}) {
+    function commitAction(fn, opts = {}) {
+        if (!gameState) return Promise.resolve();
+        const run = commitChain.then(() => commitActionCore(fn, opts));
+        commitChain = run.catch(() => {});
+        return run;
+    }
+
+    async function commitActionCore(fn, opts = {}) {
         if (!gameState) return;
+
+        const baseVersion = typeof gameState.version === 'number' ? gameState.version : 0;
+        const snapshotState = gameState;
         const result = fn();
         if (!result.ok) {
             playSound('error');
             showToast(result.error || 'Mossa non valida');
             return;
         }
+
+        saveInFlight = true;
         try {
-            await FS.persistState(lobbyId, result.state);
-            prevGameState = gameState;
+            const newVersion = await FS.persistState(lobbyId, result.state, baseVersion);
+            result.state.version = newVersion;
+            prevGameState = snapshotState;
             gameState = result.state;
             if (!opts.quiet) playResultSound(result);
             if (result.state.lastRoulette?.at !== lastRouletteAnimatedAt) {
@@ -885,9 +995,17 @@
             renderAll();
             handlePending(result.state);
         } catch (err) {
-            console.error(err);
+            console.error('Salvataggio mossa fallito:', err);
             playSound('error');
-            showToast('Errore salvataggio mossa');
+            if (err instanceof FS.SaveConflictError && err.serverState) {
+                prevGameState = gameState;
+                gameState = err.serverState;
+                renderAll();
+                handlePending(err.serverState);
+            }
+            showToast(FS.mapPersistError(err));
+        } finally {
+            saveInFlight = false;
         }
     }
 
@@ -914,6 +1032,10 @@
         await commitAction(() => Engine.playMariGreenCard(gameState, myPlayerId, instanceId));
     }
 
+    async function playCardsImmediate(instanceIds, options = {}) {
+        await commitAction(() => Engine.playCards(gameState, myPlayerId, instanceIds, options));
+    }
+
     async function onPlayCard(instanceId) {
         const hand = myHand();
         const card = hand.find(c => c.instanceId === instanceId);
@@ -929,6 +1051,12 @@
         const ladder = Engine.getLadderPlay(gameState, myPlayerId, instanceId);
         if (ladder.length > 1 && Engine.isValidLadder(ladder)) {
             startLadderSelection(ladder);
+            return;
+        }
+
+        const batch = Engine.getDuplicateBatch(gameState, myPlayerId, instanceId);
+        if (batch.length > 1) {
+            cycleDuplicateSelection(batch, card);
             return;
         }
 
@@ -952,20 +1080,52 @@
             return;
         }
 
-        await commitAction(() => Engine.playCards(gameState, myPlayerId, instanceIds, {}));
+        await playCardsImmediate(instanceIds);
     }
 
     async function confirmLadderPlay() {
         if (!playSelection || playSelection.mode !== 'ladder') return;
-        const ids = playSelection.ids;
+        const ids = [...playSelection.ids];
         clearPlaySelection();
         playSound('cards');
-        await commitAction(() => Engine.playCards(gameState, myPlayerId, ids, {}));
+        await playCardsImmediate(ids);
     }
 
-    function showColorModal(pendingCardId) {
+    async function confirmDuplicatePlay() {
+        if (!playSelection || playSelection.mode !== 'duplicate') return;
+        const ids = [...playSelection.ids];
+        const cards = playSelection.cards;
+        const card = cards[0];
+        clearPlaySelection();
+        playSound('cards');
+
+        if (card.value === 'wild' || card.value === 'wild4') {
+            showColorModal(ids.length === 1 ? ids[0] : ids);
+            return;
+        }
+        if (card.value === 'heart') {
+            if (!Engine.eliminatedPlayerIds(gameState).length) {
+                playSound('error');
+                showToast('Nessun giocatore eliminato da rianimare');
+                return;
+            }
+            showTargetModal(ids[0], 'heart');
+            return;
+        }
+        if (['death', 'swap', 'gift', 'communism', 'blobby'].includes(card.value)) {
+            showTargetModal(ids[0], card.value);
+            return;
+        }
+
+        await playCardsImmediate(ids);
+    }
+
+    function showColorModal(pendingCardIdOrIds) {
         const modal = $('game-modal');
         const content = $('modal-content');
+        const ids = Array.isArray(pendingCardIdOrIds)
+            ? pendingCardIdOrIds
+            : (pendingCardIdOrIds ? [pendingCardIdOrIds] : []);
         $('modal-title').textContent = 'Scegli colore';
         $('modal-description').textContent = 'Quale colore vuoi imporre?';
         content.innerHTML = '';
@@ -976,10 +1136,8 @@
             b.onclick = async () => {
                 modal.classList.add('hidden');
                 playSound('click');
-                if (pendingCardId) {
-                    await commitAction(() =>
-                        Engine.playCards(gameState, myPlayerId, [pendingCardId], { chosenColor: color })
-                    );
+                if (ids.length) {
+                    await playCardsImmediate(ids, { chosenColor: color });
                 } else {
                     await commitAction(() => Engine.chooseColor(gameState, myPlayerId, color));
                 }
@@ -1077,6 +1235,7 @@
         });
         $('btn-confirm-play')?.addEventListener('click', () => {
             if (playSelection?.mode === 'brainrotDiscard') confirmBrainrotDiscard();
+            else if (playSelection?.mode === 'duplicate') confirmDuplicatePlay();
             else confirmLadderPlay();
         });
         $('btn-cancel-play')?.addEventListener('click', () => {
@@ -1190,6 +1349,14 @@
         unsubGame = FS.subscribeGame(lobbyId, pub => {
             if (!pub) {
                 kickToMainMenu(ADMIN_LOBBY_MSG);
+                return;
+            }
+            const incomingVersion = pub.version || 0;
+            const localVersion = gameState?.version || 0;
+            if (saveInFlight && incomingVersion <= localVersion) {
+                return;
+            }
+            if (!saveInFlight && incomingVersion < localVersion) {
                 return;
             }
             reactToStateChanges(gameState, pub);
