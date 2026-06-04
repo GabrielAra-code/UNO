@@ -532,10 +532,10 @@
             `;
         }
         const colorHint = $('active-color-hint');
-        if (colorHint) {
-            const c = Deck.COLOR_LABEL[gameState?.activeColor] || gameState?.activeColor || '—';
-            colorHint.textContent = gameState?.forcedColor ? `Vincolo: ${c}` : `Colore: ${c}`;
-            colorHint.className = `color-hint color-${gameState?.activeColor || 'slate'}`;
+        if (colorHint && Engine.getDisplayColorInfo) {
+            const info = Engine.getDisplayColorInfo(gameState);
+            colorHint.textContent = info.label;
+            colorHint.className = `color-hint color-${info.cssColor || 'slate'}`;
         }
         const stackEl = $('stack-alert');
         if (stackEl) {

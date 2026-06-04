@@ -64,8 +64,12 @@ function getAdminProfile() {
 }
 
 function lobbyAperta(lobby) {
+    if (window.LobbyList?.isLobbyJoinable) {
+        return window.LobbyList.isLobbyJoinable(lobby);
+    }
     const status = String(lobby?.status || 'waiting').toLowerCase();
-    return !['closed', 'closed_by_admin', 'deleted', 'destroyed', 'eliminated'].includes(status);
+    const n = Array.isArray(lobby?.players) ? lobby.players.filter(p => p && (p.nickname || p.uid)).length : 0;
+    return n > 0 && !['closed', 'closed_by_admin', 'deleted', 'destroyed', 'eliminated', 'playing', 'started', 'finished'].includes(status);
 }
 
 function filtraLobby(list, query) {

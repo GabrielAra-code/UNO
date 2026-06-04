@@ -7,6 +7,11 @@
     };
 
     const BRAINROT_DISCARD_BY_COLOR = { yellow: 2, white: 4, pink: 3, blue: 1 };
+    const PLAY_COLORS = ['red', 'yellow', 'green', 'blue'];
+
+    function isValidPlayColor(color) {
+        return PLAY_COLORS.includes(color);
+    }
 
     function isBrainrotCard(card) {
         return Deck.isBrainrotCard ? Deck.isBrainrotCard(card) : (card?.kind === 'brainrot' || card?.value === 'brainrot');
@@ -633,13 +638,41 @@
         checkLastPlayerStanding(state, currentPlayerId(state));
     }
 
+    function topRequiresChosenColor(top) {
+        if (!top) return false;
+        return top.value === 'wild' || top.value === 'wild4'
+            || top.color === 'black' || top.kind === 'wild' || top.color === 'wild';
+    }
+
     function effectiveTopColor(state) {
         const top = state.topCard;
-        if (!top) return state.activeColor;
-        if (top.value === 'wild' || top.value === 'wild4' || top.color === 'black' || top.color === 'wild') {
-            return state.activeColor;
+        if (!top) {
+            return isValidPlayColor(state.activeColor) ? state.activeColor : null;
         }
-        return top.color;
+        if (topRequiresChosenColor(top)) {
+            return isValidPlayColor(state.activeColor) ? state.activeColor : null;
+        }
+        if (isValidPlayColor(top.color)) return top.color;
+        return isValidPlayColor(state.activeColor) ? state.activeColor : null;
+    }
+
+    function getDisplayColorInfo(state) {
+        if (!state) return { label: '—', cssColor: 'slate' };
+        if (state.pendingAction?.type === 'mariGreen' && state.forcedColor) {
+            const lbl = Deck.COLOR_LABEL[state.forcedColor] || state.forcedColor;
+            return { label: `Vincolo: ${lbl}`, cssColor: state.forcedColor };
+        }
+        if (state.pendingColor) {
+            return { label: 'Scegli colore', cssColor: 'slate' };
+        }
+        const eff = effectiveTopColor(state);
+        if (eff) {
+            return { label: `Colore: ${Deck.COLOR_LABEL[eff] || eff}`, cssColor: eff };
+        }
+        if (topRequiresChosenColor(state.topCard)) {
+            return { label: 'Colore: da scegliere', cssColor: 'slate' };
+        }
+        return { label: 'Colore: —', cssColor: 'slate' };
     }
 
     /** Jolly, +4 e speciali nere/incolore: giocabili sul mazzo in tavola (salvo stack +2/+4). */
@@ -648,7 +681,7 @@
         if (isBrainrotCard(card)) return true;
         if (card.value === 'wild' || card.value === 'wild4') return true;
         if (card.kind === 'wild') return true;
-        if (card.kind === 'special' && (card.color === 'black' || card.color === 'wild')) return true;
+        if (card.kind === 'special' && card.color === 'black') return true;
         return false;
     }
 
@@ -658,24 +691,14 @@
 
         if (isFreePlayCard(card)) return true;
 
-        if (state.forcedColor) {
+        if (state.pendingAction?.type === 'mariGreen' && state.forcedColor) {
             return card.color === state.forcedColor || isFreePlayCard(card);
         }
 
         if (String(card.value) === String(top.value)) return true;
 
         const effectiveColor = effectiveTopColor(state);
-        const topIsWild = top.value === 'wild' || top.value === 'wild4'
-            || top.color === 'black' || top.kind === 'wild';
-
-        if (topIsWild && card.color && card.color === effectiveColor) {
-            return true;
-        }
-
-        if (top.color && top.color !== 'black' && card.color === top.color) {
-            if (top.kind === 'number') {
-                return card.kind !== 'number';
-            }
+        if (effectiveColor && isValidPlayColor(card.color) && card.color === effectiveColor) {
             return true;
         }
 
@@ -1260,6 +1283,10 @@
             return { ok: false, error: 'Una sola carta speciale per volta.' };
         }
 
+        if (options.chosenColor && !isValidPlayColor(options.chosenColor)) {
+            return { ok: false, error: 'Colore non valido.' };
+        }
+
         cards.forEach(c => removeFromHand(s.hands, playerId, c.instanceId));
         cards.forEach(c => s.discardPile.push(c));
         const card = cards[cards.length - 1];
@@ -1268,9 +1295,7 @@
             s.activeColor = options.chosenColor;
             s.pendingColor = false;
             s.pendingAction = null;
-        } else if (card.color !== 'black' && card.color !== 'wild') {
-            s.activeColor = card.color;
-        } else if (card.kind === 'number') {
+        } else if (isValidPlayColor(card.color)) {
             s.activeColor = card.color;
         }
 
@@ -1531,7 +1556,7 @@
                 }
                 return { ok: true };
             default:
-                if (card.kind === 'number' && state.forcedColor && card.color === 'green') {
+                if (state.forcedColor && card.color === state.forcedColor) {
                     state.forcedColor = null;
                 }
                 return { ok: true };
@@ -1644,6 +1669,9 @@
         const s = clone(state);
         if (!s.pendingColor || s.pendingAction?.playerId !== playerId) {
             return { ok: false, error: 'Nessuna scelta colore richiesta.' };
+        }
+        if (!isValidPlayColor(color)) {
+            return { ok: false, error: 'Scegli Rosso, Giallo, Verde o Blu.' };
         }
         const drawTarget = s.pendingAction?.drawStackDefender || nextPlayerId(s);
         s.activeColor = color;
@@ -1778,6 +1806,10 @@
         revivePlayer,
         stripForFirestore,
         topMatches,
+        effectiveTopColor,
+        getDisplayColorInfo,
+        isValidPlayColor,
+        PLAY_COLORS,
         comboValueKey,
         COUNTER_WINDOW_MS
     };

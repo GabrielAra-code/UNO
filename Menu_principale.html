@@ -259,6 +259,7 @@
     <script src="js/anti-cheat.js"></script>
     <script src="js/avatar-ui.js"></script>
     <script src="js/carte-data.js"></script>
+    <script src="js/lobby-list.js"></script>
     <script src="js/admin-panel.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
@@ -1450,12 +1451,7 @@
         };
 
         function lobbyDisponibile(item) {
-            const players = Array.isArray(item.players) ? item.players : [];
-            const maxPlayers = parseInt(item.maxPlayers, 10) || 15;
-            const status = String(item.status || 'waiting').toLowerCase();
-            return players.length > 0
-                && players.length < maxPlayers
-                && !['closed', 'started', 'destroyed', 'deleted', 'eliminated'].includes(status);
+            return window.LobbyList?.isLobbyJoinable(item) ?? false;
         }
 
         window.renderListaLobby = async function() {
@@ -1468,9 +1464,10 @@
             (await leggiLobbyRemote()).forEach(lobby => {
                 if (lobby?.id) lobbiesById.set(lobby.id, lobby);
             });
-            salvaLobby([...lobbiesById.values()].slice(0, 50));
-            const lobbies = [...lobbiesById.values()]
-                .filter(lobbyDisponibile)
+            const merged = [...lobbiesById.values()];
+            const pulite = window.LobbyList?.pruneLobbyList(merged) || merged.filter(lobbyDisponibile);
+            salvaLobby(pulite.slice(0, 50));
+            const lobbies = pulite
                 .filter(item => !searchValue || String(item.id || '').toUpperCase().includes(searchValue));
             if(!lobbies.length) {
                 container.innerHTML = `
