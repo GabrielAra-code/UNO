@@ -664,6 +664,21 @@
 
         if (String(card.value) === String(top.value)) return true;
 
+        const effectiveColor = effectiveTopColor(state);
+        const topIsWild = top.value === 'wild' || top.value === 'wild4'
+            || top.color === 'black' || top.kind === 'wild';
+
+        if (topIsWild && card.color && card.color === effectiveColor) {
+            return true;
+        }
+
+        if (top.color && top.color !== 'black' && card.color === top.color) {
+            if (top.kind === 'number') {
+                return card.kind !== 'number';
+            }
+            return true;
+        }
+
         return false;
     }
 
@@ -689,7 +704,9 @@
         if (pending?.type === 'drawStackWindow') {
             return canPlayDrawStackResponse(state, pid, card);
         }
-        if (pending?.type === 'mariGreen') return false;
+        if (pending?.type === 'mariGreen') {
+            return canPlayMariGreen(state, pid, card);
+        }
         if (state.drawStack > 0 && pending?.type !== 'drawStackWindow') {
             if (!state.settings.stack) return false;
             if (state.drawStackType === 'draw2' && card.value === 'draw2') return true;
@@ -703,6 +720,9 @@
 
     /** Carta giocabile nel turno corrente (una sola azione di gioco per turno). */
     function canPlayCardThisTurn(state, playerId, card) {
+        if (state.pendingAction?.type === 'mariGreen') {
+            return canPlayMariGreen(state, playerId, card);
+        }
         if (isBrainrotBattle(state)) {
             return canPlayBrainrotResponse(state, playerId) && isBrainrotCard(card);
         }
@@ -883,6 +903,7 @@
         const pending = state.pendingAction;
         if (!pending || pending.type !== 'mariGreen') return false;
         if (pending.currentId !== playerId) return false;
+        if (!card || state.players[playerId]?.eliminated) return false;
         return isGreenCard(card);
     }
 

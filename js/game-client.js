@@ -637,15 +637,13 @@
             if (selIds.has(card.instanceId)) btn.classList.add('hand-card-selected');
             else if (ladderHintIds?.has(card.instanceId)) btn.classList.add('hand-card-ladder-hint');
             btn.innerHTML = `<span class="hand-label">${lbl}${showStack ? `<small class="block text-[9px] opacity-80">×${stackSize}</small>` : ''}</span>`;
-            if (playableMari) {
-                btn.addEventListener('click', () => onPlayMariCard(card.instanceId));
-            } else if (playableBrainrotDiscard) {
+            if (playableBrainrotDiscard) {
                 btn.addEventListener('click', () => onToggleBrainrotDiscard(card.instanceId));
             } else if (playableBrainrot) {
                 btn.addEventListener('click', () => onPlayBrainrotResponse(card.instanceId));
             } else if (playableStack) {
                 btn.addEventListener('click', () => onPlayDrawStackResponse(card.instanceId));
-            } else if (playableTurn && !playSelection) {
+            } else if ((playableTurn || playableMari) && !playSelection) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
             } else if (playableCounter) {
                 btn.addEventListener('click', () => onPlayCounter(card.instanceId));
