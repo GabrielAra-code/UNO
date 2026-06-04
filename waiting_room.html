@@ -601,13 +601,43 @@
             }
         }
 
+        function payloadLobbyPerFirestore(lobby) {
+            const { id, ...rest } = lobby;
+            return rest;
+        }
+
         async function aggiornaLobbyRemota(lobby) {
             if (!window.db || !window.doc || !window.updateDoc) return;
             try {
-                await window.updateDoc(window.doc(window.db, 'lobbies', lobby.id), lobby);
+                await window.updateDoc(
+                    window.doc(window.db, 'lobbies', lobby.id),
+                    payloadLobbyPerFirestore(lobby)
+                );
             } catch (error) {
                 console.warn('Impossibile aggiornare la lobby remota:', error);
             }
+        }
+
+        function applicaIsSelfLocale(lobbyRemota) {
+            const myNick = currentUser.nickname || 'Giocatore';
+            const players = (lobbyRemota.players || []).map(player => ({
+                ...player,
+                isSelf: player.nickname === myNick
+            }));
+            return { ...lobbyRemota, id: stanzaId, players };
+        }
+
+        function waitForFirebase() {
+            return new Promise((resolve) => {
+                const check = () => {
+                    if (window.db && window.doc && window.onSnapshot) {
+                        resolve();
+                        return;
+                    }
+                    requestAnimationFrame(check);
+                };
+                check();
+            });
         }
 
         async function leaveLobby() {
@@ -749,15 +779,60 @@
             renderCardSummary(document.getElementById('card-summary-search').value || '');
         }
 
-        if (!stanzaId || !findLobby()) {
-            alert('Lobby non trovata. Torna alla lobby principale.');
-            window.location.href = 'Menu_principale.html';
-        } else {
+        let unsubscribeLobby = null;
+
+        function listenLobbyRealtime() {
+            const lobbyRef = window.doc(window.db, 'lobbies', stanzaId);
+
+            unsubscribeLobby = window.onSnapshot(
+                lobbyRef,
+                (snapshot) => {
+                    if (!snapshot.exists()) {
+                        window.location.href = 'Menu_principale.html';
+                        return;
+                    }
+
+                    const lobbyRemota = applicaIsSelfLocale(snapshot.data());
+
+                    const list = readLobbyList();
+                    const index = list.findIndex(room => room.id === stanzaId);
+
+                    if (index !== -1) {
+                        list[index] = lobbyRemota;
+                    } else {
+                        list.push(lobbyRemota);
+                    }
+
+                    saveLobbyList(list);
+                    renderWaitingRoom();
+                },
+                (error) => {
+                    console.error('Errore listener lobby:', error);
+                }
+            );
+        }
+
+        async function initWaitingRoom() {
+            await waitForFirebase();
+
+            if (!stanzaId || !findLobby()) {
+                alert('Lobby non trovata. Torna alla lobby principale.');
+                window.location.href = 'Menu_principale.html';
+                return;
+            }
+
             initializeLobbyData();
             renderWaitingRoom();
-            window.addEventListener('storage', renderWaitingRoom);
-            setInterval(renderWaitingRoom, 1000);
+            listenLobbyRealtime();
         }
+
+        window.addEventListener('beforeunload', () => {
+            if (typeof unsubscribeLobby === 'function') {
+                unsubscribeLobby();
+            }
+        });
+
+        initWaitingRoom();
     </script>
 </body>
 </html>

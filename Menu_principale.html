@@ -238,7 +238,7 @@
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         // FIX: Importazione corretta da firebase-firestore.js
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, runTransaction, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
@@ -262,6 +262,7 @@
         window.getDoc = getDoc;
         window.setDoc = setDoc;
         window.updateDoc = updateDoc;
+        window.runTransaction = runTransaction;
         window.collection = collection;
         window.query = query;
         window.orderBy = orderBy;
@@ -880,13 +881,57 @@
             }
         }
 
+        function payloadLobbyPerFirestore(lobby) {
+            const { id, ...rest } = lobby;
+            return rest;
+        }
+
         async function aggiornaLobbyRemota(lobby) {
             if (!window.db || !window.doc || !window.updateDoc) return;
             try {
-                await window.updateDoc(window.doc(window.db, 'lobbies', lobby.id), lobby);
+                await window.updateDoc(
+                    window.doc(window.db, 'lobbies', lobby.id),
+                    payloadLobbyPerFirestore(lobby)
+                );
             } catch(error) {
                 console.warn('Aggiornamento lobby remota non disponibile:', error);
             }
+        }
+
+        async function aggiungiGiocatoreAllaLobbyRemota(lobbyId, playerName, playerAvatar) {
+            if (!window.db || !window.doc || !window.runTransaction) return false;
+            const lobbyRef = window.doc(window.db, 'lobbies', lobbyId);
+            await window.runTransaction(window.db, async (transaction) => {
+                const snap = await transaction.get(lobbyRef);
+                if (!snap.exists()) {
+                    throw new Error('Lobby non trovata');
+                }
+                const data = snap.data();
+                const players = Array.isArray(data.players) ? [...data.players] : [];
+                if (players.some(p => p.nickname === playerName)) {
+                    return;
+                }
+                const maxPlayers = parseInt(data.maxPlayers, 10) || 15;
+                if (players.length >= maxPlayers) {
+                    throw new Error('Lobby piena');
+                }
+                players.push({
+                    nickname: playerName,
+                    avatar: playerAvatar,
+                    role: 'player',
+                    isSelf: false
+                });
+                transaction.update(lobbyRef, { players });
+            });
+            return true;
+        }
+
+        function applicaIsSelfLocale(lobby, playerName) {
+            const players = (lobby.players || []).map(player => ({
+                ...player,
+                isSelf: player.nickname === playerName
+            }));
+            return { ...lobby, players };
         }
 
         async function leggiLobbyRemote() {
@@ -982,35 +1027,80 @@
             }, 80);
         }
 
-        window.entraInLobby = function(id) {
-            const lobbies = leggiLobbySalvate();
-            const lobbyIndex = lobbies.findIndex(item => item.id === id && item.status === 'waiting');
-            if(lobbyIndex === -1) {
+        window.entraInLobby = async function(id) {
+            const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{}');
+            const playerName = currentUser.nickname || document.getElementById('header-nickname').innerText || 'PLAYER';
+            const playerAvatar = currentUser.avatar || '🦊';
+
+            let lobby = null;
+            if (window.db && window.doc && window.getDoc) {
+                try {
+                    const snap = await window.getDoc(window.doc(window.db, 'lobbies', id));
+                    if (snap.exists()) {
+                        lobby = { id, ...snap.data() };
+                    }
+                } catch (error) {
+                    console.warn('Lettura lobby remota non disponibile:', error);
+                }
+            }
+
+            if (!lobby) {
+                const lobbies = leggiLobbySalvate();
+                const lobbyIndex = lobbies.findIndex(item => item.id === id && item.status === 'waiting');
+                if (lobbyIndex === -1) {
+                    playSynth('error');
+                    alert('Lobby non più disponibile.');
+                    return;
+                }
+                lobby = lobbies[lobbyIndex];
+            }
+
+            if (String(lobby.status || 'waiting').toLowerCase() !== 'waiting') {
                 playSynth('error');
                 alert('Lobby non più disponibile.');
                 return;
             }
-            const lobby = lobbies[lobbyIndex];
-            if(lobby.locked) {
+
+            if (lobby.locked) {
                 const password = prompt('Password lobby privata');
-                if(password !== lobby.privatePassword) {
+                if (password !== lobby.privatePassword) {
                     playSynth('error');
                     alert('Password errata.');
                     return;
                 }
             }
 
-            const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{}');
-            const playerName = currentUser.nickname || document.getElementById('header-nickname').innerText || 'PLAYER';
-            const playerAvatar = currentUser.avatar || '🦊';
             const alreadyInLobby = lobby.players?.some(p => p.nickname === playerName);
-            if(!alreadyInLobby) {
-                lobby.players = lobby.players || [];
-                lobby.players.push({ nickname: playerName, avatar: playerAvatar, role: 'player', isSelf: true });
-                lobbies[lobbyIndex] = lobby;
-                salvaLobby(lobbies);
-                aggiornaLobbyRemota(lobby);
+            if (!alreadyInLobby) {
+                try {
+                    await aggiungiGiocatoreAllaLobbyRemota(id, playerName, playerAvatar);
+                } catch (error) {
+                    playSynth('error');
+                    alert(error.message || 'Impossibile entrare nella lobby.');
+                    return;
+                }
             }
+
+            if (window.db && window.doc && window.getDoc) {
+                try {
+                    const snap = await window.getDoc(window.doc(window.db, 'lobbies', id));
+                    if (snap.exists()) {
+                        lobby = { id, ...snap.data() };
+                    }
+                } catch (error) {
+                    console.warn('Refresh lobby remota non disponibile:', error);
+                }
+            }
+
+            lobby = applicaIsSelfLocale(lobby, playerName);
+            const lobbies = leggiLobbySalvate();
+            const lobbyIndex = lobbies.findIndex(item => item.id === id);
+            if (lobbyIndex === -1) {
+                lobbies.unshift(lobby);
+            } else {
+                lobbies[lobbyIndex] = lobby;
+            }
+            salvaLobby(lobbies);
 
             setTimeout(() => {
                 window.location.href = `waiting_room.html?stanzaId=${lobby.id}&ruolo=player`;
@@ -1029,10 +1119,12 @@
         window.renderListaLobby = async function() {
             const container = document.getElementById('public-lobbies-list');
             const searchValue = (document.getElementById('public-lobbies-search')?.value || '').trim().toUpperCase();
-            const tutteLobby = [...await leggiLobbyRemote(), ...leggiLobbySalvate()];
             const lobbiesById = new Map();
-            tutteLobby.forEach(lobby => {
-                if (lobby?.id && !lobbiesById.has(lobby.id)) lobbiesById.set(lobby.id, lobby);
+            leggiLobbySalvate().forEach(lobby => {
+                if (lobby?.id) lobbiesById.set(lobby.id, lobby);
+            });
+            (await leggiLobbyRemote()).forEach(lobby => {
+                if (lobby?.id) lobbiesById.set(lobby.id, lobby);
             });
             salvaLobby([...lobbiesById.values()].slice(0, 50));
             const lobbies = [...lobbiesById.values()]
