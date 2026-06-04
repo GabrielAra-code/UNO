@@ -1,528 +1,686 @@
 <!DOCTYPE html>
 <html lang="it">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UNO? REVOLUTION - Sala d'Attesa</title>
-    
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Sala d'attesa</title>
     <script src="https://cdn.tailwindcss.com"></script>
-
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
-
-        body {
-            font-family: 'Nunito', sans-serif;
-            background: radial-gradient(circle at center, #0f1e43 0%, #070f24 100%) !important;
-            user-select: none;
-            color: #e2e8f0; /* Light slate for general text */
+        *, *::before, *::after {
+            box-sizing: border-box;
         }
-
-        .game-panel-dark {
+        html {
+            height: 100%;
+        }
+        body {
+            margin: 0;
+            min-height: 100vh;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+            font-family: 'Nunito', sans-serif;
+            background: radial-gradient(circle at center, #0f1e43 0%, #070f24 100%);
+            color: #ffffff;
+            user-select: none;
+        }
+        .container {
+            max-width: 1120px;
+            width: min(100%, 1120px);
+            margin: 0 auto;
+            padding: 12px;
+        }
+        .game-panel-dark,
+        .card {
             background-color: #0b111e;
             border: 2px solid #1e293b;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.9);
         }
-
-        .btn-chunky {
+        .card-inner {
+            padding: 20px;
+            border-radius: 28px;
+            max-height: calc(100vh - 40px);
+            overflow: hidden;
+        }
+        .title-small {
+            letter-spacing: 0.35em;
+            font-size: 0.72rem;
+            color: #94a3b8;
+            text-transform: uppercase;
+            margin-bottom: 10px;
+        }
+        .code-value {
+            letter-spacing: 0.4em;
+            color: #f8b800;
+        }
+        .btn-chunky,
+        .button-primary,
+        .button-secondary {
             border-radius: 1.5rem;
             border: 3px solid rgba(0, 0, 0, 0.2);
             transition: all 0.1s ease;
             position: relative;
             font-weight: 900;
-            text-transform: uppercase;
             letter-spacing: 0.05em;
+            text-transform: uppercase;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
         }
-
-        .btn-yellow { background-color: #facc15; color: #451a03; box-shadow: 0 8px 0 #ca8a04; }
-        .btn-pink { background-color: #ec4899; color: #ffffff; box-shadow: 0 8px 0 #be185d; }
-        .btn-cyan { background-color: #22d3ee; color: #083344; box-shadow: 0 8px 0 #0891b2; }
-        .btn-purple { background-color: #a855f7; color: #ffffff; box-shadow: 0 8px 0 #7e22ce; }
-        .btn-red { background-color: #ef4444; color: #ffffff; box-shadow: 0 8px 0 #b91c1c; }
-        .btn-slate { background-color: #475569; color: #ffffff; box-shadow: 0 8px 0 #1e293b; }
-        .btn-emerald { background-color: #10b981; color: #ffffff; box-shadow: 0 8px 0 #047857; }
-
-        .btn-chunky:hover {
-            filter: brightness(1.1);
+        .btn-yellow,
+        .button-primary {
+            background-color: #facc15;
+            color: #451a03;
+            box-shadow: 0 8px 0 #ca8a04;
+        }
+        .btn-slate,
+        .button-secondary {
+            background-color: #475569;
+            color: #f8fafc;
+            box-shadow: 0 8px 0 #1e293b;
+        }
+        .btn-red {
+            background-color: #ef4444;
+            color: #ffffff;
+            box-shadow: 0 8px 0 #b91c1c;
+        }
+        .btn-emerald {
+            background-color: #10b981;
+            color: #ffffff;
+            box-shadow: 0 8px 0 #047857;
+        }
+        .btn-chunky:hover,
+        .button-primary:hover,
+        .button-secondary:hover,
+        .btn-yellow:hover,
+        .btn-slate:hover,
+        .btn-red:hover {
             transform: translateY(-2px);
+            filter: brightness(1.1);
         }
-
-        .btn-chunky:active {
+        .btn-chunky:active,
+        .button-primary:active,
+        .button-secondary:active,
+        .btn-yellow:active,
+        .btn-slate:active,
+        .btn-red:active {
             transform: translateY(6px);
             box-shadow: 0 2px 0 transparent !important;
         }
-
-        .custom-scroll::-webkit-scrollbar { width: 6px; }
-        .custom-scroll::-webkit-scrollbar-track { background: transparent; }
-        .custom-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-
-        .modal-content:not(.hidden) {
-            animation: modal-pop 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
-        }
-
-        @keyframes modal-pop {
-            0% { opacity: 0; transform: translateY(14px) scale(0.94); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
-        }
-
-        @keyframes waiting-text-anim {
-            0% { transform: rotate(-2deg) scale(1); opacity: 0.8; }
-            50% { transform: rotate(2deg) scale(1.02); opacity: 1; }
-            100% { transform: rotate(-2deg) scale(1); opacity: 0.8; }
-        }
-        .animate-waiting-text {
-            animation: waiting-text-anim 4s ease-in-out infinite;
-        }
-
-        /* Card styling for Card Summary Window */
-        .card-item {
-            width: 100px; /* Fixed width for card */
-            height: 150px; /* Fixed height for card */
-            background-color: #1a202c; /* Dark background */
-            border: 2px solid #4a5568; /* Border color */
-            border-radius: 10px;
-            display: flex;
-            flex-direction: column;
+        .setting-pill {
+            display: inline-flex;
             justify-content: space-between;
             align-items: center;
-            padding: 5px;
-            position: relative;
-            overflow: hidden;
-            text-align: center;
-            font-size: 0.75rem;
-            font-weight: bold;
-            color: #e2e8f0;
-            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.3);
-            transition: all 0.2s ease;
-        }
-        .card-item.disabled {
-            opacity: 0.3;
-            filter: grayscale(100%);
-            pointer-events: none;
-        }
-        .card-item .card-quantity-total {
-            position: absolute;
-            top: 5px;
-            right: 5px;
-            background-color: rgba(0,0,0,0.5);
-            padding: 2px 5px;
-            border-radius: 5px;
-            font-size: 0.6rem;
-            color: #cbd5e0;
-        }
-        .card-item .card-name {
-            margin-top: auto;
-            margin-bottom: auto;
-            font-size: 0.8rem;
-            line-height: 1.1;
-        }
-        .card-item .card-controls {
-            display: flex;
-            justify-content: space-between;
             width: 100%;
-            padding: 0 5px;
-            margin-top: auto;
+            min-width: 0;
+            background-color: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 18px;
+            padding: 10px 12px;
+            gap: 8px;
+            color: #e2e8f0;
+            font-size: 0.84rem;
         }
-        .card-item .card-controls button {
-            background-color: #4a5568;
-            color: white;
-            border: none;
-            border-radius: 5px;
-            width: 25px;
-            height: 25px;
-            display: flex;
+        .setting-pill span:last-child {
+            color: #34d399;
+            font-weight: 800;
+        }
+        .toggle-switch {
+            display: inline-flex;
             align-items: center;
-            justify-content: center;
+            justify-content: flex-start;
+            width: 52px;
+            height: 28px;
+            border-radius: 9999px;
+            background-color: #1f2937;
+            border: 1px solid #334155;
+            padding: 3px;
             cursor: pointer;
-            font-size: 1rem;
-            transition: background-color 0.1s ease;
+            transition: background-color 0.2s ease;
         }
-        .card-item .card-controls button:hover {
-            background-color: #64748b;
+        .toggle-switch.on {
+            background-color: #10b981;
+            justify-content: flex-end;
+            border-color: #047857;
         }
-        .card-item .card-controls .current-quantity {
-            font-size: 0.9rem;
-            color: #a0aec0;
-            display: flex;
+        .toggle-switch .thumb {
+            width: 22px;
+            height: 22px;
+            border-radius: 9999px;
+            background-color: #ffffff;
+            box-shadow: 0 10px 16px rgba(0, 0, 0, 0.24);
+            transition: transform 0.2s ease;
+        }
+        .option-pill {
+            width: 56px;
+            height: 56px;
+            border-radius: 9999px;
+            border: 1px solid #334155;
+            display: inline-flex;
             align-items: center;
             justify-content: center;
-            min-width: 30px;
+            font-weight: 900;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background-color: #111827;
+            color: #94a3b8;
+        }
+        .option-pill.selected {
+            background-color: #facc15;
+            color: #0f172a;
+            border-color: #f59e0b;
+            box-shadow: 0 8px 0 #ca8a04;
+        }
+        .room-input {
+            width: 100%;
+            background-color: #0f172a;
+            color: #ffffff;
+            border: 1px solid #334155;
+            border-radius: 28px;
+            padding: 0.9rem 1rem;
+            font-weight: 900;
+            outline: none;
+        }
+        .room-input::placeholder {
+            color: #94a3b8;
+        }
+        .room-input:focus {
+            border-color: #f7c74b;
+            box-shadow: 0 0 0 4px rgba(247, 199, 59, 0.12);
+        }
+        .custom-scroll::-webkit-scrollbar {
+            width: 6px;
+        }
+        .custom-scroll::-webkit-scrollbar-thumb {
+            background: rgba(148, 163, 184, 0.35);
+            border-radius: 9999px;
+        }
+        .custom-scroll::-webkit-scrollbar-track {
+            background: transparent;
+        }
+        .alert-pill {
+            display: inline-flex;
+            padding: 8px 12px;
+            border-radius: 9999px;
+            background: rgba(248, 184, 0, 0.12);
+            color: #f7c74b;
+            font-weight: 800;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            font-size: 0.72rem;
+        }
+        .players-empty {
+            border: 1px dashed rgba(148, 163, 184, 0.24);
+            border-radius: 18px;
+            padding: 14px;
+            text-align: center;
+            color: #94a3b8;
+            font-size: 0.95rem;
+        }
+        .section-spacing {
+            margin-top: 12px;
+        }
+        .waiting-grid {
+            display: grid;
+            grid-template-columns: minmax(260px, 0.34fr) minmax(0, 0.66fr);
+            gap: 16px;
+            min-height: min(680px, calc(100vh - 80px));
+        }
+        .waiting-column {
+            min-height: 0;
+            background-color: #0b111e;
+            border: 2px solid #1e293b;
+            border-radius: 28px;
+            box-shadow: 0 16px 30px rgba(0, 0, 0, 0.35);
+        }
+        .settings-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+        @media (max-width: 820px) {
+            body {
+                align-items: flex-start;
+            }
+            .card-inner {
+                max-height: none;
+                overflow: visible;
+            }
+            .waiting-grid,
+            .settings-grid {
+                grid-template-columns: 1fr;
+            }
         }
     </style>
-
-    <script type="module">
-        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js"; // FIX: Importazione corretta da firebase-auth.js
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js"; // FIX: Importazione corretta da firebase-firestore.js
-        import { databaseCarte } from './js/carte.js'; // Import the card database
-
-        const firebaseConfig = {
-            apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8", // Replace with your actual API key
-            authDomain: "unoforse-a553d.firebaseapp.com", // Replace with your actual auth domain
-            databaseURL: "https://unoforse-a553d-default-rtdb.europe-west1.firebasedatabase.app", // Replace with your actual database URL
-            projectId: "unoforse-a553d", // Replace with your actual project ID
-            storageBucket: "unoforse-a553d.firebasestorage.app", // Replace with your actual storage bucket
-            messagingSenderId: "396941322053", // Replace with your actual messaging sender ID
-            appId: "1:396941322053:web:86b8f596b4e05aac8ec02c", // Replace with your actual app ID
-            measurementId: "G-9SEK0SY996" // Replace with your actual measurement ID
-        };
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-
-        window.auth = auth;
-        window.db = db;
-        window.signOut = signOut;
-        window.doc = doc;
-        window.getDoc = getDoc;
-        window.setDoc = setDoc;
-        window.updateDoc = updateDoc;
-        window.collection = collection;
-        window.query = query;
-        window.orderBy = orderBy;
-        window.limit = limit;
-        window.getDocs = getDocs;
-        window.databaseCarte = databaseCarte; // Make card database globally accessible for now
-
-        // Sincronizzazione parametri URL
-        const parametriUrl = new URLSearchParams(window.location.search);
-        const stanzaIdFromUrl = parametriUrl.get('stanzaId');
-        const ruoloUtenteFromUrl = parametriUrl.get('ruolo'); // Sarà 'host' per chi crea
-
-        let currentLobby = null;
-        let currentUser = null;
-        let isHost = false; // This will be determined by ruoloUtenteFromUrl
-
-        onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                window.location.href = "index.html";
-            } else {
-                currentUser = user;
-                window.currentUserUid = user.uid;
-                await rinfrescaDatiProfiloUtente(); // Assuming this function exists globally or is imported
-                await loadLobbyDetails(); // Load lobby details from Firestore
-                inizializzaPannelloSalaAttesa(); // Initialize panel after lobby details are loaded
-                renderLobbyScreen(); // Render screen after everything is set up
-            }
-        });
-
-        async function loadLobbyDetails() {
-            if (!stanzaIdFromUrl) {
-                alert("Nessuna lobby selezionata. Tornando alla lobby principale.");
-                window.location.href = "lobby.html";
-                return;
-            }
-
-            try {
-                const lobbyDocRef = doc(db, "stanze", stanzaIdFromUrl);
-                const lobbyDoc = await getDoc(lobbyDocRef);
-
-                if (!lobbyDoc.exists()) {
-                    alert("Lobby non trovata. Tornando alla lobby principale.");
-                    window.location.href = "lobby.html";
-                    return;
-                }
-
-                currentLobby = lobbyDoc.data();
-                currentLobby.id = lobbyDoc.id; // Ensure ID is part of the object
-
-                // Determine if current user is host based on URL parameter
-                isHost = (ruoloUtenteFromUrl === 'host');
-
-                // Ensure current user is in the players list (if not already)
-                if (!currentLobby.giocatori) {
-                    currentLobby.giocatori = [];
-                }
-                const userDocRef = doc(db, "utenti", currentUser.uid);
-                const userDoc = await getDoc(userDocRef);
-                const userData = userDoc.exists() ? userDoc.data() : {};
-
-                if (!currentLobby.giocatori.some(p => p.uid === currentUser.uid)) {
-                    currentLobby.giocatori.push({
-                        uid: currentUser.uid,
-                        nickname: userData.nickname || "Player",
-                        avatar: userData.avatar || "🦊",
-                        level: userData.livello || 1,
-                        ruolo: isHost ? "host" : "player" // Assign role based on URL
-                    });
-                    // Update Firestore with new player
-                    await updateDoc(lobbyDocRef, {
-                        giocatori: currentLobby.giocatori
-                    });
-                }
-                currentLobby.currentPlayers = currentLobby.giocatori.length; // Update player count
-            } catch (error) {
-                console.error("Error loading lobby details:", error);
-                alert("Errore nel caricamento della lobby: " + error.message);
-                window.location.href = "lobby.html";
-                return;
-            }
-        }
-
-        function renderLobbyScreen() {
-            document.getElementById('lobby-name').innerText = currentLobby.nome.toUpperCase();
-            document.getElementById('lobby-id').innerText = currentLobby.id;
-            document.getElementById('lobby-owner').innerText = currentLobby.owner;
-            document.getElementById('lobby-type').innerText = currentLobby.locked ? 'Privata 🔒' : 'Pubblica 🌍';
-            // Find owner nickname from players list
-            const ownerPlayer = currentLobby.giocatori.find(p => p.uid === currentLobby.hostUid);
-            document.getElementById('lobby-owner').innerText = ownerPlayer ? ownerPlayer.nickname : 'Sconosciuto';
-            document.getElementById('lobby-players-count').innerText = `${currentLobby.giocatori.length}/${currentLobby.maxGiocatori}`;
-
-            renderPlayerList();
-        }
-
-        function renderPlayerList() {
-            const playerListContainer = document.getElementById('player-list');
-            playerListContainer.innerHTML = '';
-            currentLobby.giocatori.forEach(player => { // Use currentLobby.giocatori
-                const playerElement = document.createElement('div');
-                playerElement.className = 'flex items-center gap-3 p-2 bg-black/40 rounded-xl border border-slate-800';
-                playerElement.innerHTML = `
-                    <div class="w-8 h-8 bg-slate-950 rounded-full flex items-center justify-center text-lg border-2 border-slate-800">${player.avatar}</div>
-                    <div class="flex-1">
-                        <div class="font-bold text-sm text-white">${player.nickname} ${player.uid === currentLobby.hostUid ? '<span class="text-amber-400 text-xs">(Host)</span>' : ''}</div>
-                        <div class="text-xs text-slate-400">Livello ${player.level}</div>
+</head>
+<body>
+    <div class="container">
+        <div class="card card-inner">
+            <div class="waiting-grid">
+                <section class="waiting-column p-5 flex flex-col">
+                    <div class="mb-5">
+                        <div class="title-small">Lobby</div>
+                        <h1 class="text-4xl sm:text-5xl font-black text-amber-500 tracking-tight drop-shadow-[0_3px_0_rgba(0,0,0,1)]">Sala d'Attesa</h1>
                     </div>
-                    ${ruoloUtenteFromUrl === 'host' && player.uid !== currentUser.uid ? `
-                        <div class="relative group">
-                            <button class="text-slate-500 hover:text-white">⋮</button>
-                            <div class="absolute right-0 top-full mt-1 w-40 bg-slate-800 rounded-lg shadow-lg hidden group-hover:block z-10">
-                                <button class="block w-full text-left px-3 py-2 text-sm text-white hover:bg-slate-700 rounded-t-lg">Visualizza Profilo</button>
-                                <button class="block w-full text-left px-3 py-2 text-sm text-red-400 hover:bg-slate-700">Espelli Giocatore</button>
-                                <button class="block w-full text-left px-3 py-2 text-sm text-red-500 hover:bg-slate-700">Banna Giocatore</button>
-                                <button class="block w-full text-left px-3 py-2 text-sm text-emerald-400 hover:bg-slate-700 rounded-b-lg">Nomina Host</button>
+                    <div class="min-h-0 flex-1 flex flex-col">
+                        <div class="flex items-center justify-between mb-4 gap-2">
+                            <div class="alert-pill">Giocatori</div>
+                            <div id="player-count" class="text-sm text-slate-400 font-semibold">0/6</div>
+                        </div>
+                        <div id="players-list" class="space-y-3 min-h-0 flex-1 overflow-y-auto custom-scroll pr-1 pb-1"></div>
+                        <div id="players-empty" class="players-empty mt-3">In attesa di altri giocatori...</div>
+                    </div>
+                </section>
+
+                <section class="waiting-column p-5 flex flex-col min-h-0">
+                    <div class="rounded-3xl bg-slate-950/90 border border-slate-800 p-4 mb-4">
+                        <div class="title-small">Codice Stanza</div>
+                        <div class="flex flex-col sm:flex-row sm:items-center gap-3">
+                            <div id="room-code" class="text-4xl sm:text-5xl font-black code-value leading-none">KJTN39</div>
+                            <button id="copy-code-btn" onclick="copyRoomCode()" class="btn-chunky btn-slate px-5 py-3 text-xs" data-sound="click">Copia</button>
+                        </div>
+                    </div>
+                    <div class="room-settings-panel rounded-[28px] border border-slate-800 bg-slate-900/80 p-5 mb-4 flex-1 min-h-0 overflow-y-auto custom-scroll">
+                        <div class="flex items-center justify-between mb-4 gap-3">
+                            <div>
+                                <div class="text-sm font-black uppercase tracking-[0.25em] text-slate-400">Configurazioni Partita</div>
+                            </div>
+                            <div id="role-badge" class="text-xs text-slate-400"></div>
+                        </div>
+                        <div class="settings-grid">
+                            <div class="flex items-center justify-between rounded-3xl bg-slate-950/90 border border-slate-800 p-3">
+                                <div>
+                                    <div class="text-sm font-black text-white">🧠 Brainrot</div>
+                                </div>
+                                <button id="toggle-brainrot-btn" onclick="toggleLobbySetting('brainrot')" class="toggle-switch" type="button" data-sound="click"><span class="thumb"></span></button>
+                            </div>
+                            <div class="flex items-center justify-between rounded-3xl bg-slate-950/90 border border-slate-800 p-3">
+                                <div>
+                                    <div class="text-sm font-black text-white">🃏 Stack</div>
+                                </div>
+                                <button id="toggle-stack-btn" onclick="toggleLobbySetting('stack')" class="toggle-switch" type="button" data-sound="click"><span class="thumb"></span></button>
+                            </div>
+                            <div class="rounded-3xl bg-slate-950/90 border border-slate-800 p-4">
+                                <div class="text-sm font-black uppercase tracking-[0.15em] text-slate-400 mb-2">💥 PistolHP</div>
+                                <div class="flex gap-2">
+                                    <button id="pistolhp-2" onclick="selectPistolHp(2)" type="button" class="option-pill" data-sound="click">2</button>
+                                    <button id="pistolhp-3" onclick="selectPistolHp(3)" type="button" class="option-pill selected" data-sound="click">3</button>
+                                    <button id="pistolhp-5" onclick="selectPistolHp(5)" type="button" class="option-pill" data-sound="click">5</button>
+                                </div>
+                            </div>
+                            <div class="space-y-3">
+                                <div class="setting-pill"><span>Giocatori Max</span><span id="setting-max-players">6</span></div>
+                                <div class="setting-pill"><span>Privacy</span><span id="setting-privacy">Pubblica</span></div>
+                                <div class="setting-pill"><span>Stato</span><span id="setting-status">In attesa</span></div>
                             </div>
                         </div>
-                    ` : ''}
-                `;
-                playerListContainer.appendChild(playerElement);
-            });
-        }
-
-        function inizializzaPannelloSalaAttesa() {
-            const hostControls = document.getElementById('host-controls');
-            const btnAvviaPartita = document.getElementById('btn-avvia-partita');
-            const playerWaitingMessage = document.getElementById('player-waiting-message');
-
-            if (ruoloUtenteFromUrl === 'host') {
-                console.log("Benvenuto Capo! Sei l'Host di questa lobby.");
-                
-                if (hostControls) hostControls.classList.remove('hidden');
-                if (playerWaitingMessage) playerWaitingMessage.classList.add('hidden');
-                if (btnAvviaPartita) {
-                    btnAvviaPartita.removeAttribute('disabled');
-                    btnAvviaPartita.classList.remove('opacity-50', 'cursor-not-allowed');
-                    btnAvviaPartita.innerText = "Avvia Partita";
-                }
-            } else {
-                console.log("Sei entrato come ospite.");
-                
-                if (hostControls) hostControls.classList.add('hidden');
-                if (playerWaitingMessage) playerWaitingMessage.classList.remove('hidden');
-                if (btnAvviaPartita) {
-                    btnAvviaPartita.setAttribute('disabled', 'true');
-                    btnAvviaPartita.classList.add('opacity-50', 'cursor-not-allowed');
-                    btnAvviaPartita.innerText = "⏳ IN ATTESA DELL'HOST...";
-                }
-            }
-        }
-
-        window.openModal = function(id) {
-            const overlay = document.getElementById('modal-overlay');
-            const modal = document.getElementById(id);
-            if(overlay && modal) {
-                overlay.classList.remove('hidden');
-                modal.classList.remove('hidden');
-            }
-        }
-
-        window.closeModal = function() {
-            const overlay = document.getElementById('modal-overlay');
-            document.querySelectorAll('.modal-content').forEach(m => m.classList.add('hidden'));
-            if(overlay) overlay.classList.add('hidden');
-        }
-
-        window.renderCardSummary = function(filterText = "") {
-            const container = document.getElementById('card-summary-grid');
-            container.innerHTML = '';
-            const queryNorm = filterText.toLowerCase().trim();
-
-            // Simulate lobby-specific card quantities
-            if (!currentLobby.cardQuantities) {
-                currentLobby.cardQuantities = {};
-                databaseCarte.forEach(card => {
-                    // Default quantities, parse "2 per colore", "4", "1", "Da definire"
-                    let defaultQty = 0;
-                    if (card.quantita.includes("per numero") || card.quantita.includes("per colore")) {
-                        defaultQty = 8; // Example: 2 per 4 colors = 8, or 2 per 10 numbers = 20 (simplified)
-                    } else if (card.quantita === "4") {
-                        defaultQty = 4;
-                    } else if (card.quantita === "1") {
-                        defaultQty = 1;
-                    } else if (card.quantita === "2") {
-                        defaultQty = 2;
-                    } else if (card.quantita === "6") {
-                        defaultQty = 6;
-                    } else {
-                        defaultQty = 2; // Fallback for "Da definire" or other
-                    }
-                    currentLobby.cardQuantities[card.id] = defaultQty;
-                });
-            }
-
-            databaseCarte.forEach(card => {
-                const cardName = card.nome.toLowerCase();
-                if (queryNorm && !cardName.includes(queryNorm)) {
-                    return;
-                }
-
-                const currentQty = currentLobby.cardQuantities[card.id] || 0;
-                const isDisabled = currentQty === 0;
-
-                const cardElement = document.createElement('div');
-                cardElement.className = `card-item ${isDisabled ? 'disabled' : ''}`;
-                cardElement.innerHTML = `
-                    <span class="card-quantity-total">x${card.quantita.replace('Da definire', '?')}</span>
-                    <div class="card-name">${card.nome}</div>
-                    <div class="card-controls">
-                        <button onclick="updateCardQuantity('${card.id}', -1)">-</button>
-                        <span class="current-quantity">${currentQty}</span>
-                        <button onclick="updateCardQuantity('${card.id}', 1)">+</button>
+                        <button onclick="openCardSummary()" class="btn-chunky btn-yellow w-full py-4 mt-5 text-sm" data-sound="click">Riepilogo Carte</button>
                     </div>
-                `;
-                container.appendChild(cardElement);
-            });
-        }
 
-        window.updateCardQuantity = function(cardId, change) {
-            if (!currentLobby || !currentLobby.cardQuantities) return;
-
-            let currentQty = currentLobby.cardQuantities[cardId] || 0;
-            currentQty += change;
-            if (currentQty < 0) currentQty = 0;
-            if (currentQty > 99) currentQty = 99; // Arbitrary max for display
-
-            currentLobby.cardQuantities[cardId] = currentQty;
-
-            // Re-render the card summary to reflect changes
-            renderCardSummary(document.getElementById('card-search-input').value);
-
-            // In a real app, you'd save this to Firestore
-            // For demo, update localStorage
-            const lobbies = JSON.parse(localStorage.getItem('unoLobbyList') || '[]');
-            const updatedLobbies = lobbies.map(l => l.id === currentLobby.id ? currentLobby : l);
-            localStorage.setItem('unoLobbyList', JSON.stringify(updatedLobbies));
-        }
-
-        window.leaveLobby = function() {
-            // In a real app, you'd remove the user from the lobby in Firestore
-            // For this demo, we just redirect
-            window.location.href = "lobby.html";
-        };
-
-        // Placeholder for rinfrescaDatiProfiloUtente if not imported
-        window.rinfrescaDatiProfiloUtente = async function() {
-            // This function would typically fetch and update user profile data
-            // For now, it's a no-op to prevent errors
-            console.log("rinfrescaDatiProfiloUtente called in waiting_room.html");
-        };
-    </script>
-</head>
-<body class="w-full h-screen flex flex-col p-6">
-
-    <!-- Header -->
-    <header class="flex justify-between items-center mb-4">
-        <div>
-            <h1 class="text-5xl font-black text-amber-500 tracking-tight drop-shadow-[0_3px_0_rgba(0,0,0,1)] -rotate-1">UNO?</h1>
-            <span class="bg-pink-600 px-3 py-0.5 rounded-full text-[10px] font-black uppercase shadow-md inline-block text-white tracking-widest">Revolution</span>
-        </div>
-        <div class="flex items-center gap-4 game-panel-dark px-5 py-2 rounded-2xl shadow-xl">
-            <div class="avatar-render w-10 h-10 bg-slate-950 rounded-full flex items-center justify-center text-xl border-2 border-slate-800">🦊</div>
-            <div>
-                <div id="header-nickname" class="font-black text-sm tracking-wide text-white">CARICAMENTO...</div>
-                <div class="text-[10px] text-emerald-400 font-bold uppercase tracking-wider">Online</div>
+                    <div class="flex flex-col gap-3 sm:flex-row">
+                        <button id="btn-start-game" onclick="startGame()" class="btn-chunky btn-emerald w-full py-4" data-sound="click">Avvia Partita</button>
+                        <button onclick="leaveLobby()" class="btn-chunky btn-slate w-full py-4" data-sound="click">Esci dalla Lobby</button>
+                    </div>
+                </section>
             </div>
         </div>
-    </header>
+    </div>
 
-    <!-- Main Lobby Content -->
-    <main class="flex-1 flex gap-6 mt-4">
-        <!-- Left Column: Player List (30-35%) -->
-        <div class="w-full lg:w-1/3 flex flex-col game-panel-dark p-5 rounded-3xl shadow-xl">
-            <h2 class="text-xl font-black text-cyan-400 mb-4 uppercase">Giocatori in Lobby</h2>
-            <div id="player-list" class="flex-1 space-y-3 custom-scroll pr-2">
-                <!-- Player list will be rendered here -->
-            </div>
-            <button onclick="leaveLobby()" class="btn-chunky btn-red w-full py-3.5 text-sm cursor-pointer mt-4">Lascia Lobby</button>
-        </div>
-
-        <!-- Right Column: Host Controls / Player Waiting (65-70%) -->
-        <div class="w-full lg:w-2/3 flex flex-col game-panel-dark p-5 rounded-3xl shadow-xl relative">
-            <!-- Lobby Info Header -->
-            <div class="mb-6 pb-4 border-b border-slate-800">
-                <h2 class="text-2xl font-black text-amber-500 uppercase" id="lobby-name">Nome Lobby</h2>
-                <p class="text-sm text-slate-400 font-bold mt-1">ID: <span id="lobby-id">#XXXXXX</span> | Host: <span id="lobby-owner"></span> | Tipo: <span id="lobby-type"></span> | Giocatori: <span id="lobby-players-count"></span></p>
-            </div>
-
-            <!-- Host Controls (Visible only to host) -->
-            <div id="host-controls" class="flex-1 flex flex-col gap-4 hidden">
-                <h3 class="text-xl font-black text-emerald-400 uppercase mb-2">Configurazioni Avanzate Lobby</h3>
-                
-                <div class="grid grid-cols-2 gap-4">
-                    <button onclick="openModal('modal-card-summary')" class="btn-chunky btn-purple p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer">
-                        <span class="text-3xl">🃏</span>
-                        <span class="text-base font-black">Riepilogo Carte</span>
-                    </button>
-                    <button class="btn-chunky btn-cyan p-4 flex flex-col items-center justify-center gap-1.5 cursor-pointer opacity-50 cursor-not-allowed">
-                        <span class="text-3xl">⚙️</span>
-                        <span class="text-base font-black">Regole Speciali</span>
-                    </button>
-                    <!-- Add more advanced config buttons here -->
-                </div>
-
-                <div class="flex-1"></div> <!-- Spacer -->
-
-                <div class="flex gap-4 mt-auto">
-                    <button class="btn-chunky btn-red flex-1 py-3.5 text-sm cursor-pointer">Chiudi Lobby</button>
-                    <button id="btn-avvia-partita" class="btn-chunky btn-emerald flex-1 py-3.5 text-sm cursor-pointer">Avvia Partita</button>
+    <div id="card-summary-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+        <div class="w-full max-w-5xl rounded-[32px] border border-slate-800 bg-slate-950/95 shadow-2xl relative">
+            <button onclick="closeCardSummary()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <div class="flex items-center justify-between gap-4 border-b border-slate-800 px-5 py-4">
+                <div>
+                    <div class="text-sm uppercase tracking-[0.3em] text-slate-400">Riepilogo carte</div>
+                    <h2 class="text-2xl font-black text-white">Configura il mazzo</h2>
                 </div>
             </div>
-
-            <!-- Player Waiting Message (Visible only to normal players) -->
-            <div id="player-waiting-message" class="flex-1 flex items-center justify-center hidden">
-                <p class="text-4xl font-black text-slate-500 text-center animate-waiting-text transform -rotate-2">
-                    In attesa che l'host avvii la partita...
-                </p>
-            </div>
-        </div>
-    </main>
-
-    <!-- Modali Overlay -->
-    <div id="modal-overlay" class="fixed inset-0 bg-black/85 backdrop-blur-sm z-40 hidden flex items-center justify-center p-4">
-
-        <!-- Modal: Card Summary Window -->
-        <div id="modal-card-summary" class="modal-content hidden game-panel-dark w-full max-w-4xl p-6 rounded-3xl flex flex-col gap-4 relative">
-            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer">X</button>
-            <h2 class="text-2xl font-black text-purple-400 text-center uppercase">Riepilogo Carte Lobby</h2>
-            
-            <div class="relative mb-4">
-                <input type="text" id="card-search-input" placeholder="🔍 Cerca carta per nome..." 
-                    class="w-full bg-slate-950 rounded-xl px-4 py-2.5 text-white font-bold text-xs outline-none border-2 border-slate-800 focus:border-purple-500 transition-all placeholder:text-slate-600"
-                    oninput="renderCardSummary(this.value)">
-            </div>
-
-            <div id="card-summary-grid" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 custom-scroll max-h-[60vh] overflow-y-auto pr-2">
-                <!-- Cards will be rendered here -->
+            <div class="space-y-4 p-5">
+                <div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                    <input id="card-summary-search" type="text" placeholder="Cerca carta..." class="room-input w-full sm:max-w-md rounded-3xl px-4 py-3 text-sm font-black outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20" oninput="renderCardSummary(this.value)" />
+                    <div class="text-xs text-slate-400">Riduci quantità a 0 per disabilitare la carta nella partita.</div>
+                </div>
+                <div id="summary-cards-grid" class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3 max-h-[56vh] overflow-y-auto custom-scroll pr-2"></div>
             </div>
         </div>
     </div>
 
     <script>
-        // Initial render of card summary when modal opens
-        document.getElementById('modal-card-summary').addEventListener('transitionend', (event) => {
-            if (!document.getElementById('modal-card-summary').classList.contains('hidden')) {
-                renderCardSummary();
+        const urlParams = new URLSearchParams(window.location.search);
+        const stanzaId = urlParams.get('stanzaId');
+        const ruolo = urlParams.get('ruolo');
+        const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{"nickname":"Giocatore","avatar":"🦊"}');
+        const isHost = ruolo === 'host';
+        const databaseCarte = [
+            { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: 20, effetto: "Nessuno. Giocabili solo se l'ultimo numero coincide o su carte speciali incolori.", cat: "⚪ Incolore" },
+            { id: "c_piu2", nome: "Classico: +2", quantita: 2, effetto: "Il bersaglio pesca 2 carte e salta il turno corrente.", cat: "🟥🟨🟩🟦 Classico" },
+            { id: "c_rev", nome: "Classico: Reverse", quantita: 2, effetto: "Inverte istantaneamente la direzione dei turni di gioco.", cat: "🟥🟨🟩🟦 Classico" },
+            { id: "c_bloc", nome: "Classico: Blocco", quantita: 2, effetto: "Salto del turno immediato per il giocatore successivo.", cat: "🟥🟨🟩🟦 Classico" },
+            { id: "c_cc", nome: "Nero: Cambio Colore", quantita: 4, effetto: "Scegli il colore dominante del tavolo di gioco.", cat: "⚫ Nero" },
+            { id: "c_piu4", nome: "Nero: +4", quantita: 4, effetto: "Il bersaglio pesca 4 carte e perde il proprio turno.", cat: "⚫ Nero" },
+            { id: "c_jack", nome: "Jack Sparrow", quantita: 1, effetto: "Copia sul momento l'effetto di un +2, +4, Cambio Colore o Reverse.", cat: "⭐ Speciale UNO?" },
+            { id: "c_piu10", nome: "Speciale: +10", quantita: 1, effetto: "Il malcapitato subisce la pesca di 10 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
+            { id: "c_piu16", nome: "Speciale: +16", quantita: 1, effetto: "Il malcapitato subisce la pesca di 16 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
+            { id: "c_scudo", nome: "Scudo", quantita: 4, effetto: "Protegge solo da Blobby e Proiettile. Si consuma quando salva il giocatore.", cat: "⭐ Speciale UNO?" },
+            { id: "c_death", nome: "Death Note", quantita: 1, effetto: "Eliminazione immediata di un giocatore a scelta.", cat: "⭐ Speciale UNO?" },
+            { id: "c_blobby", nome: "Blobby", quantita: 1, effetto: "Vittoria istantanea. Se il bersaglio ha Scudo, lo Scudo si consuma e il bersaglio sopravvive.", cat: "⭐ Speciale UNO?" },
+            { id: "c_righello", nome: "Righello o X?", quantita: 4, effetto: "Giocabile fuori dal turno. Annulla interamente l'ultima mossa.", cat: "⭐ Speciale UNO?" },
+            { id: "c_donna", nome: "Donna di Mazze", quantita: 1, effetto: "Resetta e annulla tutte le catene ed effetti attivi globali sul tavolo.", cat: "⭐ Speciale UNO?" },
+            { id: "c_imprevisti", nome: "Imprevisti", quantita: 1, effetto: "Appena entra in mano si gioca da sola. Tutti pescano una carta.", cat: "⚪ Speciale Incolore" },
+            { id: "c_scambio", nome: "Scambio", quantita: 2, effetto: "Scambia l'intera mano di carte con un giocatore bersaglio.", cat: "⭐ Speciale UNO?" },
+            { id: "c_vaff", nome: "Vaffanculo", quantita: 2, effetto: "Annulla l'effetto e la streak attiva. Le carte tornano in mano.", cat: "🌍 Evento (Giallo)" },
+            { id: "c_mari", nome: "Mariguana", quantita: 1, effetto: "Obbliga tutti a giocare Verde o pescare finché non lo si trova.", cat: "🌍 Evento (Verde)" },
+            { id: "c_onde", nome: "Le ONDE", quantita: 2, effetto: "Tutti tranne chi la usa si scambiano le mani in modo casuale.", cat: "🌍 Evento (Blu)" },
+            { id: "c_cuore", nome: "Cuore", quantita: 2, effetto: "Effettua la resurrezione immediata di un player precedentemente eliminato.", cat: "🌍 Evento (Verde)" },
+            { id: "c_comunismo", nome: "Comunismo", quantita: 1, effetto: "Ruba e guarda le carte. Se intercetta Blobby attiva lo scontro 1vs1.", cat: "🌍 Evento (Rosso)" },
+            { id: "c_nazismo", nome: "Nazismo", quantita: 1, effetto: "Seleziona una carta dalla tua mano e cedila forzatamente a un altro.", cat: "🌍 Evento (Rosso)" },
+            { id: "c_proiettile", nome: "Proiettile", quantita: 6, effetto: "Parte una roulette russa: chi viene colpito perde 1 PistolHP (Max 2).", cat: "🔫 Sistema Proiettile" },
+            { id: "c_quagruppo", nome: "QUA GRUPPO!", quantita: 1, effetto: "La metà esatta dei giocatori pesca una carta (arrotondato per eccesso).", cat: "🎯 Cutruzzolà Move" },
+            { id: "c_messa", nome: "La Messa è Finita", quantita: 1, effetto: "Prende tutti i rifiuti e gli scarti accumulati e li rimescola nel deck.", cat: "🎯 Cutruzzolà Move" },
+            { id: "c_piani", nome: "Piani di Proiezione (P.V/P.L/P.O/L.T)", quantita: 1, effetto: "Chi unisce tutti e 4 i pezzi sblocca la vittoria suprema.", cat: "📐 Piani di Proiezione" },
+            { id: "c_brainrot", nome: "Brainrot Battle", quantita: 1, effetto: "Inizia una sfida Brainrot globale. Il punteggio PT più alto vince.", cat: "🧠 Brainrot" },
+            { id: "c_specchio", nome: "Specchio", quantita: 1, effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente.", cat: "❓ Non Definita" }
+        ];
+
+        function readLobbyList() {
+            try {
+                return JSON.parse(localStorage.getItem('unoLobbyList') || '[]');
+            } catch (error) {
+                return [];
             }
-        });
+        }
+
+        function saveLobbyList(list) {
+            localStorage.setItem('unoLobbyList', JSON.stringify(list));
+        }
+
+        function findLobby() {
+            const list = readLobbyList();
+            return list.find(room => room.id === stanzaId);
+        }
+
+        function updateLobby(updateFn) {
+            const list = readLobbyList();
+            const index = list.findIndex(room => room.id === stanzaId);
+            if (index === -1) return null;
+            updateFn(list[index]);
+            saveLobbyList(list);
+            return list[index];
+        }
+
+        function initializeLobbyData() {
+            const currentLobby = findLobby();
+            if (!currentLobby) return null;
+            currentLobby.settings = currentLobby.settings || { brainrot: true, stack: true, pistolHp: 3 };
+            if (!currentLobby.cardQuantities) {
+                currentLobby.cardQuantities = {};
+                databaseCarte.forEach(carta => {
+                    currentLobby.cardQuantities[carta.id] = carta.quantita || 1;
+                });
+                saveLobbyList(readLobbyList());
+            }
+            return currentLobby;
+        }
+
+        function renderWaitingRoom() {
+            const roomCodeEl = document.getElementById('room-code');
+            const playerCountEl = document.getElementById('player-count');
+            const playersList = document.getElementById('players-list');
+            const playersEmpty = document.getElementById('players-empty');
+            const startButton = document.getElementById('btn-start-game');
+            const currentLobby = initializeLobbyData();
+
+            if (!currentLobby) {
+                alert('La lobby non è più disponibile.');
+                window.location.href = 'Menu_principale.html';
+                return;
+            }
+
+            roomCodeEl.innerText = currentLobby.id || '—';
+            playerCountEl.innerText = `${(currentLobby.players?.length || 0)}/${currentLobby.maxPlayers || 6}`;
+            document.getElementById('setting-max-players').innerText = currentLobby.maxPlayers || 6;
+            document.getElementById('setting-privacy').innerText = currentLobby.locked ? 'Privata' : 'Pubblica';
+            document.getElementById('setting-status').innerText = currentLobby.status === 'started' ? 'Avviata' : 'In attesa';
+            playersList.innerHTML = '';
+            const players = currentLobby.players || [];
+            players.forEach(player => {
+                const item = document.createElement('div');
+                item.className = 'rounded-2xl border border-slate-800 bg-slate-900/80 p-4 flex items-center justify-between gap-3';
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <div class="w-10 h-10 rounded-2xl bg-slate-800 flex items-center justify-center text-lg">${player.avatar || '🃏'}</div>
+                        <div>
+                            <div class="font-black text-slate-100">${player.nickname || 'Giocatore'}</div>
+                            <div class="text-[11px] uppercase tracking-[0.2em] text-slate-500">${player.role === 'host' ? 'Host' : 'Giocatore'}</div>
+                        </div>
+                    </div>
+                    <div class="text-[11px] font-black uppercase ${player.isSelf ? 'text-amber-300' : 'text-slate-400'}">${player.isSelf ? 'TU' : ''}</div>
+                `;
+                playersList.appendChild(item);
+            });
+
+            playersEmpty.classList.toggle('hidden', players.length > 0);
+            document.getElementById('toggle-brainrot-btn').classList.toggle('on', currentLobby.settings.brainrot);
+            document.getElementById('toggle-stack-btn').classList.toggle('on', currentLobby.settings.stack);
+            [2, 3, 5].forEach(value => {
+                document.getElementById(`pistolhp-${value}`)?.classList.toggle('selected', currentLobby.settings.pistolHp === value);
+            });
+            document.getElementById('role-badge').innerText = isHost ? 'Host' : 'Ospite';
+            startButton.classList.toggle('hidden', !isHost);
+            document.querySelectorAll('.toggle-switch').forEach(btn => {
+                btn.disabled = !isHost;
+                btn.classList.toggle('opacity-40', !isHost);
+            });
+            document.querySelectorAll('.option-pill').forEach(btn => {
+                btn.disabled = !isHost;
+                btn.classList.toggle('opacity-40', !isHost);
+            });
+        }
+
+        let sfxVolume = parseFloat(localStorage.getItem('sfxVolume') || '1');
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        function playSynth(type) {
+            if (sfxVolume <= 0) return;
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const osc = audioCtx.createOscillator();
+            const gainNode = audioCtx.createGain();
+            osc.connect(gainNode);
+            gainNode.connect(audioCtx.destination);
+            const now = audioCtx.currentTime;
+            const volumeEffettivo = 0.2 * sfxVolume;
+
+            if (type === 'pop') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, now);
+                osc.frequency.exponentialRampToValueAtTime(800, now + 0.1);
+                gainNode.gain.setValueAtTime(volumeEffettivo, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.1);
+                osc.start(now); osc.stop(now + 0.1);
+            } else if (type === 'bloop') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(400, now);
+                osc.frequency.exponentialRampToValueAtTime(550, now + 0.15);
+                gainNode.gain.setValueAtTime(volumeEffettivo, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.15);
+                osc.start(now); osc.stop(now + 0.15);
+            } else if (type === 'click') {
+                osc.type = 'triangle'; osc.frequency.setValueAtTime(750, now);
+                gainNode.gain.setValueAtTime(volumeEffettivo * 0.3, now);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.04);
+                osc.start(now); osc.stop(now + 0.04);
+            } else if (type === 'error') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(160, now);
+                osc.frequency.exponentialRampToValueAtTime(110, now + 0.25);
+                gainNode.gain.setValueAtTime(volumeEffettivo * 0.5, now);
+                gainNode.gain.linearRampToValueAtTime(0.01, now + 0.25);
+                osc.start(now); osc.stop(now + 0.25);
+            }
+        }
+
+        function initializeSfxListeners() {
+            document.addEventListener('mouseover', (event) => {
+                const elemento = event.target.closest('button, [data-sound]');
+                if (!elemento || !elemento.contains(event.target)) return;
+                if (event.relatedTarget && elemento.contains(event.relatedTarget)) return;
+                playSynth('click');
+            });
+
+            document.addEventListener('click', (event) => {
+                const elemento = event.target.closest('button, [data-sound]');
+                if (!elemento) return;
+                const soundType = elemento.getAttribute('data-sound') || 'click';
+                playSynth(soundType);
+            }, true);
+        }
+        setTimeout(initializeSfxListeners, 500);
+
+        function copyRoomCode() {
+            const codeText = document.getElementById('room-code').innerText;
+            const copyButton = document.getElementById('copy-code-btn');
+            navigator.clipboard.writeText(codeText).then(() => {
+                copyButton.innerText = 'Copiato';
+                setTimeout(() => {
+                    copyButton.innerText = 'Copia';
+                }, 1100);
+            }).catch(() => {
+                copyButton.innerText = 'Errore';
+                playSynth('error');
+                setTimeout(() => {
+                    copyButton.innerText = 'Copia';
+                }, 1100);
+            });
+        }
+
+        function leaveLobby() {
+            const list = readLobbyList();
+            const index = list.findIndex(room => room.id === stanzaId);
+            if (index !== -1) {
+                if (isHost) {
+                    list[index].status = 'closed';
+                } else {
+                    list[index].players = list[index].players.filter(player => !player.isSelf);
+                }
+                saveLobbyList(list);
+            }
+            window.location.href = 'Menu_principale.html';
+        }
+
+        function startGame() {
+            if (!isHost) {
+                alert('Solo l\'host può avviare la partita.');
+                return;
+            }
+            const list = readLobbyList();
+            const index = list.findIndex(room => room.id === stanzaId);
+            if (index === -1) {
+                alert('Lobby non trovata.');
+                return;
+            }
+            if ((list[index].players?.length || 0) < 2) {
+                alert('Servono almeno 2 giocatori per avviare la partita.');
+                return;
+            }
+            list[index].status = 'started';
+            saveLobbyList(list);
+            alert('Partita avviata!');
+            renderWaitingRoom();
+        }
+
+        function toggleLobbySetting(setting) {
+            if (!isHost) {
+                alert('Solo l\'host può modificare le impostazioni.');
+                return;
+            }
+            updateLobby(lobbyData => {
+                lobbyData.settings[setting] = !lobbyData.settings[setting];
+            });
+            renderWaitingRoom();
+        }
+
+        function selectPistolHp(value) {
+            if (!isHost) {
+                alert('Solo l\'host può modificare le impostazioni.');
+                return;
+            }
+            updateLobby(lobbyData => {
+                lobbyData.settings.pistolHp = value;
+            });
+            document.querySelectorAll('.option-pill').forEach(btn => btn.classList.remove('selected'));
+            document.getElementById(`pistolhp-${value}`)?.classList.add('selected');
+            renderWaitingRoom();
+        }
+
+        function openCardSummary() {
+            renderCardSummary(document.getElementById('card-summary-search').value || '');
+            document.getElementById('card-summary-modal').classList.remove('hidden');
+        }
+
+        function closeCardSummary() {
+            document.getElementById('card-summary-modal').classList.add('hidden');
+        }
+
+        function cardIcon(carta) {
+            if (carta.cat.includes('Classico')) return '🎴';
+            if (carta.cat.includes('Nero')) return '🖤';
+            if (carta.cat.includes('Evento')) return '🌍';
+            if (carta.cat.includes('Speciale')) return '✨';
+            if (carta.cat.includes('Brainrot')) return '🧠';
+            return '🃏';
+        }
+
+        function renderCardSummary(filter = '') {
+            const currentLobby = initializeLobbyData();
+            const query = filter.toLowerCase().trim();
+            const grid = document.getElementById('summary-cards-grid');
+            grid.innerHTML = '';
+            if (!currentLobby) return;
+
+            databaseCarte.filter(carta => {
+                const search = `${carta.nome} ${carta.effetto} ${carta.cat}`.toLowerCase();
+                return !query || search.includes(query);
+            }).forEach(carta => {
+                const quantity = currentLobby.cardQuantities[carta.id] ?? 0;
+                const disabled = quantity === 0;
+                const card = document.createElement('div');
+                card.className = `rounded-3xl border p-4 text-center transition-all ${disabled ? 'bg-slate-900/70 border-slate-700 opacity-40' : 'bg-slate-950 border-slate-800 hover:border-amber-400/40 hover:shadow-xl'}`;
+                card.innerHTML = `
+                    <div class="text-[32px] mb-3">${cardIcon(carta)}</div>
+                    <div class="text-xs uppercase tracking-[0.35em] text-slate-500 mb-2">${carta.cat}</div>
+                    <div class="font-black text-white text-sm mb-3">${carta.nome}</div>
+                    <div class="text-[11px] text-slate-400 leading-relaxed mb-4">${carta.effetto}</div>
+                    <div class="flex items-center justify-center gap-2">
+                        <button onclick="modifyCardQuantity('${carta.id}', -1)" class="btn-chunky btn-slate w-9 h-9 rounded-2xl" data-sound="click">-</button>
+                        <span class="text-2xl font-black text-amber-300">${quantity}</span>
+                        <button onclick="modifyCardQuantity('${carta.id}', 1)" class="btn-chunky btn-slate w-9 h-9 rounded-2xl" data-sound="click">+</button>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        function modifyCardQuantity(id, delta) {
+            if (!isHost) {
+                alert('Solo l\'host può modificare le carte.');
+                return;
+            }
+            updateLobby(lobbyData => {
+                lobbyData.cardQuantities = lobbyData.cardQuantities || {};
+                lobbyData.cardQuantities[id] = Math.max(0, (lobbyData.cardQuantities[id] || 0) + delta);
+            });
+            renderCardSummary(document.getElementById('card-summary-search').value || '');
+        }
+
+        if (!stanzaId || !findLobby()) {
+            alert('Lobby non trovata. Torna alla lobby principale.');
+            window.location.href = 'Menu_principale.html';
+        } else {
+            initializeLobbyData();
+            renderWaitingRoom();
+            window.addEventListener('storage', renderWaitingRoom);
+            setInterval(renderWaitingRoom, 1000);
+        }
     </script>
 </body>
 </html>

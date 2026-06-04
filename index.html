@@ -234,7 +234,7 @@
                         createdAt: new Date().toISOString()
                     });
 
-                    window.location.href = "lobby.html";
+                    window.location.href = "Menu_principale.html";
                 } catch(err) {
                     errorBox.innerText = "Errore: " + err.message;
                     errorBox.classList.remove('hidden');
@@ -242,7 +242,7 @@
             } else {
                 try {
                     await window.signInWithEmailAndPassword(window.auth, email, password);
-                    window.location.href = "lobby.html";
+                    window.location.href = "Menu_principale.html";
                 } catch(err) {
                     errorBox.innerText = "Credenziali errate o utente inesistente.";
                     errorBox.classList.remove('hidden');
