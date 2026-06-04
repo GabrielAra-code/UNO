@@ -291,18 +291,34 @@ export function renderizzaSalaAttesa() {
             `;
         }
 
-        listContainer.innerHTML += `
-            <div class="player-row bg-black/40 border border-slate-900 rounded-2xl p-2.5 flex items-center justify-between relative">
-                <div class="flex items-center gap-3">
-                    <div class="w-9 h-9 bg-slate-950 rounded-xl flex items-center justify-center border border-slate-800 text-lg shadow-inner">${p.avatar}</div>
-                    <div>
-                        <div class="text-xs font-black text-white uppercase tracking-wide">${iconaHost}${p.nickname} ${isMe ? '<span class="text-[9px] text-pink-400 lowercase">(tu)</span>' : ''}</div>
-                        <div class="text-[10px] text-slate-500 font-bold uppercase">Livello ${p.livello}</div>
-                    </div>
-                </div>
-                ${menuTrePuntiniHTML}
-            </div>
+        const row = document.createElement('div');
+        row.className = 'player-row bg-black/40 border border-slate-900 rounded-2xl p-2.5 flex items-center justify-between relative';
+
+        const left = document.createElement('div');
+        left.className = 'flex items-center gap-3';
+
+        const av = document.createElement('div');
+        av.className = 'w-9 h-9 bg-slate-950 rounded-xl overflow-hidden flex items-center justify-center border border-slate-800 shadow-inner';
+        if (globalThis.AvatarUI) {
+            globalThis.AvatarUI.mountAvatar(av, p.avatar, { imgClass: 'w-full h-full object-cover' });
+        } else {
+            av.textContent = p.avatar || '🦊';
+        }
+
+        const meta = document.createElement('div');
+        meta.innerHTML = `
+            <div class="text-xs font-black text-white uppercase tracking-wide">${iconaHost}${p.nickname} ${isMe ? '<span class="text-[9px] text-pink-400 lowercase">(tu)</span>' : ''}</div>
+            <div class="text-[10px] text-slate-500 font-bold uppercase">Livello ${p.livello}</div>
         `;
+        left.appendChild(av);
+        left.appendChild(meta);
+        row.appendChild(left);
+        if (menuTrePuntiniHTML) {
+            const menuWrap = document.createElement('div');
+            menuWrap.innerHTML = menuTrePuntiniHTML;
+            row.appendChild(menuWrap.firstElementChild || menuWrap);
+        }
+        listContainer.appendChild(row);
     });
 }
 

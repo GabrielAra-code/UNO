@@ -270,6 +270,7 @@
     <script src="js/game-deck.js"></script>
     <script src="js/game-engine.js"></script>
     <script src="js/game-firestore.js"></script>
+    <script src="js/avatar-ui.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
          import {
@@ -587,16 +588,39 @@
             players.forEach(player => {
                 const item = document.createElement('div');
                 item.className = 'rounded-2xl border border-slate-800 bg-slate-900/80 p-4 flex items-center justify-between gap-3';
-                item.innerHTML = `
-                    <div class="flex items-center gap-3">
-                        <div class="w-10 h-10 rounded-2xl bg-slate-800 flex items-center justify-center text-lg">${player.avatar || '🃏'}</div>
-                        <div>
-                            <div class="font-black text-slate-100">${player.nickname || 'Giocatore'}</div>
-                            <div class="text-[11px] uppercase tracking-[0.2em] text-slate-500">${player.role === 'host' ? 'Host' : 'Giocatore'}</div>
-                        </div>
-                    </div>
-                    <div class="text-[11px] font-black uppercase ${player.isSelf ? 'text-amber-300' : 'text-slate-400'}">${player.isSelf ? 'TU' : ''}</div>
-                `;
+
+                const left = document.createElement('div');
+                left.className = 'flex items-center gap-3';
+
+                const av = document.createElement('div');
+                av.className = 'w-10 h-10 rounded-2xl bg-slate-800 overflow-hidden flex items-center justify-center shrink-0';
+                if (window.AvatarUI) {
+                    window.AvatarUI.mountAvatar(av, player.avatar, {
+                        fallback: '🃏',
+                        imgClass: 'w-full h-full object-cover'
+                    });
+                } else {
+                    av.textContent = player.avatar || '🃏';
+                }
+
+                const info = document.createElement('div');
+                const name = document.createElement('div');
+                name.className = 'font-black text-slate-100';
+                name.textContent = player.nickname || 'Giocatore';
+                const role = document.createElement('div');
+                role.className = 'text-[11px] uppercase tracking-[0.2em] text-slate-500';
+                role.textContent = player.role === 'host' ? 'Host' : 'Giocatore';
+                info.appendChild(name);
+                info.appendChild(role);
+                left.appendChild(av);
+                left.appendChild(info);
+
+                const badge = document.createElement('div');
+                badge.className = `text-[11px] font-black uppercase ${player.isSelf ? 'text-amber-300' : 'text-slate-400'}`;
+                badge.textContent = player.isSelf ? 'TU' : '';
+
+                item.appendChild(left);
+                item.appendChild(badge);
                 playersList.appendChild(item);
             });
 

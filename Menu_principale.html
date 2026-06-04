@@ -257,6 +257,7 @@
     <script src="js/admin-config.js"></script>
     <script src="js/ban-service.js"></script>
     <script src="js/anti-cheat.js"></script>
+    <script src="js/avatar-ui.js"></script>
     <script src="js/carte-data.js"></script>
     <script src="js/admin-panel.js"></script>
     <script type="module">
@@ -336,10 +337,13 @@
                 const nodiAvatar = document.querySelectorAll('.avatar-render');
                 const avatarVal = dati.avatar || '🦊';
                 nodiAvatar.forEach(el => {
-                    if(avatarVal.startsWith('data:image') || avatarVal.startsWith('http')) {
-                        el.innerHTML = `<img src="${avatarVal}" class="w-full h-full object-cover rounded-full">`;
+                    if (window.AvatarUI) {
+                        window.AvatarUI.mountAvatar(el, avatarVal, {
+                            imgClass: 'w-full h-full object-cover rounded-full',
+                            emojiClass: 'text-xl'
+                        });
                     } else {
-                        el.innerHTML = avatarVal;
+                        el.textContent = avatarVal;
                     }
                 });
 

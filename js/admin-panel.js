@@ -238,18 +238,40 @@ async function adminDeleteLobby() {
     if (!selectedLobbyId) return;
     if (!confirm('Eliminare questa lobby? Tutti i giocatori verranno espulsi.')) return;
 
-    const ref = ctx.doc(adminDb(), 'lobbies', selectedLobbyId);
+    const lobbyId = selectedLobbyId;
+    const lobbyRef = ctx.doc(adminDb(), 'lobbies', lobbyId);
+    const gameRef = ctx.doc(adminDb(), 'games', lobbyId);
+
     try {
-        await ctx.updateDoc(ref, {
+        await ctx.updateDoc(lobbyRef, {
             status: 'closed_by_admin',
             adminCloseMessage: LOBBY_CLOSED_BY_ADMIN_MESSAGE,
-            closedAt: new Date().toISOString()
+            closedAt: new Date().toISOString(),
+            players: []
         });
-        await ctx.deleteDoc(ref);
+
+        try {
+            await ctx.deleteDoc(gameRef);
+        } catch (gameErr) {
+            console.warn('Partita associata non eliminata (può essere assente):', gameErr);
+        }
+
+        await ctx.deleteDoc(lobbyRef);
+
+        cacheLobbies = cacheLobbies.filter(item => item.id !== lobbyId);
+        selectedLobbyId = null;
+
+        const list = JSON.parse(localStorage.getItem('unoLobbyList') || '[]')
+            .filter(room => room.id !== lobbyId);
+        localStorage.setItem('unoLobbyList', JSON.stringify(list));
+
+        renderAdminLobbies();
+
         ctx.playSynth?.('bloop');
         ctx.closeModal();
         alert('Lobby eliminata.');
     } catch (error) {
+        console.error('adminDeleteLobby:', error);
         alert('Errore eliminazione lobby: ' + error.message);
     }
 }

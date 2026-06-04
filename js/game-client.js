@@ -9,12 +9,16 @@
     let gameState = null;
     let prevGameState = null;
     let unsubGame = null;
+    let unsubLobby = null;
+    const ADMIN_LOBBY_MSG = 'Questa lobby è stata chiusa da un amministratore.';
     let returnTimer = null;
     let lastRouletteAnimatedAt = null;
     let rouletteHideTimer = null;
     let counterResolveTimer = null;
     let counterTickTimer = null;
     let counterWindowKey = null;
+    let playSelection = null;
+    const AvatarUI = global.AvatarUI;
 
     function leftGameKey(id) {
         return `unoLeftGame_${id}`;
@@ -197,24 +201,39 @@
         if (!wheel) return;
         const n = segments.length;
         if (!n) return;
-        const colors = ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2'];
-        const stops = segments.map((seg, i) => {
-            const c = colors[i % colors.length];
-            const start = (i / n) * 100;
-            const end = ((i + 1) / n) * 100;
-            return `${c} ${start}% ${end}%`;
-        }).join(', ');
-        wheel.style.background = `conic-gradient(from -90deg, ${stops})`;
+        const colors = ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2', '#ea580c', '#4f46e5'];
+        wheel.style.background = 'transparent';
         wheel.style.transform = 'rotate(0deg)';
         wheel.innerHTML = '';
+
         segments.forEach((seg, i) => {
-            const angle = (i / n) * 360 + 360 / n / 2 - 90;
-            const el = document.createElement('span');
-            el.className = 'roulette-label';
-            el.textContent = seg.nickname || seg.id;
-            el.style.transform = `rotate(${angle}deg) translateY(-95px)`;
-            wheel.appendChild(el);
+            const slice = document.createElement('div');
+            slice.className = 'roulette-slice';
+            slice.style.setProperty('--i', String(i));
+            slice.style.setProperty('--total', String(n));
+            slice.style.background = colors[i % colors.length];
+
+            const label = document.createElement('div');
+            label.className = 'roulette-slice-label';
+            label.textContent = seg.nickname || seg.id;
+            slice.appendChild(label);
+            wheel.appendChild(slice);
         });
+
+        const hub = document.createElement('div');
+        hub.className = 'roulette-hub';
+        wheel.appendChild(hub);
+    }
+
+    function seatRadiusForCount(n) {
+        if (n <= 2) return 'min(34vmin, 150px)';
+        if (n <= 4) return 'min(32vmin, 168px)';
+        return 'min(30vmin, 178px)';
+    }
+
+    function seatAngleForPlayer(indexInOrder, total, myIndex) {
+        const rel = (indexInOrder - myIndex + total) % total;
+        return 90 + (rel * 360) / total;
     }
 
     function showBulletRouletteWaiting(pending) {
@@ -269,28 +288,28 @@
             btn.textContent = 'Gira…';
         }
 
-        wheel.style.transition = 'none';
+        wheel.getAnimations().forEach(a => a.cancel());
         wheel.style.transform = 'rotate(0deg)';
-        requestAnimationFrame(() => {
-            requestAnimationFrame(() => {
-                wheel.style.transition = 'transform 4.5s cubic-bezier(0.12, 0.8, 0.2, 1)';
-                wheel.style.transform = `rotate(${lr.spinDeg}deg)`;
-                playSound('roulette');
-            });
-        });
+
+        const anim = wheel.animate(
+            [{ transform: 'rotate(0deg)' }, { transform: `rotate(${lr.spinDeg}deg)` }],
+            { duration: 5600, easing: 'cubic-bezier(0.12, 0.82, 0.12, 1)', fill: 'forwards' }
+        );
+        playSound('roulette');
 
         const hitName = gameState?.players?.[lr.hitId]?.nickname || lr.hitId;
         if (result) result.textContent = '';
 
-        clearTimeout(rouletteHideTimer);
-        rouletteHideTimer = setTimeout(() => {
+        anim.onfinish = () => {
+            wheel.style.transform = `rotate(${lr.spinDeg}deg)`;
             if (result) result.textContent = `💥 Colpito: ${hitName}!`;
             playSound('shot');
+            clearTimeout(rouletteHideTimer);
             rouletteHideTimer = setTimeout(() => {
                 overlay.classList.remove('active');
                 setTimeout(() => overlay.classList.add('hidden'), 500);
-            }, 2200);
-        }, 4600);
+            }, 2400);
+        };
     }
 
     function hideBulletRouletteIfIdle() {
@@ -313,26 +332,118 @@
         container.innerHTML = '';
         const order = gameState.turnOrder || [];
         const n = order.length;
+        if (!n) return;
         const current = Engine.currentPlayerId(gameState);
+        const found = order.indexOf(myPlayerId);
+        const myIndex = found >= 0 ? found : 0;
+        const radius = seatRadiusForCount(n);
 
         order.forEach((id, i) => {
             const p = gameState.players[id] || {};
-            const angle = (i / n) * 360 - 90;
+            const angle = seatAngleForPlayer(i, n, myIndex);
             const seat = document.createElement('div');
             seat.className = 'table-seat';
             seat.style.setProperty('--angle', `${angle}deg`);
+            seat.style.setProperty('--radius', radius);
             const isMe = id === myPlayerId;
             const isTurn = id === current && gameState.status === 'playing';
-            seat.innerHTML = `
-                <div class="seat-inner ${isTurn ? 'seat-turn' : ''} ${p.eliminated ? 'seat-out' : ''}">
-                    <div class="seat-avatar">${p.avatar || '🦊'}</div>
-                    <div class="seat-name">${isMe ? 'Tu' : (p.nickname || id)}</div>
-                    <div class="seat-meta">${p.handCount ?? 0} carte${p.eliminated ? ' · OUT' : ''}</div>
-                    ${gameState.settings?.pistolHp ? `<div class="seat-hp">💥 ${p.pistolHp ?? 0}/${p.maxPistolHp ?? 3}</div>` : ''}
-                </div>
-            `;
+
+            const inner = document.createElement('div');
+            inner.className = `seat-inner ${isTurn ? 'seat-turn' : ''} ${p.eliminated ? 'seat-out' : ''}`;
+
+            const av = document.createElement('div');
+            av.className = 'seat-avatar';
+            if (AvatarUI) AvatarUI.mountAvatar(av, p.avatar);
+            else av.textContent = p.avatar || '🦊';
+
+            const name = document.createElement('div');
+            name.className = 'seat-name';
+            name.textContent = isMe ? 'Tu' : (p.nickname || id);
+
+            const meta = document.createElement('div');
+            meta.className = 'seat-meta';
+            meta.textContent = `${p.handCount ?? 0} carte${p.eliminated ? ' · OUT' : ''}`;
+
+            inner.appendChild(av);
+            inner.appendChild(name);
+            inner.appendChild(meta);
+            if (gameState.settings?.pistolHp) {
+                const hp = document.createElement('div');
+                hp.className = 'seat-hp';
+                hp.textContent = `💥 ${p.pistolHp ?? 0}/${p.maxPistolHp ?? 3}`;
+                inner.appendChild(hp);
+            }
+            seat.appendChild(inner);
             container.appendChild(seat);
         });
+    }
+
+    function renderPlayersSidebar() {
+        const list = $('game-players-list');
+        if (!list || !gameState) return;
+        list.innerHTML = '';
+        const order = gameState.turnOrder || [];
+        const current = Engine.currentPlayerId(gameState);
+
+        order.forEach(id => {
+            const p = gameState.players[id] || {};
+            const row = document.createElement('div');
+            row.className = `sidebar-player ${id === current && gameState.status === 'playing' ? 'sidebar-turn' : ''} ${p.eliminated ? 'opacity-50' : ''}`;
+
+            const av = document.createElement('div');
+            av.className = 'sidebar-player-avatar';
+            if (AvatarUI) AvatarUI.mountAvatar(av, p.avatar);
+            else av.textContent = p.avatar || '🦊';
+
+            const info = document.createElement('div');
+            const name = document.createElement('div');
+            name.className = 'sidebar-player-name';
+            name.textContent = id === myPlayerId ? 'Tu' : (p.nickname || id);
+            const meta = document.createElement('div');
+            meta.className = 'sidebar-player-meta';
+            meta.textContent = `${p.handCount ?? 0} carte${p.eliminated ? ' · OUT' : ''}`;
+            info.appendChild(name);
+            info.appendChild(meta);
+
+            row.appendChild(av);
+            row.appendChild(info);
+            list.appendChild(row);
+        });
+    }
+
+    function renderDrawPile() {
+        const pile = $('deck-draw');
+        if (!pile || !gameState) return;
+        const can = Engine.canDraw(gameState, myPlayerId);
+        pile.classList.toggle('pile-draw-disabled', !can);
+        pile.title = can ? 'Pesca' : 'Non puoi pescare ora';
+    }
+
+    function clearPlaySelection() {
+        playSelection = null;
+        $('play-selection-bar')?.classList.add('hidden');
+        renderHand();
+    }
+
+    function updatePlaySelectionBar() {
+        const bar = $('play-selection-bar');
+        const label = $('play-selection-label');
+        if (!bar || !playSelection) return;
+        bar.classList.remove('hidden');
+        const nums = playSelection.cards.map(c => c.value).join(' → ');
+        if (label) {
+            label.textContent = `Scala ${nums} (${playSelection.cards.length} carte)`;
+        }
+    }
+
+    function startLadderSelection(cards) {
+        playSelection = {
+            mode: 'ladder',
+            ids: cards.map(c => c.instanceId),
+            cards
+        };
+        updatePlaySelectionBar();
+        renderHand();
     }
 
     function renderCenter() {
@@ -383,21 +494,34 @@
 
         const counterActive = Engine.isCounterWindow(gameState);
         const canCounter = counterActive && gameState.pendingAction?.sourcePlayerId !== myPlayerId;
+        const mariActive = gameState.pendingAction?.type === 'mariGreen';
+        const mariMyTurn = mariActive && gameState.pendingAction?.currentId === myPlayerId;
+
+        const selIds = new Set(playSelection?.ids || []);
+        const ladderHintIds = playSelection?.mode === 'ladder'
+            ? new Set(playSelection.ids)
+            : null;
 
         hand.forEach(card => {
             const btn = document.createElement('button');
-            const playableTurn = canPlay && Engine.canPlayCard(gameState, card) && Engine.isMyTurn(gameState, myPlayerId);
+            const playableMari = mariMyTurn && Engine.canPlayMariGreen(gameState, myPlayerId, card);
+            const playableTurn = canPlay && Engine.canPlayCard(gameState, card) && Engine.isMyTurn(gameState, myPlayerId) && !mariActive;
             const playableCounter = canCounter && Engine.canPlayCounter(gameState, myPlayerId, card);
-            const playable = playableTurn || playableCounter;
+            const playable = playableTurn || playableCounter || playableMari;
             const stackSize = card.kind === 'number' ? (stackCounts[String(card.value)] || 1) : 1;
-            const showStack = playableTurn && stackSize > 1 && card.kind === 'number';
+            const showStack = playableTurn && stackSize > 1 && card.kind === 'number' && !playSelection;
             const lbl = cardLabel(card);
 
             btn.type = 'button';
             btn.className = `hand-card ${Deck.colorStyle(card)} ${playable ? '' : 'hand-card-disabled'}`;
             if (playableCounter) btn.classList.add('hand-card-counter');
+            if (playableMari) btn.classList.add('hand-card-mari');
+            if (selIds.has(card.instanceId)) btn.classList.add('hand-card-selected');
+            else if (ladderHintIds?.has(card.instanceId)) btn.classList.add('hand-card-ladder-hint');
             btn.innerHTML = `<span class="hand-label">${lbl}${showStack ? `<small class="block text-[9px] opacity-80">×${stackSize}</small>` : ''}</span>`;
-            if (playableTurn) {
+            if (playableMari) {
+                btn.addEventListener('click', () => onPlayMariCard(card.instanceId));
+            } else if (playableTurn && !playSelection) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
             } else if (playableCounter) {
                 btn.addEventListener('click', () => onPlayCounter(card.instanceId));
@@ -434,6 +558,14 @@
                 ? 'Attesa risposte al tuo effetto…'
                 : `Attesa risposte… (${src})`;
             el.classList.toggle('animate-pulse', pending.sourcePlayerId !== myPlayerId && !!firstCounterCard());
+            return;
+        }
+        if (pending?.type === 'mariGreen') {
+            el.classList.remove('hidden');
+            el.textContent = pending.currentId === myPlayerId
+                ? 'Marijuana: gioca una carta Verde o pesca'
+                : 'Marijuana: in attesa degli altri…';
+            el.classList.toggle('animate-pulse', pending.currentId === myPlayerId);
             return;
         }
         el.classList.remove('hidden');
@@ -500,7 +632,9 @@
     function renderAll() {
         renderDirection();
         renderSeats();
+        renderPlayersSidebar();
         renderCenter();
+        renderDrawPile();
         renderHand();
         renderEndTurnButton();
         renderUnoButton();
@@ -548,6 +682,7 @@
             if (result.state.lastRoulette?.at !== lastRouletteAnimatedAt) {
                 animateBulletRouletteSpin(result.state.lastRoulette);
             }
+            clearPlaySelection();
             renderAll();
             handlePending(result.state);
         } catch (err) {
@@ -572,28 +707,49 @@
         }
     }
 
+    async function onPlayMariCard(instanceId) {
+        playSound('click');
+        await commitAction(() => Engine.playMariGreenCard(gameState, myPlayerId, instanceId));
+    }
+
     async function onPlayCard(instanceId) {
-        const matching = Engine.getMatchingPlayableCards(gameState, myPlayerId, instanceId);
-        const instanceIds = matching.map(c => c.instanceId);
-        const card = matching[0];
+        const hand = myHand();
+        const card = hand.find(c => c.instanceId === instanceId);
         if (!card) return;
 
         playSound('click');
 
+        if (gameState.pendingAction?.type === 'mariGreen') {
+            await onPlayMariCard(instanceId);
+            return;
+        }
+
+        const ladder = Engine.getLadderPlay(gameState, myPlayerId, instanceId);
+        if (ladder.length > 1) {
+            startLadderSelection(ladder);
+            return;
+        }
+
+        const instanceIds = [instanceId];
+
         if (card.value === 'wild' || card.value === 'wild4') {
-            showColorModal(instanceIds[0]);
+            showColorModal(instanceId);
             return;
         }
         if (['death', 'swap', 'gift', 'heart', 'communism', 'blobby'].includes(card.value)) {
-            showTargetModal(instanceIds[0], card.value);
-            return;
-        }
-        if (card.value === 'bullet') {
-            await commitAction(() => Engine.playCards(gameState, myPlayerId, instanceIds, {}));
+            showTargetModal(instanceId, card.value);
             return;
         }
 
         await commitAction(() => Engine.playCards(gameState, myPlayerId, instanceIds, {}));
+    }
+
+    async function confirmLadderPlay() {
+        if (!playSelection || playSelection.mode !== 'ladder') return;
+        const ids = playSelection.ids;
+        clearPlaySelection();
+        playSound('cards');
+        await commitAction(() => Engine.playCards(gameState, myPlayerId, ids, {}));
     }
 
     function showColorModal(pendingCardId) {
@@ -651,9 +807,9 @@
 
     function wireControls() {
         $('deck-draw')?.addEventListener('click', async () => {
-            if (!Engine.isMyTurn(gameState, myPlayerId)) {
+            if (!Engine.canDraw(gameState, myPlayerId)) {
                 playSound('error');
-                showToast('Non è il tuo turno');
+                showToast('Non puoi pescare ora');
                 return;
             }
             playSound('click');
@@ -672,6 +828,11 @@
             playSound('click');
             await commitAction(() => Engine.endTurn(gameState, myPlayerId));
         });
+        $('btn-confirm-play')?.addEventListener('click', () => confirmLadderPlay());
+        $('btn-cancel-play')?.addEventListener('click', () => {
+            playSound('click');
+            clearPlaySelection();
+        });
         $('btn-contrast')?.addEventListener('click', async () => {
             const card = firstCounterCard();
             if (!card) {
@@ -687,12 +848,48 @@
         });
     }
 
+    function kickToMainMenu(message) {
+        clearCounterTimers();
+        if (unsubGame) {
+            unsubGame();
+            unsubGame = null;
+        }
+        if (unsubLobby) {
+            unsubLobby();
+            unsubLobby = null;
+        }
+        const list = JSON.parse(localStorage.getItem('unoLobbyList') || '[]')
+            .filter(r => r.id !== lobbyId);
+        localStorage.setItem('unoLobbyList', JSON.stringify(list));
+        alert(message || ADMIN_LOBBY_MSG);
+        window.location.href = 'Menu_principale.html';
+    }
+
+    function listenLobbyAdminClose() {
+        if (!window.db || !window.doc || !window.onSnapshot || !lobbyId) return;
+        const ref = window.doc(window.db, 'lobbies', lobbyId);
+        unsubLobby = window.onSnapshot(ref, snap => {
+            if (!snap.exists()) {
+                kickToMainMenu(ADMIN_LOBBY_MSG);
+                return;
+            }
+            const data = snap.data();
+            if (String(data.status || '').toLowerCase() === 'closed_by_admin') {
+                kickToMainMenu(data.adminCloseMessage || ADMIN_LOBBY_MSG);
+            }
+        }, err => console.error('Listener lobby:', err));
+    }
+
     async function leaveGameToWaiting() {
         sessionStorage.setItem(leftGameKey(lobbyId), '1');
         clearCounterTimers();
         if (unsubGame) {
             unsubGame();
             unsubGame = null;
+        }
+        if (unsubLobby) {
+            unsubLobby();
+            unsubLobby = null;
         }
         try {
             if (gameState && myPlayerId) {
@@ -733,13 +930,11 @@
         const lobby = JSON.parse(localStorage.getItem('unoLobbyList') || '[]').find(r => r.id === lobbyId);
         myPlayerId = resolveMyPlayerId(lobby);
         wireControls();
+        listenLobbyAdminClose();
 
         unsubGame = FS.subscribeGame(lobbyId, pub => {
             if (!pub) {
-                showToast('Partita non trovata');
-                setTimeout(() => {
-                    window.location.href = `waiting_room.html?stanzaId=${encodeURIComponent(lobbyId)}`;
-                }, 2000);
+                kickToMainMenu(ADMIN_LOBBY_MSG);
                 return;
             }
             reactToStateChanges(gameState, pub);

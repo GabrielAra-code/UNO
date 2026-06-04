@@ -371,6 +371,28 @@ html {
         text-align: center;
     }
 
+    .uno-game .game-sidebar {
+        width: min(108px, 30vw);
+    }
+
+    .uno-game .game-sidebar-title {
+        font-size: 0.55rem;
+        padding: 0.5rem 0.45rem 0.35rem;
+    }
+
+    .uno-game .sidebar-player-name {
+        font-size: 0.6rem;
+    }
+
+    .uno-game .sidebar-player-meta {
+        font-size: 0.5rem;
+    }
+
+    .uno-game .sidebar-player-avatar {
+        width: 1.75rem;
+        height: 1.75rem;
+    }
+
     .uno-game .hand-section {
         padding-bottom: max(12px, var(--safe-bottom)) !important;
     }
@@ -424,9 +446,9 @@ html {
         height: min(72vw, 240px);
     }
 
-    .uno-game .roulette-label {
-        font-size: 0.55rem;
-        max-width: 56px;
+    .uno-game .roulette-slice-label {
+        font-size: 0.52rem;
+        max-width: 52px;
     }
 
     .uno-game #end-overlay h2 {

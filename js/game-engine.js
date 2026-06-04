@@ -108,6 +108,11 @@
             players,
             pendingAction: null,
             turnAdvanceSteps: 0,
+            turnFlags: {
+                playerId: order[currentTurnIndex],
+                drawn: false,
+                played: false
+            },
             hands
         };
     }
@@ -139,6 +144,7 @@
     function isMyTurn(state, myId) {
         if (state.status !== 'playing') return false;
         const pending = state.pendingAction;
+        if (pending?.type === 'mariGreen') return pending.currentId === myId;
         if (pending?.type === 'bulletRoulette' && !pending.spun && pending.shooterId === myId) {
             return true;
         }
@@ -156,9 +162,13 @@
         if (state.status !== 'playing' || currentPlayerId(state) !== playerId) return false;
         if (isCounterWindow(state)) return false;
         const pending = state.pendingAction;
+        if (pending?.type === 'mariGreen') return false;
         if (state.pendingColor) return false;
-        if (!pending) return true;
-        return pending.type === 'bulletRoulette' && pending.spun;
+        if (pending && pending.type !== 'bulletRoulette') return false;
+        syncTurnFlags(state);
+        if (!state.turnFlags.drawn && !state.turnFlags.played) return false;
+        if (pending?.type === 'bulletRoulette' && !pending.spun) return false;
+        return true;
     }
 
     function leaveGame(state, playerId) {
@@ -316,22 +326,55 @@
         checkLastPlayerStanding(state, currentPlayerId(state));
     }
 
+    function effectiveTopColor(state) {
+        const top = state.topCard;
+        if (!top) return state.activeColor;
+        if (top.value === 'wild' || top.value === 'wild4' || top.color === 'black') {
+            return state.activeColor;
+        }
+        return top.color;
+    }
+
     function topMatches(card, state) {
         const top = state.topCard;
         if (!top || !card) return false;
-        if (card.kind === 'wild' || card.value === 'wild' || card.value === 'wild4') return true;
-        if (state.forcedColor) return card.color === state.forcedColor;
-        if (card.color === 'black' && card.kind === 'special') {
-            return card.color === state.activeColor || true;
+
+        if (card.value === 'wild' || card.value === 'wild4') return true;
+
+        if (state.forcedColor) {
+            return card.color === state.forcedColor
+                || card.value === 'wild'
+                || card.value === 'wild4';
         }
-        return card.color === state.activeColor
-            || card.color === top.color
-            || card.value === top.value
-            || (top.color === 'black' && card.color === state.activeColor);
+
+        const topColor = effectiveTopColor(state);
+        const topValue = top.value;
+
+        if (String(card.value) === String(topValue)) return true;
+
+        if (card.color && card.color !== 'black' && card.color !== 'wild' && topColor) {
+            return card.color === topColor;
+        }
+
+        return false;
+    }
+
+    function hasPlayableCard(state, playerId) {
+        const hand = state.hands[playerId] || [];
+        return hand.some(c => canPlayCard(state, c));
+    }
+
+    function syncTurnFlags(state) {
+        const pid = currentPlayerId(state);
+        if (!state.turnFlags || state.turnFlags.playerId !== pid) {
+            state.turnFlags = { playerId: pid, drawn: false, played: false };
+        }
     }
 
     function canPlayCard(state, card) {
         if (state.status !== 'playing') return false;
+        const pending = state.pendingAction;
+        if (pending?.type === 'mariGreen') return false;
         if (state.drawStack > 0) {
             if (!state.settings.stack) return false;
             if (state.drawStackType === 'draw2' && card.value === 'draw2') return true;
@@ -340,6 +383,20 @@
         }
         if (state.pendingColor) return false;
         return topMatches(card, state);
+    }
+
+    function canDraw(state, playerId) {
+        if (state.status !== 'playing' || currentPlayerId(state) !== playerId) return false;
+        const pending = state.pendingAction;
+        if (pending?.type === 'mariGreen') {
+            return pending.currentId === playerId;
+        }
+        if (pending?.type === 'counterWindow' || pending?.type === 'bulletRoulette') return false;
+        if (state.pendingColor) return false;
+        syncTurnFlags(state);
+        if (state.turnFlags.drawn && state.drawStack === 0) return false;
+        if (state.drawStack > 0) return true;
+        return !hasPlayableCard(state, playerId);
     }
 
     function removeFromHand(hands, playerId, instanceId) {
@@ -414,6 +471,117 @@
             }
         }
         state.currentTurnIndex = idx;
+        state.turnFlags = {
+            playerId: state.turnOrder[state.currentTurnIndex],
+            drawn: false,
+            played: false
+        };
+    }
+
+    function isGreenCard(card) {
+        return card?.color === 'green';
+    }
+
+    function startMariEffect(state, sourcePlayerId) {
+        const waiting = state.turnOrder.filter(id =>
+            id !== sourcePlayerId && !state.players[id]?.eliminated
+        );
+        state.forcedColor = 'green';
+        state.pendingAction = {
+            type: 'mariGreen',
+            sourcePlayerId,
+            waiting: [...waiting],
+            currentId: waiting[0] || null
+        };
+        addLog(state, 'Marijuana! Ogni giocatore deve giocare una carta Verde.');
+    }
+
+    function advanceMariQueue(state) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'mariGreen') return;
+        if (!pending.waiting.length) {
+            state.pendingAction = null;
+            state.forcedColor = null;
+            addLog(state, 'Effetto Marijuana concluso.');
+            return;
+        }
+        pending.currentId = pending.waiting[0];
+    }
+
+    function finishMariPlayer(state, playerId) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'mariGreen') return;
+        pending.waiting = pending.waiting.filter(id => id !== playerId);
+        advanceMariQueue(state);
+    }
+
+    function mariDrawUntilGreen(state, playerId) {
+        const name = state.players[playerId]?.nickname || playerId;
+        let safety = 0;
+        while (safety < 50) {
+            safety += 1;
+            const drawn = drawFromPile(state, 1);
+            if (!drawn.length) {
+                addLog(state, `${name}: mazzo esaurito durante Marijuana.`);
+                break;
+            }
+            const c = drawn[0];
+            if (isGreenCard(c)) {
+                state.discardPile.push(c);
+                state.topCard = c;
+                state.activeColor = 'green';
+                addLog(state, `${name} pesca e gioca ${Deck.cardDisplayName(c)}.`);
+                return c;
+            }
+            state.hands[playerId].push(c);
+            syncHandCounts(state);
+            addLog(state, `${name} pesca ${Deck.cardDisplayName(c)} (in mano).`);
+        }
+        return null;
+    }
+
+    function canPlayMariGreen(state, playerId, card) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'mariGreen') return false;
+        if (pending.currentId !== playerId) return false;
+        return isGreenCard(card);
+    }
+
+    function playMariGreenCard(state, playerId, instanceId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'mariGreen' || pending.currentId !== playerId) {
+            return { ok: false, error: 'Non devi rispondere a Marijuana ora.' };
+        }
+        const card = removeFromHand(s.hands, playerId, instanceId);
+        if (!card) return { ok: false, error: 'Carta non in mano.' };
+        if (!isGreenCard(card)) {
+            s.hands[playerId].push(card);
+            return { ok: false, error: 'Devi giocare una carta Verde.' };
+        }
+        s.discardPile.push(card);
+        s.topCard = card;
+        s.activeColor = 'green';
+        addLog(s, `${s.players[playerId]?.nickname} gioca ${Deck.cardDisplayName(card)} (Marijuana).`);
+        syncHandCounts(s);
+        finishMariPlayer(s, playerId);
+        return { ok: true, state: s };
+    }
+
+    function resolveMariByDraw(state, playerId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'mariGreen' || pending.currentId !== playerId) {
+            return { ok: false, error: 'Non devi rispondere a Marijuana ora.' };
+        }
+        const hand = s.hands[playerId] || [];
+        if (hand.some(isGreenCard)) {
+            return { ok: false, error: 'Hai una carta Verde: giocala dalla mano.' };
+        }
+        mariDrawUntilGreen(s, playerId);
+        syncHandCounts(s);
+        finishMariPlayer(s, playerId);
+        return { ok: true, state: s };
     }
 
     function comboValueKey(card) {
@@ -425,21 +593,94 @@
         return comboValueKey(card) || `card:${card.color}:${card.value}:${card.defId || card.label}`;
     }
 
-    function canComboTogether(state, card, first) {
-        return card.kind === 'number'
-            && first.kind === 'number'
-            && String(card.value) === String(first.value)
-            && canPlayCard(state, card);
+    function numberRank(card) {
+        return Number(card?.value);
+    }
+
+    function isValidLadder(cards) {
+        if (!cards?.length) return false;
+        const sorted = [...cards].sort((a, b) => numberRank(a) - numberRank(b));
+        const color = sorted[0].color;
+        if (numberRank(sorted[0]) !== 0) return false;
+        for (let i = 0; i < sorted.length; i += 1) {
+            const c = sorted[i];
+            if (c.kind !== 'number' || c.color !== color || numberRank(c) !== i) return false;
+        }
+        return true;
+    }
+
+    function getLadderPlay(state, playerId, instanceId) {
+        const hand = state.hands[playerId] || [];
+        const card = hand.find(c => c.instanceId === instanceId);
+        if (!card || card.kind !== 'number') return card ? [card] : [];
+
+        const color = card.color;
+        const byNum = {};
+        hand.filter(c => c.kind === 'number' && c.color === color).forEach(c => {
+            byNum[numberRank(c)] = c;
+        });
+        if (!byNum[0] || !canPlayCard(state, byNum[0])) return [card];
+
+        let maxV = 0;
+        while (byNum[maxV + 1]) maxV += 1;
+        const full = [];
+        for (let v = 0; v <= maxV; v += 1) full.push(byNum[v]);
+
+        const idx = full.findIndex(c => c.instanceId === instanceId);
+        if (idx < 0) return [card];
+        const ladder = full.slice(0, idx + 1);
+        return ladder.length >= 2 ? ladder : [card];
+    }
+
+    function getSameNumberBatch(state, playerId, instanceId) {
+        const hand = state.hands[playerId] || [];
+        const card = hand.find(c => c.instanceId === instanceId);
+        if (!card || card.kind !== 'number' || !canPlayCard(state, card)) return card ? [card] : [];
+        return hand.filter(c =>
+            c.kind === 'number'
+            && String(c.value) === String(card.value)
+            && canPlayCard(state, c)
+        );
+    }
+
+    function getSameColorBatch(state, playerId, instanceId) {
+        const hand = state.hands[playerId] || [];
+        const card = hand.find(c => c.instanceId === instanceId);
+        if (!card || !canPlayCard(state, card)) return card ? [card] : [];
+        if (!card.color || card.color === 'black' || card.color === 'wild') return [card];
+        return hand.filter(c =>
+            c.color === card.color
+            && canPlayCard(state, c)
+        );
+    }
+
+    function canPlaySameNumberBatch(state, cards) {
+        if (!cards?.length) return false;
+        const first = cards[0];
+        if (first.kind !== 'number') return false;
+        return cards.every(c =>
+            c.kind === 'number'
+            && String(c.value) === String(first.value)
+            && canPlayCard(state, c)
+        );
+    }
+
+    function canPlaySameColorBatch(state, cards) {
+        if (!cards?.length) return false;
+        const first = cards[0];
+        if (!first.color || first.color === 'black' || first.color === 'wild') return cards.length === 1;
+        return cards.every(c => c.color === first.color && canPlayCard(state, c));
+    }
+
+    function isValidPlayGroup(state, cards) {
+        if (!cards?.length) return false;
+        if (cards.length === 1) return canPlayCard(state, cards[0]);
+        if (isValidLadder(cards)) return canPlayCard(state, cards[0]);
+        return canPlaySameNumberBatch(state, cards) || canPlaySameColorBatch(state, cards);
     }
 
     function getMatchingPlayableCards(state, playerId, instanceId) {
-        const hand = state.hands[playerId] || [];
-        const card = hand.find(c => c.instanceId === instanceId);
-        if (!card || !canPlayCard(state, card)) {
-            return card ? [card] : [];
-        }
-        if (card.kind !== 'number') return [card];
-        return hand.filter(c => canComboTogether(state, c, card));
+        return [state.hands[playerId]?.find(c => c.instanceId === instanceId)].filter(Boolean);
     }
 
     function activePlayers(state) {
@@ -561,7 +802,7 @@
         const n = alive.length;
         const hitIndex = alive.indexOf(hitId);
         const slice = 360 / n;
-        const spinDeg = 360 * 6 + (360 - hitIndex * slice - slice / 2);
+        const spinDeg = 360 * 8 - hitIndex * slice - slice / 2;
 
         state.pendingAction = {
             type: 'bulletRoulette',
@@ -620,9 +861,13 @@
 
     function playCards(state, playerId, instanceIds, options = {}) {
         const s = clone(state);
+        if (s.pendingAction?.type === 'mariGreen') {
+            return { ok: false, error: 'Rispondi all\'effetto Marijuana.' };
+        }
         if (!isMyTurn(s, playerId)) {
             return { ok: false, error: 'Non è il tuo turno.' };
         }
+        syncTurnFlags(s);
         if (!instanceIds?.length) {
             return { ok: false, error: 'Nessuna carta selezionata.' };
         }
@@ -639,8 +884,11 @@
         }
 
         if (cards.length > 1) {
-            if (first.kind !== 'number' || !cards.every(c => canComboTogether(s, c, first))) {
-                return { ok: false, error: 'Puoi giocare insieme solo carte con lo stesso numero.' };
+            if (!isValidPlayGroup(s, cards)) {
+                return { ok: false, error: 'Combinazione di carte non valida.' };
+            }
+            if (isValidLadder(cards)) {
+                cards.sort((a, b) => numberRank(a) - numberRank(b));
             }
         }
 
@@ -678,6 +926,8 @@
         addLog(s, `${s.players[playerId]?.nickname} gioca ${playLabel}`);
         syncHandCounts(s);
         updateUnoStateAfterPlay(s, playerId);
+
+        s.turnFlags.played = true;
 
         const effect = resolveCardEffect(s, playerId, card, options);
         if (!effect.ok) {
@@ -794,13 +1044,9 @@
                 state.forcedColor = null;
                 addLog(state, 'Vaffanculo! Stack e vincoli annullati.');
                 return { ok: true };
-            case 'mari': {
-                const target = nextPlayerId(state);
-                addLog(state, 'Marihuana: pesca fino a una carta Verde da giocare.');
-                applyMariDrawLoop(state, target);
-                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
-                return { ok: true };
-            }
+            case 'mari':
+                startMariEffect(state, playerId);
+                return { ok: true, skipAdvance: true };
             case 'bullet':
                 startBulletRoulette(state, playerId);
                 return { ok: true, skipAdvance: true };
@@ -945,15 +1191,33 @@
 
     function drawCard(state, playerId) {
         const s = clone(state);
-        if (currentPlayerId(s) !== playerId) {
-            return { ok: false, error: 'Non è il tuo turno.' };
+
+        if (s.pendingAction?.type === 'mariGreen') {
+            return resolveMariByDraw(s, playerId);
         }
+
+        if (!canDraw(s, playerId)) {
+            if (currentPlayerId(s) !== playerId) {
+                return { ok: false, error: 'Non è il tuo turno.' };
+            }
+            syncTurnFlags(s);
+            if (s.turnFlags.drawn) {
+                return { ok: false, error: 'Hai già pescato in questo turno.' };
+            }
+            if (hasPlayableCard(s, playerId)) {
+                return { ok: false, error: 'Hai carte giocabili: gioca o termina il turno.' };
+            }
+            return { ok: false, error: 'Non puoi pescare ora.' };
+        }
+
+        syncTurnFlags(s);
 
         if (s.drawStack > 0) {
             const n = applyDrawToPlayer(s, playerId, s.drawStack);
             addLog(s, `${s.players[playerId]?.nickname} pesca ${n} (stack).`);
             s.drawStack = 0;
             s.drawStackType = null;
+            s.turnFlags.drawn = true;
             syncHandCounts(s);
             return { ok: true, state: s };
         }
@@ -961,6 +1225,7 @@
         const n = applyDrawToPlayer(s, playerId, 1);
         if (n === 0) return { ok: false, error: 'Mazzo vuoto.' };
         addLog(s, `${s.players[playerId]?.nickname} pesca 1.`);
+        s.turnFlags.drawn = true;
         syncHandCounts(s);
         return { ok: true, state: s };
     }
@@ -1060,8 +1325,17 @@
         isCounterWindow,
         canPlayCounter,
         canPlayCard,
+        canDraw,
+        hasPlayableCard,
         cardStackKey,
         getMatchingPlayableCards,
+        getSameNumberBatch,
+        getSameColorBatch,
+        getLadderPlay,
+        playMariGreenCard,
+        canPlayMariGreen,
+        isValidLadder,
+        isValidPlayGroup,
         playCard,
         playCards,
         playCounterCard,
