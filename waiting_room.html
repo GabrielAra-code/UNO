@@ -255,6 +255,10 @@
             }
         }
     </style>
+    <script src="js/anti-cheat.js"></script>
+    <script src="js/game-deck.js"></script>
+    <script src="js/game-engine.js"></script>
+    <script src="js/game-firestore.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
          import {
@@ -564,7 +568,9 @@
             playerCountEl.innerText = `${(currentLobby.players?.length || 0)}/${currentLobby.maxPlayers || 6}`;
             document.getElementById('setting-max-players').innerText = currentLobby.maxPlayers || 6;
             document.getElementById('setting-privacy').innerText = currentLobby.locked ? 'Privata' : 'Pubblica';
-            document.getElementById('setting-status').innerText = currentLobby.status === 'started' ? 'Avviata' : 'In attesa';
+            const st = String(currentLobby.status || '').toLowerCase();
+            document.getElementById('setting-status').innerText =
+                st === 'playing' ? 'In partita' : (st === 'started' ? 'Avviata' : 'In attesa');
             playersList.innerHTML = '';
             const players = currentLobby.players || [];
             players.forEach(player => {
@@ -790,9 +796,28 @@
 
         async function leaveLobby() {
             showLoadingOverlay();
+            window.AntiCheat?.stopLobbyHeartbeat?.();
+
+            const firebaseAc = window.AntiCheat?.buildFirebaseContext?.() || {};
+            firebaseAc.currentUid = uidCorrente();
 
             try {
                 await waitForFirebase();
+                const lobbyBefore = initializeLobbyData();
+                const leaveCheck = window.AntiCheat?.validateLobbyLeave?.({
+                    lobby: lobbyBefore,
+                    uid: uidCorrente(),
+                    nickname: nicknameCorrente()
+                });
+                if (leaveCheck && !leaveCheck.valid) {
+                    throw new Error('Uscita lobby non valida.');
+                }
+
+                await window.AntiCheat?.guardAction?.('lobby.leave', firebaseAc, {
+                    nickname: nicknameCorrente(),
+                    page: 'waiting_room.html'
+                }, async () => {});
+
                 const risultato = await trasferisciHostELasciaLobbyRemota();
                 const list = readLobbyList();
                 const index = list.findIndex(room => room.id === stanzaId);
@@ -856,7 +881,7 @@
             window.location.href = 'Menu_principale.html';
         }
 
-        function startGame() {
+        async function startGame() {
             const lobby = initializeLobbyData();
             if (!isUtenteHost(lobby)) {
                 alert('Solo l\'host può avviare la partita.');
@@ -872,10 +897,30 @@
                 alert('Servono almeno 2 giocatori per avviare la partita.');
                 return;
             }
-            list[index].status = 'started';
-            saveLobbyList(list);
-            alert('Partita avviata!');
-            renderWaitingRoom();
+
+            const btn = document.getElementById('btn-start-game');
+            if (btn) {
+                btn.disabled = true;
+                btn.textContent = 'Avvio…';
+            }
+
+            try {
+                await waitForFirebase();
+                if (!window.GameFirestore?.createGameFromLobby) {
+                    throw new Error('Motore di gioco non caricato.');
+                }
+                await window.GameFirestore.createGameFromLobby(list[index]);
+                list[index].status = 'playing';
+                saveLobbyList(list);
+                window.location.href = `gioco.html?stanzaId=${encodeURIComponent(stanzaId)}`;
+            } catch (err) {
+                console.error(err);
+                alert('Errore avvio partita: ' + (err.message || err));
+                if (btn) {
+                    btn.disabled = false;
+                    btn.textContent = 'Avvia Partita';
+                }
+            }
         }
 
         function toggleLobbySetting(setting) {
@@ -967,15 +1012,51 @@
         function listenLobbyRealtime() {
             const lobbyRef = window.doc(window.db, 'lobbies', stanzaId);
 
+            const MESSAGGIO_CHIUSURA_ADMIN = 'Questa lobby è stata chiusa da un amministratore.';
+
+            function espelliDaLobbyChiusa(messaggio) {
+                window.AntiCheat?.stopLobbyHeartbeat?.();
+                const list = readLobbyList().filter(room => room.id !== stanzaId);
+                saveLobbyList(list);
+                alert(messaggio || MESSAGGIO_CHIUSURA_ADMIN);
+                window.location.href = 'Menu_principale.html';
+            }
+
             unsubscribeLobby = window.onSnapshot(
                 lobbyRef,
                 (snapshot) => {
                     if (!snapshot.exists()) {
-                        window.location.href = 'Menu_principale.html';
+                        espelliDaLobbyChiusa(MESSAGGIO_CHIUSURA_ADMIN);
                         return;
                     }
 
-                    const lobbyRemota = applicaIsSelfLocale(snapshot.data());
+                    const data = snapshot.data();
+                    if (String(data.status || '').toLowerCase() === 'closed_by_admin') {
+                        espelliDaLobbyChiusa(data.adminCloseMessage || MESSAGGIO_CHIUSURA_ADMIN);
+                        return;
+                    }
+
+                    if (String(data.status || '').toLowerCase() === 'playing') {
+                        const list = readLobbyList();
+                        const idx = list.findIndex(room => room.id === stanzaId);
+                        if (idx !== -1) {
+                            list[idx].status = 'playing';
+                            saveLobbyList(list);
+                        }
+                        window.location.href = `gioco.html?stanzaId=${encodeURIComponent(stanzaId)}`;
+                        return;
+                    }
+
+                    const lobbyRemota = applicaIsSelfLocale(data);
+
+                    if (window.AntiCheat) {
+                        window.AntiCheat.trackLobbySnapshot(lobbyRemota, {
+                            uid: uidCorrente(),
+                            nickname: nicknameCorrente(),
+                            page: 'waiting_room.html',
+                            firebase: window.AntiCheat.buildFirebaseContext()
+                        });
+                    }
 
                     const list = readLobbyList();
                     const index = list.findIndex(room => room.id === stanzaId);
@@ -1007,9 +1088,21 @@
             initializeLobbyData();
             renderWaitingRoom();
             listenLobbyRealtime();
+
+            if (window.AntiCheat && window.setDoc) {
+                window.AntiCheat.startLobbyHeartbeat({
+                    db: window.db,
+                    doc: window.doc,
+                    setDoc: window.setDoc,
+                    lobbyId: stanzaId,
+                    uid: uidCorrente(),
+                    nickname: nicknameCorrente()
+                });
+            }
         }
 
         window.addEventListener('beforeunload', () => {
+            window.AntiCheat?.stopLobbyHeartbeat?.();
             if (typeof unsubscribeLobby === 'function') {
                 unsubscribeLobby();
             }

@@ -57,12 +57,31 @@
             max-height: calc(100vh - 4rem);
         }
 
-        .modal-content.scrollable {
+        .modal-content.scrollable,
+        .modal-shell .modal-frame.scrollable {
             overflow-y: auto;
         }
 
-        .modal-content:not(.hidden) {
+        .modal-content:not(.hidden),
+        .modal-shell:not(.hidden) {
             animation: modal-pop 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+        }
+
+        .modal-shell {
+            position: relative;
+            max-height: calc(100vh - 4rem);
+            overflow: visible;
+        }
+
+        .modal-shell .modal-close-outside {
+            position: absolute;
+            top: -0.75rem;
+            right: -0.75rem;
+            z-index: 50;
+        }
+
+        .modal-shell .modal-frame {
+            max-height: calc(100vh - 4rem);
         }
 
         .toggle-switch {
@@ -234,11 +253,18 @@
         }
     </style>
 
+    <script src="js/admin-config.js"></script>
+    <script src="js/ban-service.js"></script>
+    <script src="js/anti-cheat.js"></script>
+    <script src="js/carte-data.js"></script>
+    <script src="js/admin-panel.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        // FIX: Importazione corretta da firebase-firestore.js
-        import { getFirestore, doc, getDoc, setDoc, updateDoc, runTransaction, collection, query, orderBy, limit, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, runTransaction, collection, query, orderBy, limit, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const { initAdminPanel, updateAdminButtonVisibility, closeAdminPanel } = window.AdminPanel;
+        const { fetchBanForUser, formatBanMessage } = window.BanService;
 
         const firebaseConfig = {
             apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
@@ -262,21 +288,15 @@
         window.getDoc = getDoc;
         window.setDoc = setDoc;
         window.updateDoc = updateDoc;
+        window.deleteDoc = deleteDoc;
+        window.addDoc = addDoc;
         window.runTransaction = runTransaction;
+        window.onSnapshot = onSnapshot;
         window.collection = collection;
         window.query = query;
         window.orderBy = orderBy;
         window.limit = limit;
         window.getDocs = getDocs;
-
-        onAuthStateChanged(auth, async (user) => {
-            if (!user) {
-                window.location.href = "index.html";
-            } else {
-                window.currentUserUid = user.uid;
-                await rinfrescaDatiProfiloUtente();
-            }
-        });
 
         window.rinfrescaDatiProfiloUtente = async function() {
             try {
@@ -308,15 +328,17 @@
 
                 window.carteSbloccateUtente = dati.carteSbloccate || ["c_0_9", "c_piu2", "c_rev", "c_bloc", "c_cc", "c_piu4"];
 
-                document.getElementById('header-nickname').innerText = dati.nickname.toUpperCase();
+                const nickVisibile = (dati.nickname || 'Giocatore').toUpperCase();
+                document.getElementById('header-nickname').innerText = nickVisibile;
                 document.getElementById('settings-nickname-input').value = dati.nickname;
                 
                 const nodiAvatar = document.querySelectorAll('.avatar-render');
+                const avatarVal = dati.avatar || '🦊';
                 nodiAvatar.forEach(el => {
-                    if(dati.avatar.startsWith('data:image') || dati.avatar.startsWith('http')) {
-                        el.innerHTML = `<img src="${dati.avatar}" class="w-full h-full object-cover rounded-full">`;
+                    if(avatarVal.startsWith('data:image') || avatarVal.startsWith('http')) {
+                        el.innerHTML = `<img src="${avatarVal}" class="w-full h-full object-cover rounded-full">`;
                     } else {
-                        el.innerHTML = dati.avatar;
+                        el.innerHTML = avatarVal;
                     }
                 });
 
@@ -341,8 +363,62 @@
                 }));
             } catch(e) {
                 console.error("Errore sincro dati:", e);
+                const headerNick = document.getElementById('header-nickname');
+                if (headerNick) headerNick.innerText = 'GIOCATORE';
             }
-        }
+        };
+
+        onAuthStateChanged(auth, async (user) => {
+            if (!user) {
+                window.location.href = "index.html";
+                return;
+            }
+
+            window.currentUserUid = user.uid;
+
+            try {
+                const banStatus = await fetchBanForUser(db, doc, getDoc, user.uid);
+                if (banStatus.banned) {
+                    await signOut(auth);
+                    alert(formatBanMessage(banStatus));
+                    window.location.href = "index.html?banned=1";
+                    return;
+                }
+
+                await window.rinfrescaDatiProfiloUtente();
+                updateAdminButtonVisibility();
+
+                initAdminPanel({
+                    db,
+                    auth,
+                    doc,
+                    collection,
+                    getDoc,
+                    getDocs,
+                    setDoc,
+                    updateDoc,
+                    deleteDoc,
+                    addDoc,
+                    onSnapshot,
+                    openModal: (id) => window.openModal(id),
+                    closeModal: () => window.closeModal(false),
+                    playSynth: (type) => window.playSynth?.(type),
+                    entraInLobbyForzato: (id) => window.entraInLobbyForzato(id)
+                });
+            } catch (error) {
+                console.error('Errore avvio sessione:', error);
+                const headerNick = document.getElementById('header-nickname');
+                if (headerNick && headerNick.innerText === 'CARICAMENTO...') {
+                    headerNick.innerText = 'GIOCATORE';
+                }
+            }
+        });
+
+        window.__closeAdminPanelListeners = closeAdminPanel;
+        window.chiudiAdminPanel = function() {
+            closeAdminPanel();
+            window.closeModal(false);
+        };
     </script>
 </head>
 <body class="w-full h-screen text-white flex items-center justify-center relative p-6">
@@ -436,6 +512,7 @@
                 </div>
             </div>
 
+            <button id="btn-admin-panel" type="button" class="hidden btn-chunky btn-red w-full py-3.5 text-sm cursor-pointer" data-sound="error">Admin Panel</button>
             <button class="btn-chunky btn-red w-full py-3.5 text-sm cursor-pointer" onclick="openModal('modal-logout')" data-sound="error">Disconnetti Account</button>
         </div>
 
@@ -555,6 +632,96 @@
                 <div id="room-create-error" class="hidden md:col-span-2 bg-red-950/80 border border-red-900 text-red-300 rounded-2xl p-3 text-[11px] font-bold text-center"></div>
 
                 <button onclick="creaLobbySelezionata()" class="md:col-span-2 btn-chunky btn-emerald w-full py-4 text-sm font-black rounded-full uppercase tracking-[0.1em]" data-sound="bloop">CREA LOBBY ✓</button>
+            </div>
+        </div>
+
+        <!-- ADMIN PANEL -->
+        <div id="modal-admin-panel" class="modal-shell hidden w-full max-w-2xl">
+            <button type="button" onclick="window.chiudiAdminPanel()" class="modal-close-outside w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <div class="modal-content modal-frame scrollable game-panel-dark w-full p-6 rounded-3xl">
+            <h2 class="text-2xl font-black text-center text-red-500 tracking-wide mb-4">🛡️ ADMIN PANEL</h2>
+            <div class="flex gap-2 mb-4">
+                <button type="button" data-admin-tab="lobbies" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-red-600 text-white">Lobby Aperte</button>
+                <button type="button" data-admin-tab="gives" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-slate-800 text-slate-400">Gives</button>
+                <button type="button" data-admin-tab="ban" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-slate-800 text-slate-400">Ban</button>
+                <button type="button" data-admin-tab="security" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-slate-800 text-slate-400">Sicurezza</button>
+            </div>
+            <div id="admin-section-lobbies" class="space-y-3">
+                <input id="admin-lobbies-search" type="text" placeholder="Cerca lobby..." class="room-input w-full rounded-2xl px-4 py-3 text-sm font-black outline-none focus:border-red-500" />
+                <div id="admin-lobbies-list" class="space-y-2 max-h-[50vh] overflow-y-auto custom-scroll pr-1"></div>
+            </div>
+            <div id="admin-section-gives" class="hidden space-y-3">
+                <input id="admin-gives-search" type="text" placeholder="Cerca nickname, UID, email..." class="room-input w-full rounded-2xl px-4 py-3 text-sm font-black outline-none focus:border-amber-500" />
+                <div id="admin-gives-list" class="space-y-2 max-h-[50vh] overflow-y-auto custom-scroll pr-1"></div>
+            </div>
+            <div id="admin-section-ban" class="hidden space-y-3">
+                <button type="button" id="admin-btn-ban-user" class="btn-chunky btn-red w-full py-3 text-sm" data-sound="error">Banna un Utente</button>
+                <input id="admin-ban-search" type="text" placeholder="Cerca ban (nickname, email, UID)..." class="room-input w-full rounded-2xl px-4 py-3 text-sm font-black outline-none focus:border-red-500" />
+                <div id="admin-ban-list" class="space-y-2 max-h-[45vh] overflow-y-auto custom-scroll pr-1"></div>
+            </div>
+            <div id="admin-section-security" class="hidden space-y-3">
+                <input id="admin-security-search" type="text" placeholder="Cerca eventi (UID, tipo, nickname)..." class="room-input w-full rounded-2xl px-4 py-3 text-sm font-black outline-none focus:border-cyan-500" />
+                <div id="admin-security-list" class="space-y-2 max-h-[50vh] overflow-y-auto custom-scroll pr-1"></div>
+            </div>
+            </div>
+        </div>
+
+        <div id="modal-admin-lobby-detail" class="modal-shell hidden w-full max-w-md">
+            <button type="button" onclick="closeModal()" class="modal-close-outside w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <div class="modal-content modal-frame game-panel-dark w-full p-6 rounded-3xl">
+            <h2 id="admin-lobby-detail-title" class="text-xl font-black text-red-400 mb-3">Lobby</h2>
+            <div id="admin-lobby-detail-body" class="mb-4"></div>
+            <div class="flex flex-col gap-2">
+                <button type="button" id="admin-btn-join-lobby" class="btn-chunky btn-emerald w-full py-3 text-sm" data-sound="bloop">Unisciti</button>
+                <button type="button" id="admin-btn-delete-lobby" class="btn-chunky btn-red w-full py-3 text-sm" data-sound="error">Elimina</button>
+            </div>
+            </div>
+        </div>
+
+        <div id="modal-admin-give-user" class="modal-shell hidden w-full max-w-2xl">
+            <button type="button" onclick="closeModal()" class="modal-close-outside w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <div class="modal-content modal-frame scrollable game-panel-dark w-full p-6 rounded-3xl">
+            <h2 id="admin-give-title" class="text-xl font-black text-amber-400">Utente</h2>
+            <p id="admin-give-meta" class="text-[10px] text-slate-500 font-bold uppercase mb-4"></p>
+            <div class="bg-black/50 rounded-2xl p-4 border border-slate-900 mb-4">
+                <label class="text-[10px] font-bold text-slate-400 uppercase">Quantità XP</label>
+                <div class="flex gap-2 mt-2">
+                    <input id="admin-give-xp-input" type="number" min="1" value="100" class="room-input flex-1 rounded-xl px-3 py-2 text-sm font-black" />
+                    <button type="button" id="admin-btn-give-xp" class="btn-chunky btn-yellow px-4 py-2 text-xs whitespace-nowrap" data-sound="bloop">Aggiungi XP</button>
+                </div>
+            </div>
+            <div class="text-xs font-black text-slate-400 uppercase mb-2">Give Carte (Index)</div>
+            <div id="admin-give-cards-grid" class="grid gap-2 sm:grid-cols-2 max-h-[40vh] overflow-y-auto custom-scroll pr-1"></div>
+            </div>
+        </div>
+
+        <div id="modal-admin-ban-pick" class="modal-shell hidden w-full max-w-md">
+            <button type="button" onclick="closeModal()" class="modal-close-outside w-10 h-10 btn-chunky btn-slate flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <div class="modal-content modal-frame scrollable game-panel-dark w-full p-6 rounded-3xl">
+            <h2 class="text-xl font-black text-red-400 mb-3">Seleziona utente da bannare</h2>
+            <input id="admin-ban-pick-search" type="text" placeholder="Cerca nickname, email, UID..." class="room-input w-full rounded-2xl px-4 py-3 text-sm font-black mb-3" />
+            <div id="admin-ban-pick-list" class="space-y-2 max-h-[50vh] overflow-y-auto custom-scroll pr-1"></div>
+            </div>
+        </div>
+
+        <div id="modal-admin-ban-form" class="modal-shell hidden w-full max-w-md">
+            <button type="button" onclick="closeModal()" class="modal-close-outside w-10 h-10 btn-chunky btn-slate flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <div class="modal-content modal-frame game-panel-dark w-full p-6 rounded-3xl">
+            <h2 id="admin-ban-form-title" class="text-xl font-black text-red-400 mb-4">Ban utente</h2>
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Durata Ban</label>
+            <select id="admin-ban-duration" class="room-input w-full rounded-xl px-3 py-2 text-sm font-black mt-1 mb-3"></select>
+            <label class="text-[10px] font-bold text-slate-400 uppercase">Motivo Ban *</label>
+            <textarea id="admin-ban-reason" rows="3" class="room-input w-full rounded-xl px-3 py-2 text-sm font-black mt-1 mb-4" placeholder="Motivo obbligatorio"></textarea>
+            <button type="button" id="admin-btn-confirm-ban" class="btn-chunky btn-red w-full py-3 text-sm" data-sound="error">Ban</button>
+            </div>
+        </div>
+
+        <div id="modal-admin-ban-detail" class="modal-shell hidden w-full max-w-md">
+            <button type="button" onclick="closeModal()" class="modal-close-outside w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <div class="modal-content modal-frame game-panel-dark w-full p-6 rounded-3xl">
+            <h2 class="text-xl font-black text-red-400 mb-3">Scheda Ban</h2>
+            <div id="admin-ban-detail-body" class="mb-4"></div>
+            <button type="button" id="admin-btn-unban" class="btn-chunky btn-emerald w-full py-3 text-sm" data-sound="bloop">Sban</button>
             </div>
         </div>
 
@@ -740,7 +907,7 @@
         const overlay = document.getElementById('modal-overlay');
         let modalAttiva = null;
 
-        function openModal(id) {
+        window.openModal = function openModal(id) {
             playSynth('bloop');
             if(modalAttiva) {
                 document.getElementById(modalAttiva).classList.add('hidden');
@@ -761,14 +928,47 @@
                 if (search) search.value = '';
                 renderListaLobby();
             }
-        }
+        };
 
-        function closeModal(playAudio = true) {
-            if(!modalAttiva) return;
+        window.closeModal = function closeModal(playAudio = true) {
+            if(!modalAttiva || modalAttiva === 'modal-loading-room') return;
+            if (modalAttiva === 'modal-admin-panel' && typeof window.__closeAdminPanelListeners === 'function') {
+                window.__closeAdminPanelListeners();
+            }
             if (playAudio) playSynth('pop');
             document.getElementById(modalAttiva).classList.add('hidden');
             overlay.classList.add('hidden');
             modalAttiva = null;
+        };
+
+        let modalPrimaDelCaricamento = null;
+
+        function showLoadingOverlay() {
+            const titolo = document.getElementById('modal-loading-room-title');
+            if (titolo) titolo.innerText = 'Caricamento in corso...';
+
+            if (modalAttiva && modalAttiva !== 'modal-loading-room') {
+                modalPrimaDelCaricamento = modalAttiva;
+                document.getElementById(modalAttiva)?.classList.add('hidden');
+            }
+
+            document.getElementById('modal-loading-room')?.classList.remove('hidden');
+            modalAttiva = 'modal-loading-room';
+            overlay.classList.remove('hidden');
+        }
+
+        function hideLoadingOverlay() {
+            document.getElementById('modal-loading-room')?.classList.add('hidden');
+
+            if (modalPrimaDelCaricamento) {
+                document.getElementById(modalPrimaDelCaricamento)?.classList.remove('hidden');
+                modalAttiva = modalPrimaDelCaricamento;
+                modalPrimaDelCaricamento = null;
+                overlay.classList.remove('hidden');
+            } else {
+                overlay.classList.add('hidden');
+                modalAttiva = null;
+            }
         }
 
         window.switchStatsTab = function(tab) {
@@ -915,7 +1115,8 @@
             };
         }
 
-        async function aggiungiGiocatoreAllaLobbyRemota(lobbyId, playerName, playerAvatar, playerUid) {
+        async function aggiungiGiocatoreAllaLobbyRemota(lobbyId, playerName, playerAvatar, playerUid, opzioni = {}) {
+            const forceAdmin = opzioni.forceAdmin === true;
             if (!window.db || !window.doc || !window.runTransaction) return false;
             const lobbyRef = window.doc(window.db, 'lobbies', lobbyId);
             const nickNorm = normalizzaNickname(playerName);
@@ -934,7 +1135,7 @@
                     return;
                 }
                 const maxPlayers = parseInt(data.maxPlayers, 10) || 15;
-                if (players.length >= maxPlayers) {
+                if (!forceAdmin && players.length >= maxPlayers) {
                     throw new Error('Lobby piena');
                 }
                 players.push(creaRecordGiocatore({
@@ -1036,22 +1237,48 @@
                 nuovaLobby.cardQuantities[carta.id] = Math.max(0, defaultQuantita);
             });
 
-            document.getElementById('modal-loading-room').classList.remove('hidden');
+            const firebaseAc = window.AntiCheat?.buildFirebaseContext?.() || {};
+            firebaseAc.currentUid = hostUid;
 
-            modalAttiva = 'modal-loading-room';
+            try {
+                await window.AntiCheat.guardAction('lobby.create', firebaseAc, {
+                    nickname: hostName,
+                    page: 'Menu_principale.html'
+                }, async () => {
+                    showLoadingOverlay();
+                    document.getElementById('modal-create').classList.add('hidden');
 
-            overlay.classList.remove('hidden');
+                    lobbies.unshift(nuovaLobby);
+                    salvaLobby(lobbies.slice(0, 12));
+                    await salvaLobbyRemota(nuovaLobby);
+                    closeModal(false);
+                    setTimeout(() => {
+                        window.location.href = `waiting_room.html?stanzaId=${nuovaLobby.id}&ruolo=host`;
+                    }, 80);
+                });
+            } catch (error) {
+                playSynth('error');
+                errore.innerText = error.message || 'Creazione lobby bloccata.';
+                errore.classList.remove('hidden');
+            }
+        }
 
-            document.getElementById('modal-create').classList.add('hidden');
+        async function caricaLobbyPerIngresso(id) {
+            if (window.db && window.doc && window.getDoc) {
+                try {
+                    const snap = await window.getDoc(window.doc(window.db, 'lobbies', id));
+                    if (snap.exists()) {
+                        return { id, ...snap.data() };
+                    }
+                } catch (error) {
+                    console.warn('Lettura lobby remota non disponibile:', error);
+                }
+            }
 
-
-            lobbies.unshift(nuovaLobby);
-            salvaLobby(lobbies.slice(0, 12));
-            await salvaLobbyRemota(nuovaLobby);
-            closeModal(false);
-            setTimeout(() => {
-                window.location.href = `waiting_room.html?stanzaId=${nuovaLobby.id}&ruolo=host`;
-            }, 80);
+            const lobbies = leggiLobbySalvate();
+            const lobbyIndex = lobbies.findIndex(item => item.id === id && item.status === 'waiting');
+            if (lobbyIndex === -1) return null;
+            return lobbies[lobbyIndex];
         }
 
         window.entraInLobby = async function(id) {
@@ -1061,28 +1288,14 @@
                 || 'Giocatore';
             const playerAvatar = currentUser.avatar || '🦊';
             const playerUid = window.currentUserUid || currentUser.uid || null;
+            const nickNorm = normalizzaNickname(playerName);
 
-            let lobby = null;
-            if (window.db && window.doc && window.getDoc) {
-                try {
-                    const snap = await window.getDoc(window.doc(window.db, 'lobbies', id));
-                    if (snap.exists()) {
-                        lobby = { id, ...snap.data() };
-                    }
-                } catch (error) {
-                    console.warn('Lettura lobby remota non disponibile:', error);
-                }
-            }
+            let lobby = await caricaLobbyPerIngresso(id);
 
             if (!lobby) {
-                const lobbies = leggiLobbySalvate();
-                const lobbyIndex = lobbies.findIndex(item => item.id === id && item.status === 'waiting');
-                if (lobbyIndex === -1) {
-                    playSynth('error');
-                    alert('Lobby non più disponibile.');
-                    return;
-                }
-                lobby = lobbies[lobbyIndex];
+                playSynth('error');
+                alert('Lobby non più disponibile.');
+                return;
             }
 
             if (String(lobby.status || 'waiting').toLowerCase() !== 'waiting') {
@@ -1100,42 +1313,136 @@
                 }
             }
 
-            const alreadyInLobby = lobby.players?.some(p => p.nickname === playerName);
-            if (!alreadyInLobby) {
-                try {
+            const joinCheck = window.AntiCheat.validateLobbyJoin({
+                lobby,
+                uid: playerUid,
+                nickname: playerName
+            });
+            if (!joinCheck.valid) {
+                playSynth('error');
+                alert('Ingresso lobby non valido.');
+                await window.AntiCheat.logSecurityEvent(window.AntiCheat.buildFirebaseContext(), {
+                    uid: playerUid,
+                    nickname: playerName,
+                    type: 'lobby_invalid',
+                    severity: window.AntiCheat.SEVERITY.high,
+                    message: `Join rifiutato: ${joinCheck.reason}`,
+                    metadata: { lobbyId: id, reason: joinCheck.reason },
+                    page: 'Menu_principale.html'
+                });
+                return;
+            }
+
+            showLoadingOverlay();
+            const firebaseAc = window.AntiCheat.buildFirebaseContext();
+            firebaseAc.currentUid = playerUid;
+
+            try {
+                await window.AntiCheat.guardAction('lobby.join', firebaseAc, {
+                    nickname: playerName,
+                    page: 'Menu_principale.html'
+                }, async () => {
+                const alreadyInLobby = joinCheck.alreadyInLobby || (lobby.players || []).some(player =>
+                    (playerUid && player.uid === playerUid)
+                    || normalizzaNickname(player.nickname) === nickNorm
+                );
+
+                if (!alreadyInLobby) {
                     await aggiungiGiocatoreAllaLobbyRemota(id, playerName, playerAvatar, playerUid);
-                } catch (error) {
-                    playSynth('error');
-                    alert(error.message || 'Impossibile entrare nella lobby.');
-                    return;
                 }
-            }
 
-            if (window.db && window.doc && window.getDoc) {
-                try {
-                    const snap = await window.getDoc(window.doc(window.db, 'lobbies', id));
-                    if (snap.exists()) {
-                        lobby = { id, ...snap.data() };
-                    }
-                } catch (error) {
-                    console.warn('Refresh lobby remota non disponibile:', error);
+                lobby = await caricaLobbyPerIngresso(id);
+                if (!lobby) {
+                    throw new Error('Lobby non più disponibile.');
                 }
-            }
 
-            lobby = applicaIsSelfLocale(lobby, playerName, playerUid);
-            const lobbies = leggiLobbySalvate();
-            const lobbyIndex = lobbies.findIndex(item => item.id === id);
-            if (lobbyIndex === -1) {
-                lobbies.unshift(lobby);
-            } else {
-                lobbies[lobbyIndex] = lobby;
-            }
-            salvaLobby(lobbies);
+                lobby = applicaIsSelfLocale(lobby, playerName, playerUid);
+                const lobbies = leggiLobbySalvate();
+                const lobbyIndex = lobbies.findIndex(item => item.id === id);
+                if (lobbyIndex === -1) {
+                    lobbies.unshift(lobby);
+                } else {
+                    lobbies[lobbyIndex] = lobby;
+                }
+                salvaLobby(lobbies);
 
-            setTimeout(() => {
-                window.location.href = `waiting_room.html?stanzaId=${lobby.id}&ruolo=player`;
-            }, 80);
+                setTimeout(() => {
+                    window.location.href = `waiting_room.html?stanzaId=${lobby.id}&ruolo=player`;
+                }, 80);
+                });
+            } catch (error) {
+                hideLoadingOverlay();
+                playSynth('error');
+                alert(error.message || 'Impossibile entrare nella lobby.');
+            }
         }
+
+        window.entraInLobbyForzato = async function(id) {
+            if (!window.AdminConfig?.isAdminUid(window.currentUserUid)) {
+                alert('Accesso negato.');
+                return;
+            }
+
+            let lobby = await caricaLobbyPerIngresso(id);
+            if (!lobby) {
+                alert('Lobby non trovata.');
+                return;
+            }
+
+            const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{}');
+            const playerName = currentUser.nickname
+                || document.getElementById('settings-nickname-input')?.value?.trim()
+                || 'Giocatore';
+            const playerAvatar = currentUser.avatar || '🦊';
+            const playerUid = window.currentUserUid || currentUser.uid || null;
+
+            const joinCheck = window.AntiCheat.validateLobbyJoin({
+                lobby,
+                uid: playerUid,
+                nickname: playerName,
+                forceAdmin: true
+            });
+            if (!joinCheck.valid) {
+                alert('Ingresso admin non valido.');
+                return;
+            }
+
+            showLoadingOverlay();
+
+            try {
+                const giaPresente = joinCheck.alreadyInLobby || (lobby.players || []).some(player =>
+                    (playerUid && player.uid === playerUid)
+                    || normalizzaNickname(player.nickname) === normalizzaNickname(playerName)
+                );
+
+                if (!giaPresente) {
+                    await aggiungiGiocatoreAllaLobbyRemota(id, playerName, playerAvatar, playerUid, { forceAdmin: true });
+                }
+
+                lobby = await caricaLobbyPerIngresso(id);
+                if (!lobby) {
+                    throw new Error('Lobby non disponibile.');
+                }
+
+                lobby = applicaIsSelfLocale(lobby, playerName, playerUid);
+                const lobbies = leggiLobbySalvate();
+                const lobbyIndex = lobbies.findIndex(item => item.id === id);
+                if (lobbyIndex === -1) {
+                    lobbies.unshift(lobby);
+                } else {
+                    lobbies[lobbyIndex] = lobby;
+                }
+                salvaLobby(lobbies);
+
+                setTimeout(() => {
+                    window.location.href = `waiting_room.html?stanzaId=${lobby.id}&ruolo=player`;
+                }, 80);
+            } catch (error) {
+                hideLoadingOverlay();
+                playSynth('error');
+                alert(error.message || 'Ingresso admin non riuscito.');
+            }
+        };
 
         function lobbyDisponibile(item) {
             const players = Array.isArray(item.players) ? item.players : [];
@@ -1295,9 +1602,16 @@
                 alert("Il nome deve avere tra 3 e 20 caratteri!");
                 return;
             }
+            const patch = { nickname: nuovoNick };
+            const prot = window.AntiCheat.validateProtectedUserPatch(patch);
+            if (!prot.valid) {
+                alert('Modifica profilo non consentita.');
+                return;
+            }
+            const firebaseAc = window.AntiCheat.buildFirebaseContext();
             try {
-                await window.updateDoc(window.doc(window.db, "utenti", window.currentUserUid), {
-                    nickname: nuovoNick
+                await window.AntiCheat.guardAction('profile.nickname', firebaseAc, { nickname: nuovoNick }, async () => {
+                    await window.updateDoc(window.doc(window.db, "utenti", window.currentUserUid), patch);
                 });
                 playSynth('bloop');
                 await window.rinfrescaDatiProfiloUtente();
@@ -1309,9 +1623,16 @@
 
         async function salvaNuovoAvatar(valoreStringa) {
             if(!window.currentUserUid) return;
+            const patch = { avatar: valoreStringa };
+            const prot = window.AntiCheat.validateProtectedUserPatch(patch);
+            if (!prot.valid) {
+                alert('Modifica profilo non consentita.');
+                return;
+            }
+            const firebaseAc = window.AntiCheat.buildFirebaseContext();
             try {
-                await window.updateDoc(window.doc(window.db, "utenti", window.currentUserUid), {
-                    avatar: valoreStringa
+                await window.AntiCheat.guardAction('profile.avatar', firebaseAc, {}, async () => {
+                    await window.updateDoc(window.doc(window.db, "utenti", window.currentUserUid), patch);
                 });
                 await window.rinfrescaDatiProfiloUtente();
                 openModal('modal-options');

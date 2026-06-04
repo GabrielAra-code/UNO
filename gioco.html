@@ -3,167 +3,321 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>UNO? REVOLUTION - Tavolo Desktop</title>
+    <title>UNO? REVOLUTION — Tavolo</title>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-        /* Sfondo personalizzato sfumato radiale per il tavolo da gioco */
+        body { background: #020617; }
         .tavolo-bg {
-            background: radial-gradient(circle, #1e293b 0%, #0f172a 70%, #020617 100%);
+            background: radial-gradient(ellipse 80% 70% at 50% 45%, #1e3a5f 0%, #0f172a 55%, #020617 100%);
         }
-        /* Nasconde la barra di scorrimento ma mantiene la funzionalità */
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-    </style>
-</head>
-<body class="w-full h-screen bg-slate-950 text-white flex flex-col overflow-hidden font-sans select-none">
 
-    <header class="w-full h-14 bg-slate-950 border-b border-slate-800 flex items-center justify-between px-6 z-10">
-        <div class="flex items-center gap-4">
-            <span class="text-xl font-black text-amber-500 tracking-wider">UNO? REVOLUTION</span>
-            <div class="bg-slate-800 text-xs px-3 py-1 rounded-full text-slate-300 border border-slate-700 font-mono">
-                STANZA: <span id="room-id" class="text-white font-bold">#XG78A9</span>
-            </div>
-        </div>
-        <div class="flex items-center gap-6">
-            <div class="text-sm text-slate-400">Giro: <span id="game-direction" class="text-emerald-400 font-bold">Orario ↻</span></div>
-            <div id="turn-alert" class="bg-amber-500/10 text-amber-400 px-4 py-1 rounded-md border border-amber-500/20 text-sm font-bold animate-pulse">
-                Turno di: Player_2
-            </div>
-            <div class="text-sm font-mono bg-slate-900 border border-slate-800 px-3 py-1 rounded flex items-center gap-2">
-                ⏱️ <span id="timer">24s</span>
-            </div>
+        .table-wrap {
+            position: relative;
+            width: min(92vmin, 640px);
+            height: min(92vmin, 640px);
+            margin: 0 auto;
+        }
+
+        .table-surface {
+            position: absolute;
+            inset: 8%;
+            border-radius: 50%;
+            background: radial-gradient(circle at 40% 35%, #166534 0%, #14532d 40%, #052e16 100%);
+            border: 6px solid #422006;
+            box-shadow: inset 0 0 60px rgba(0,0,0,0.5), 0 12px 40px rgba(0,0,0,0.6);
+        }
+
+        .table-direction-ring {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .table-direction-ring::before {
+            content: '';
+            position: absolute;
+            inset: 2%;
+            border-radius: 50%;
+            border: 3px dashed rgba(251, 191, 36, 0.45);
+            animation: spin-dir 12s linear infinite;
+        }
+        .table-direction-ring.dir-ccw::before {
+            animation-direction: reverse;
+        }
+        @keyframes spin-dir {
+            to { transform: rotate(360deg); }
+        }
+
+        .dir-arrow {
+            position: absolute;
+            width: 28px;
+            height: 28px;
+            color: #fbbf24;
+            font-size: 22px;
+            font-weight: 900;
+            text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+            transform: translate(-50%, -50%);
+        }
+
+        .table-seats {
+            position: absolute;
+            inset: 0;
+            pointer-events: none;
+        }
+        .table-seat {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            width: 100px;
+            transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-min(42vmin, 280px)) rotate(calc(-1 * var(--angle)));
+        }
+        .seat-inner {
+            background: rgba(15, 23, 42, 0.92);
+            border: 2px solid #334155;
+            border-radius: 16px;
+            padding: 8px 10px;
+            text-align: center;
+            pointer-events: auto;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .seat-turn {
+            border-color: #fbbf24;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.35);
+        }
+        .seat-out { opacity: 0.45; }
+        .seat-avatar { font-size: 1.6rem; line-height: 1; }
+        .seat-name { font-size: 0.7rem; font-weight: 800; color: #f1f5f9; margin-top: 2px; }
+        .seat-meta { font-size: 0.6rem; color: #94a3b8; font-family: monospace; }
+        .seat-hp { font-size: 0.55rem; color: #fb7185; font-family: monospace; }
+
+        .table-center {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            display: flex;
+            align-items: center;
+            gap: 1.25rem;
+            z-index: 5;
+        }
+
+        .pile-card {
+            width: 7rem;
+            height: 9.5rem;
+            border: 3px solid #fff;
+            border-radius: 1rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            padding: 0.6rem;
+            font-weight: 900;
+            font-style: italic;
+            color: #fff;
+            cursor: pointer;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
+            transition: transform 0.15s;
+        }
+        .pile-card:hover { transform: scale(1.04); }
+        .pile-corner { font-size: 1.1rem; }
+        .pile-corner.br { align-self: flex-end; transform: rotate(180deg); }
+        .pile-center {
+            position: absolute;
+            left: 50%; top: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 2rem;
+            font-weight: 900;
+        }
+        #deck-discard { position: relative; transform: rotate(6deg); }
+        #deck-draw {
+            background: linear-gradient(135deg, #b91c1c, #7f1d1d);
+            position: relative;
+        }
+        #deck-draw::after {
+            content: 'UNO?';
+            position: absolute;
+            inset: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 900;
+            font-size: 1.1rem;
+            transform: rotate(-12deg);
+            opacity: 0.9;
+        }
+        .draw-count {
+            position: absolute;
+            bottom: -8px;
+            right: -8px;
+            background: #0f172a;
+            border: 2px solid #fbbf24;
+            color: #fbbf24;
+            font-size: 0.65rem;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 999px;
+        }
+
+        .color-hint {
+            position: absolute;
+            bottom: -2.5rem;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 0.65rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            white-space: nowrap;
+        }
+        .color-red { color: #f87171; }
+        .color-yellow { color: #facc15; }
+        .color-green { color: #4ade80; }
+        .color-blue { color: #60a5fa; }
+
+        .hand-card {
+            flex: 0 0 auto;
+            width: 5.5rem;
+            height: 8rem;
+            border: 2px solid #fff;
+            border-radius: 1rem;
+            font-weight: 900;
+            color: #fff;
+            cursor: pointer;
+            transition: transform 0.15s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .hand-card:hover:not(.hand-card-disabled) { transform: translateY(-12px) scale(1.05); }
+        .hand-card-disabled { opacity: 0.45; cursor: not-allowed; }
+
+        .modal-color-btn, .modal-target-btn {
+            width: 100%;
+            padding: 0.75rem;
+            border-radius: 12px;
+            font-weight: 800;
+            margin-bottom: 0.5rem;
+            border: 2px solid #475569;
+            background: #1e293b;
+            color: #fff;
+        }
+        .modal-color-btn.color-red { background: #dc2626; border-color: #fca5a5; }
+        .modal-color-btn.color-yellow { background: #eab308; color: #0f172a; border-color: #fef08a; }
+        .modal-color-btn.color-green { background: #16a34a; border-color: #86efac; }
+        .modal-color-btn.color-blue { background: #2563eb; border-color: #93c5fd; }
+
+        #game-toast {
+            position: fixed;
+            bottom: 140px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 60;
+            background: #1e293b;
+            border: 1px solid #fbbf24;
+            color: #fef3c7;
+            padding: 0.5rem 1rem;
+            border-radius: 999px;
+            font-size: 0.8rem;
+            font-weight: 700;
+        }
+    </style>
+    <script src="js/game-deck.js"></script>
+    <script src="js/game-engine.js"></script>
+    <script src="js/game-firestore.js"></script>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, setDoc, getDoc, updateDoc, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
+            authDomain: "unoforse-a553d.firebaseapp.com",
+            databaseURL: "https://unoforse-a553d-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "unoforse-a553d",
+            storageBucket: "unoforse-a553d.firebasestorage.app",
+            messagingSenderId: "396941322053",
+            appId: "1:396941322053:web:86b8f596b4e05aac8ec02c",
+            measurementId: "G-9SEK0SY996"
+        };
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.doc = doc;
+        window.setDoc = setDoc;
+        window.getDoc = getDoc;
+        window.updateDoc = updateDoc;
+        window.onSnapshot = onSnapshot;
+    </script>
+</head>
+<body class="w-full h-screen text-white flex flex-col overflow-hidden font-sans select-none">
+
+    <header class="w-full h-12 shrink-0 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between px-4 z-20">
+        <span class="text-lg font-black text-amber-500 tracking-wider">UNO? REVOLUTION</span>
+        <div class="flex items-center gap-4 text-sm">
+            <span class="text-slate-400">Giro: <span id="game-direction" class="text-emerald-400 font-bold">Oraria ↻</span></span>
+            <div id="turn-alert" class="bg-amber-500/15 text-amber-300 px-3 py-1 rounded-lg border border-amber-500/30 font-bold text-xs hidden">—</div>
+            <button id="btn-leave" type="button" class="text-xs text-slate-400 hover:text-white underline">Esci</button>
         </div>
     </header>
 
-    <div class="flex-1 w-full flex overflow-hidden">
-        
-        <aside class="w-1/5 h-full bg-slate-950/40 border-r border-slate-800 flex flex-col p-4 gap-4 justify-between">
-            <div class="flex-1 flex flex-col min-h-0">
-                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Giocatori al tavolo</h3>
-                <div id="players-list" class="space-y-2 overflow-y-auto pr-1 no-scrollbar">
-                    
-                    <div class="p-3 bg-slate-900/80 border border-slate-700 rounded-xl flex items-center justify-between shadow-md">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center font-bold text-sm border border-blue-400">TU</div>
-                            <div>
-                                <div class="text-sm font-bold">xGamer_123</div>
-                                <div class="text-xs text-rose-400 font-mono font-bold flex items-center gap-1">💥 PistolHP: 3/3</div>
-                            </div>
+    <main class="flex-1 min-h-0 flex flex-col tavolo-bg relative">
+        <div id="stack-alert" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-rose-950/90 border border-rose-500 text-rose-200 text-xs font-bold px-4 py-2 rounded-full"></div>
+
+        <div class="flex-1 flex items-center justify-center p-4 min-h-0">
+            <div class="table-wrap">
+                <div id="table-direction-ring" class="table-direction-ring"></div>
+                <!-- Frecce direzione -->
+                <span class="dir-arrow" style="left:50%;top:4%;">➤</span>
+                <span class="dir-arrow" style="left:92%;top:50%;">➤</span>
+                <span class="dir-arrow" style="left:50%;top:92%;">➤</span>
+                <span class="dir-arrow" style="left:8%;top:50%;">➤</span>
+
+                <div class="table-surface"></div>
+                <div id="table-seats" class="table-seats"></div>
+
+                <div class="table-center">
+                    <div id="deck-draw" class="pile-card" title="Pesca">
+                        <span id="draw-count" class="draw-count">0</span>
+                    </div>
+                    <div>
+                        <div id="deck-discard" class="pile-card bg-blue-600">
+                            <span class="pile-corner">—</span>
+                            <span class="pile-center">—</span>
                         </div>
-                        <span class="text-xs bg-slate-800 px-2 py-1 rounded-md text-amber-400 font-bold border border-slate-700">7 Carte</span>
+                        <div id="active-color-hint" class="color-hint color-slate">Colore: —</div>
                     </div>
-
-                    <div class="p-3 bg-slate-900/40 border border-slate-800/60 rounded-xl flex items-center justify-between opacity-80">
-                        <div class="flex items-center gap-3">
-                            <div class="w-8 h-8 rounded-full bg-slate-700 flex items-center justify-center font-bold text-sm">P2</div>
-                            <div>
-                                <div class="text-sm font-medium">Player_2</div>
-                                <div class="text-xs text-rose-400/70 font-mono flex items-center gap-1">💥 PistolHP: 2/3</div>
-                            </div>
-                        </div>
-                        <span class="text-xs bg-slate-800/60 px-2 py-1 rounded-md text-slate-400 font-mono">5 Carte</span>
-                    </div>
-
                 </div>
             </div>
+        </div>
 
-            <div class="h-48 bg-slate-900 border border-slate-800 rounded-xl p-3 flex flex-col justify-between shadow-inner">
-                <div id="chat-messages" class="flex-1 overflow-y-auto text-xs space-y-2 font-mono text-slate-400 no-scrollbar">
-                    <p><span class="text-slate-500">[System]:</span> Partita iniziata.</p>
-                    <p><span class="text-blue-400">Tu:</span> Bella raga, occhio alla roulette</p>
-                    <p><span class="text-amber-400">Player_2:</span> Non spararmi subito ti prego haha</p>
-                </div>
-                <input type="text" placeholder="Scrivi un messaggio..." class="mt-2 w-full bg-slate-950 border border-slate-700 rounded-lg px-3 py-1.5 text-xs text-white focus:outline-none focus:border-amber-500 transition-colors">
+        <div id="game-log-mini" class="shrink-0 max-h-16 overflow-y-auto px-4 text-[10px] font-mono text-slate-500 space-y-0.5 no-scrollbar"></div>
+
+        <section class="shrink-0 bg-slate-950/90 border-t border-slate-800 p-3">
+            <div class="max-w-5xl mx-auto flex items-center justify-between mb-2 px-1">
+                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">La tua mano</span>
+                <button id="btn-uno" type="button" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-1 rounded-full font-black text-xs uppercase">UNO!</button>
             </div>
-        </aside>
+            <div id="my-hand" class="max-w-5xl mx-auto flex items-end justify-center gap-2 overflow-x-auto py-2 no-scrollbar min-h-[8.5rem]"></div>
+        </section>
+    </main>
 
-        <main class="flex-1 h-full tavolo-bg flex flex-col relative">
-            
-            <div class="flex-1 flex items-center justify-center gap-16 relative">
-                
-                <div id="deck-draw" class="w-32 h-44 bg-gradient-to-br from-red-600 to-red-900 border-2 border-white rounded-2xl shadow-2xl flex items-center justify-center transform hover:scale-105 active:scale-95 transition-all cursor-pointer group relative">
-                    <div class="absolute inset-1 border border-red-400/20 rounded-xl flex items-center justify-center">
-                        <span class="text-white font-black text-2xl tracking-tighter transform -rotate-45 group-hover:scale-110 transition-transform">UNO?</span>
-                    </div>
-                    <div class="absolute -bottom-1 -right-1 w-full h-full bg-red-800 border-2 border-white rounded-2xl -z-10 shadow-md"></div>
-                </div>
-
-                <div id="deck-discard" class="w-32 h-44 bg-blue-600 border-2 border-white rounded-2xl shadow-2xl flex flex-col justify-between p-4 relative transform rotate-3">
-                    <span class="text-2xl font-black italic text-white leading-none">7</span>
-                    <div class="w-16 h-24 bg-white rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center shadow-inner">
-                        <span class="text-blue-600 text-4xl font-black italic">7</span>
-                    </div>
-                    <span class="text-2xl font-black italic text-white leading-none self-end transform rotate-180">7</span>
-                </div>
-
-            </div>
-
-            <section class="w-full bg-slate-950/80 border-t border-slate-800 p-4 flex flex-col items-center shadow-2xl">
-                <div class="w-full max-w-5xl flex items-center justify-between mb-3 px-2">
-                    <span class="text-xs text-slate-400 uppercase tracking-wider font-semibold font-mono">Le tue carte in mano</span>
-                    <button class="bg-amber-500 hover:bg-amber-600 active:scale-95 text-slate-950 px-5 py-1.5 rounded-full font-black text-xs uppercase tracking-wider shadow-lg transition-all">
-                        Dichiara UNO!
-                    </button>
-                </div>
-                
-                <div id="my-hand" class="w-full max-w-5xl h-48 flex items-center justify-center gap-3 overflow-x-auto py-2 px-4 whitespace-nowrap no-scrollbar">
-                    
-                    <div class="inline-block w-28 h-40 bg-green-600 border-2 border-white rounded-2xl shadow-lg transform hover:-translate-y-6 hover:scale-105 transition-all cursor-pointer p-3 text-white font-bold relative group">
-                        <span class="text-xl italic">4</span>
-                        <div class="w-12 h-20 bg-white/20 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-                            <span class="text-xl font-black italic">4</span>
-                        </div>
-                    </div>
-
-                    <div class="inline-block w-28 h-40 bg-yellow-500 border-2 border-white rounded-2xl shadow-lg transform hover:-translate-y-6 hover:scale-105 transition-all cursor-pointer p-3 text-white font-bold relative group">
-                        <span class="text-sm uppercase tracking-tighter">Skip</span>
-                        <div class="w-12 h-20 bg-white/20 rounded-full absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 flex items-center justify-center">
-                            <span class="text-lg font-black">🚫</span>
-                        </div>
-                    </div>
-
-                    <div class="inline-block w-28 h-40 bg-slate-950 border-2 border-amber-500 rounded-2xl shadow-xl transform hover:-translate-y-6 hover:scale-105 transition-all cursor-pointer p-3 text-amber-500 font-bold relative border-dashed group animate-pulse">
-                        <span class="text-xs uppercase font-mono tracking-tighter block text-center mt-2">🧠 MODIFIER</span>
-                        <div class="absolute inset-x-0 bottom-4 text-center text-[10px] font-black uppercase text-amber-400">BRAINROT</div>
-                    </div>
-
-                </div>
-            </section>
-        </main>
-
-        <aside class="w-1/5 h-full bg-slate-950/40 border-l border-slate-800 flex flex-col p-4 gap-4 justify-between">
-            <div class="flex-1 flex flex-col min-h-0">
-                <h3 class="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-3">Registro Partita</h3>
-                <div id="game-log" class="flex-1 bg-slate-900 border border-slate-800 rounded-xl p-3 overflow-y-auto text-[11px] space-y-2 font-mono text-slate-400 no-scrollbar shadow-inner">
-                    <p class="text-slate-500">&gt; Connessione stabilita.</p>
-                    <p class="text-slate-300">&gt; <span class="text-amber-400">Player_2</span> ha pescato 1 carta.</p>
-                    <p class="text-emerald-400">&gt; <span class="text-white font-bold">Tu</span> hai giocato Verde 4.</p>
-                    <p class="text-rose-400 font-semibold">&gt; 🚨 Player_3 fallisce la sfida Brainrot! subisce 1 danno PistolHP.</p>
-                </div>
-            </div>
-
-            <div class="h-48 bg-slate-900/40 border border-slate-800/80 rounded-xl p-4 flex flex-col">
-                <h4 class="text-xs font-bold text-slate-400 uppercase tracking-wider mb-2">Regole Attive</h4>
-                <ul class="space-y-2 text-xs font-mono text-slate-400">
-                    <li class="flex justify-between border-b border-slate-800/50 pb-1"><span>🧠 Brainrot Mode</span> <span class="text-emerald-400 font-bold">SI</span></li>
-                    <li class="flex justify-between border-b border-slate-800/50 pb-1"><span>💥 PistolHP Max</span> <span class="text-amber-400 font-bold">3 HP</span></li>
-                    <li class="flex justify-between"><span>🃏 Stack +2 / +4</span> <span class="text-emerald-400 font-bold">ATTIVO</span></li>
-                </ul>
-            </div>
-        </aside>
-
-    </div>
+    <div id="game-toast" class="hidden"></div>
 
     <div id="game-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border-2 border-amber-500 w-full max-w-md rounded-2xl p-6 text-center shadow-2xl transform scale-100 transition-transform">
-            <h2 id="modal-title" class="text-2xl font-black text-amber-500 uppercase tracking-wide mb-2">SFIDA BRAINROT!</h2>
-            <p id="modal-description" class="text-sm text-slate-300 mb-6 font-mono">Rispondi correttamente entro 10 secondi o perdi 1 PistolHP!</p>
-            <div id="modal-content" class="space-y-2">
-                <button class="w-full bg-slate-800 hover:bg-slate-700 p-3 rounded-xl border border-slate-700 font-bold text-sm transition-colors">Risposta A</button>
-                <button class="w-full bg-slate-800 hover:bg-slate-700 p-3 rounded-xl border border-slate-700 font-bold text-sm transition-colors">Risposta B</button>
-            </div>
+        <div class="bg-slate-900 border-2 border-amber-500 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
+            <h2 id="modal-title" class="text-xl font-black text-amber-500 uppercase mb-1">—</h2>
+            <p id="modal-description" class="text-sm text-slate-400 mb-4"></p>
+            <div id="modal-content"></div>
         </div>
     </div>
 
+    <div id="end-overlay" class="hidden fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-6">
+        <div class="text-center max-w-md">
+            <h2 id="end-title" class="text-4xl font-black text-amber-400 mb-3">—</h2>
+            <p id="end-duration" class="text-lg text-slate-300 font-mono mb-4">—</p>
+            <p class="text-sm text-slate-500">Ritorno alla sala d'attesa tra pochi secondi…</p>
+        </div>
+    </div>
+
+    <script src="js/game-client.js"></script>
 </body>
 </html>

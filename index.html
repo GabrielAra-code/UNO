@@ -48,10 +48,15 @@
         }
     </style>
 
+    <script src="js/admin-config.js"></script>
+    <script src="js/ban-service.js"></script>
+    <script src="js/anti-cheat.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
-        import { getFirestore, doc, setDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
+        import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const { fetchBanForUser, formatBanMessage } = window.BanService;
 
         const firebaseConfig = {
             apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
@@ -78,11 +83,63 @@
         window.query = query;
         window.where = where;
         window.getDocs = getDocs;
+        window.getDoc = getDoc;
+        window.signOut = signOut;
 
-        onAuthStateChanged(auth, (user) => {
+        function mostraSchermataLogin() {
             document.getElementById('loading-overlay').classList.add('hidden');
             document.getElementById('screen-auth').classList.remove('hidden');
+            document.getElementById('screen-banned').classList.add('hidden');
+        }
+
+        function mostraSchermataBan(messaggio) {
+            document.getElementById('loading-overlay').classList.add('hidden');
+            document.getElementById('screen-auth').classList.add('hidden');
+            document.getElementById('screen-banned').classList.remove('hidden');
+            document.getElementById('banned-message').innerText = messaggio || 'Il tuo account è stato sospeso.';
+        }
+
+        async function gestisciUtenteAutenticato(user) {
+            try {
+                if (!user) {
+                    if (new URLSearchParams(window.location.search).get('banned') !== '1') {
+                        mostraSchermataLogin();
+                    }
+                    return;
+                }
+
+                const banStatus = await fetchBanForUser(db, doc, getDoc, user.uid);
+                if (banStatus.banned) {
+                    await signOut(auth);
+                    mostraSchermataBan(formatBanMessage(banStatus));
+                    return;
+                }
+
+                document.getElementById('loading-overlay').classList.add('hidden');
+                window.location.href = 'Menu_principale.html';
+            } catch (error) {
+                console.error('Errore sincronizzazione account:', error);
+                mostraSchermataLogin();
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            gestisciUtenteAutenticato(user);
         });
+
+        setTimeout(() => {
+            const overlay = document.getElementById('loading-overlay');
+            if (overlay && !overlay.classList.contains('hidden')) {
+                console.warn('Timeout sincronizzazione: mostro login.');
+                mostraSchermataLogin();
+            }
+        }, 8000);
+
+        if (new URLSearchParams(window.location.search).get('banned') === '1') {
+            signOut(auth).finally(() => {
+                mostraSchermataBan('Il tuo account è stato sospeso.');
+            });
+        }
     </script>
 </head>
 <body class="w-full h-screen text-slate-300 flex items-center justify-center overflow-hidden">
@@ -146,6 +203,14 @@
                 Entra nel Gioco
             </button>
         </form>
+    </main>
+
+    <main id="screen-banned" class="hidden w-full max-w-md p-8 game-card rounded-3xl relative z-10 mx-4">
+        <div class="text-center mb-6">
+            <h1 class="text-3xl font-black text-red-500 uppercase">Account Sospeso</h1>
+        </div>
+        <p id="banned-message" class="text-sm text-slate-300 font-bold leading-relaxed whitespace-pre-line text-center mb-6"></p>
+        <button type="button" onclick="window.location.reload()" class="btn-chunky btn-slate w-full py-4 text-sm">Torna al login</button>
     </main>
 
     <script>
@@ -231,8 +296,22 @@
                         nickname: nickname,
                         email: email,
                         avatar: "🦊",
+                        xp: 0,
+                        livello: 1,
+                        partiteGiocate: 0,
+                        vittorie: 0,
+                        carteSbloccate: ["c_0_9", "c_piu2", "c_rev", "c_bloc", "c_cc", "c_piu4"],
                         createdAt: new Date().toISOString()
                     });
+
+                    const banStatus = await fetchBanForUser(window.db, window.doc, window.getDoc, res.user.uid);
+                    if (banStatus.banned) {
+                        await window.signOut(window.auth);
+                        document.getElementById('screen-auth').classList.add('hidden');
+                        document.getElementById('screen-banned').classList.remove('hidden');
+                        document.getElementById('banned-message').innerText = formatBanMessage(banStatus);
+                        return;
+                    }
 
                     window.location.href = "Menu_principale.html";
                 } catch(err) {
@@ -241,7 +320,18 @@
                 }
             } else {
                 try {
-                    await window.signInWithEmailAndPassword(window.auth, email, password);
+                    await window.AntiCheat.guardAction('auth.login', window.AntiCheat.buildFirebaseContext(), {
+                        page: 'index.html'
+                    }, async () => {});
+                    const res = await window.signInWithEmailAndPassword(window.auth, email, password);
+                    const banStatus = await fetchBanForUser(window.db, window.doc, window.getDoc, res.user.uid);
+                    if (banStatus.banned) {
+                        await window.signOut(window.auth);
+                        document.getElementById('screen-auth').classList.add('hidden');
+                        document.getElementById('screen-banned').classList.remove('hidden');
+                        document.getElementById('banned-message').innerText = formatBanMessage(banStatus);
+                        return;
+                    }
                     window.location.href = "Menu_principale.html";
                 } catch(err) {
                     errorBox.innerText = "Credenziali errate o utente inesistente.";
