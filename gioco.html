@@ -308,6 +308,65 @@
         .color-green { color: #4ade80; }
         .color-blue { color: #60a5fa; }
 
+        .hand-scroll-wrap {
+            width: 100%;
+            max-width: 100%;
+            overflow: hidden;
+            position: relative;
+        }
+        .hand-scroll-wrap::after {
+            content: '';
+            position: absolute;
+            right: 0;
+            top: 0;
+            bottom: 0;
+            width: 28px;
+            background: linear-gradient(to left, rgba(15, 23, 42, 0.92), transparent);
+            pointer-events: none;
+            z-index: 2;
+        }
+        #my-hand {
+            display: flex;
+            flex-wrap: nowrap;
+            align-items: flex-end;
+            justify-content: flex-start;
+            gap: 0.5rem;
+            overflow-x: auto;
+            overflow-y: hidden;
+            width: 100%;
+            max-width: 100%;
+            -webkit-overflow-scrolling: touch;
+            overscroll-behavior-x: contain;
+            scroll-snap-type: x proximity;
+            scrollbar-width: thin;
+            scrollbar-color: #475569 transparent;
+        }
+        #my-hand::-webkit-scrollbar {
+            height: 6px;
+        }
+        #my-hand::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 999px;
+        }
+        #my-hand .hand-card {
+            scroll-snap-align: start;
+            flex: 0 0 auto;
+        }
+        #my-hand.hand-size-many .hand-card {
+            width: 4.75rem;
+            height: 7rem;
+        }
+        #my-hand.hand-size-many .hand-label {
+            font-size: 0.8rem;
+        }
+        #my-hand.hand-size-crowded .hand-card {
+            width: 4rem;
+            height: 5.85rem;
+        }
+        #my-hand.hand-size-crowded .hand-label {
+            font-size: 0.72rem;
+        }
+
         .hand-card {
             flex: 0 0 auto;
             width: 5.5rem;
@@ -372,6 +431,11 @@
             padding: 0.35rem 0.75rem;
             font-size: 0.65rem;
             font-weight: 800;
+        }
+
+        .modal-target-revive {
+            border-color: #4ade80 !important;
+            background: linear-gradient(180deg, #166534, #14532d) !important;
         }
 
         .modal-color-btn, .modal-target-btn {
@@ -711,7 +775,9 @@
                 <button type="button" id="btn-confirm-play" class="btn-play-confirm" data-sound="click">Gioca scala</button>
                 <button type="button" id="btn-cancel-play" class="btn-play-cancel">Annulla</button>
             </div>
-            <div id="my-hand" class="max-w-5xl mx-auto flex items-end justify-center gap-2 overflow-x-auto py-2 no-scrollbar min-h-[8.5rem]"></div>
+            <div class="hand-scroll-wrap max-w-5xl mx-auto">
+                <div id="my-hand" class="hand-size-normal py-2 min-h-[8.5rem] px-1"></div>
+            </div>
         </section>
         </div>
     </main>

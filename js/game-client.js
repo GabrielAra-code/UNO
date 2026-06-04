@@ -548,10 +548,22 @@
         }
     }
 
+    function applyHandLayoutSizing() {
+        const handEl = $('my-hand');
+        if (!handEl) return;
+        const n = myHand().length;
+        handEl.dataset.count = String(n);
+        handEl.classList.remove('hand-size-normal', 'hand-size-many', 'hand-size-crowded');
+        if (n > 14) handEl.classList.add('hand-size-crowded');
+        else if (n > 9) handEl.classList.add('hand-size-many');
+        else handEl.classList.add('hand-size-normal');
+    }
+
     function renderHand() {
         const handEl = $('my-hand');
         if (!handEl) return;
         handEl.innerHTML = '';
+        applyHandLayoutSizing();
         const canPlay = gameState?.status === 'playing';
         const hand = myHand();
         const stackCounts = {};
@@ -617,6 +629,12 @@
                 btn.addEventListener('click', () => onPlayCounter(card.instanceId));
             }
             handEl.appendChild(btn);
+        });
+        requestAnimationFrame(() => {
+            const el = $('my-hand');
+            if (el && el.scrollWidth > el.clientWidth) {
+                el.scrollLeft = el.scrollWidth - el.clientWidth;
+            }
         });
     }
 
@@ -899,7 +917,16 @@
             showColorModal(instanceId);
             return;
         }
-        if (['death', 'swap', 'gift', 'heart', 'communism', 'blobby'].includes(card.value)) {
+        if (card.value === 'heart') {
+            if (!Engine.eliminatedPlayerIds(gameState).length) {
+                playSound('error');
+                showToast('Nessun giocatore eliminato da rianimare');
+                return;
+            }
+            showTargetModal(instanceId, 'heart');
+            return;
+        }
+        if (['death', 'swap', 'gift', 'communism', 'blobby'].includes(card.value)) {
             showTargetModal(instanceId, card.value);
             return;
         }
@@ -944,16 +971,48 @@
     function showTargetModal(pendingCardId, effect) {
         const modal = $('game-modal');
         const content = $('modal-content');
-        $('modal-title').textContent = 'Scegli bersaglio';
-        $('modal-description').textContent = 'Seleziona un giocatore';
+        const isHeart = effect === 'heart';
+        $('modal-title').textContent = isHeart ? 'Cuore — Rianima' : 'Scegli bersaglio';
+        $('modal-description').textContent = isHeart
+            ? 'Scegli un giocatore eliminato da riportare in partita'
+            : 'Seleziona un giocatore';
         content.innerHTML = '';
+
+        const targets = [];
         (gameState.turnOrder || []).forEach(id => {
-            if (id === myPlayerId) return;
             const p = gameState.players[id];
-            if (p?.eliminated) return;
+            if (isHeart) {
+                if (!p?.eliminated) return;
+            } else {
+                if (id === myPlayerId) return;
+                if (p?.eliminated) return;
+            }
+            targets.push({ id, nickname: p?.nickname || id });
+        });
+
+        if (!targets.length) {
+            const empty = document.createElement('p');
+            empty.className = 'text-sm text-slate-400 text-center py-2';
+            empty.textContent = isHeart
+                ? 'Nessun giocatore eliminato da rianimare.'
+                : 'Nessun bersaglio disponibile.';
+            content.appendChild(empty);
+            const close = document.createElement('button');
+            close.type = 'button';
+            close.className = 'modal-target-btn';
+            close.textContent = 'Chiudi';
+            close.onclick = () => modal.classList.add('hidden');
+            content.appendChild(close);
+            modal.classList.remove('hidden');
+            return;
+        }
+
+        targets.forEach(({ id, nickname }) => {
             const b = document.createElement('button');
+            b.type = 'button';
             b.className = 'modal-target-btn';
-            b.textContent = p.nickname || id;
+            if (isHeart) b.classList.add('modal-target-revive');
+            b.textContent = isHeart ? `${nickname} (eliminato)` : nickname;
             b.onclick = async () => {
                 modal.classList.add('hidden');
                 playSound('click');

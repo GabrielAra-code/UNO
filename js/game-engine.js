@@ -1474,12 +1474,13 @@
             }
             case 'heart': {
                 const target = options.targetId;
-                if (target && state.players[target]?.eliminated) {
-                    state.players[target].eliminated = false;
-                    state.players[target].pistolHp = state.settings.pistolHp;
-                    addLog(state, `${state.players[target].nickname} resuscitato!`);
+                if (!target) {
+                    state.pendingAction = { type: 'chooseTarget', playerId, effect: 'heart' };
+                    return { ok: true };
                 }
-                return { ok: true };
+                const revived = revivePlayer(state, target);
+                if (!revived.ok) addLog(state, revived.error || 'Rianimazione fallita.');
+                return { ok: revived.ok, error: revived.error };
             }
             case 'brainrot':
                 if (settings.brainrot) {
@@ -1543,6 +1544,38 @@
         state.players[playerId].eliminated = true;
         state.hands[playerId] = [];
         state.players[playerId].handCount = 0;
+    }
+
+    function eliminatedPlayerIds(state) {
+        return (state.turnOrder || []).filter(id => state.players[id]?.eliminated);
+    }
+
+    function revivePlayer(state, targetId) {
+        const p = state.players[targetId];
+        if (!p || !p.eliminated) {
+            return { ok: false, error: 'Questo giocatore non è eliminato.' };
+        }
+        p.eliminated = false;
+        p.pistolHp = state.settings.pistolHp;
+        p.maxPistolHp = state.settings.pistolHp;
+        p.saidUno = false;
+        p.unoRequired = false;
+
+        const dealt = drawFromPile(state, 7);
+        state.hands[targetId] = dealt;
+        syncHandCounts(state);
+
+        if (state.status === 'finished' && activePlayers(state).length > 1) {
+            state.status = 'playing';
+            state.winnerId = null;
+            state.winnerName = null;
+            state.endedAt = null;
+            state.durationMs = null;
+            addLog(state, 'Partita ripresa dopo resurrezione.');
+        }
+
+        addLog(state, `${p.nickname} è stato rianimato (${dealt.length} carte).`);
+        return { ok: true };
     }
 
     function drawCard(state, playerId) {
@@ -1614,6 +1647,9 @@
             resolveCardEffect(s, playerId, { value: 'swap' }, { targetId });
         } else if (pending.effect === 'gift') {
             resolveCardEffect(s, playerId, { value: 'gift' }, { targetId, giftCardId: pending.cardInstanceId });
+        } else if (pending.effect === 'heart') {
+            const effect = resolveCardEffect(s, playerId, { value: 'heart' }, { targetId });
+            if (!effect.ok) return effect;
         } else {
             resolveCardEffect(s, playerId, s.topCard, { targetId });
         }
@@ -1717,6 +1753,8 @@
         respondDefense,
         spinBulletRoulette,
         removePlayerFromGame,
+        eliminatedPlayerIds,
+        revivePlayer,
         stripForFirestore,
         topMatches,
         comboValueKey,
