@@ -257,7 +257,14 @@
     </style>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, updateDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+         import {
+          getFirestore,
+           doc,
+          updateDoc,
+          setDoc,
+          deleteDoc,
+          onSnapshot
+        } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
@@ -276,6 +283,7 @@
         window.updateDoc = updateDoc;
         window.setDoc = setDoc;
         window.deleteDoc = deleteDoc;
+        window.onSnapshot = onSnapshot;
     </script>
 </head>
 <body>
