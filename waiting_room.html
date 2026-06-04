@@ -263,7 +263,9 @@
           updateDoc,
           setDoc,
           deleteDoc,
-          onSnapshot
+          onSnapshot,
+          runTransaction,
+          getDoc
         } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
@@ -284,6 +286,8 @@
         window.setDoc = setDoc;
         window.deleteDoc = deleteDoc;
         window.onSnapshot = onSnapshot;
+        window.runTransaction = runTransaction;
+        window.getDoc = getDoc;
     </script>
 </head>
 <body>
@@ -359,6 +363,20 @@
         </div>
     </div>
 
+    <div id="modal-loading-room"
+         class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-sm">
+        <div class="game-panel-dark p-8 rounded-3xl text-center max-w-md w-full shadow-2xl" style="background-color:#0b111e;border:2px solid #1e293b;">
+            <div class="text-6xl mb-4 animate-pulse">⏳</div>
+            <h2 class="text-2xl font-black text-amber-400 uppercase tracking-wider">
+                Caricamento in corso...
+            </h2>
+            <p class="text-slate-400 font-bold mt-3">Attendere prego</p>
+            <div class="mt-5 flex justify-center">
+                <div class="w-10 h-10 border-4 border-slate-700 border-t-amber-400 rounded-full animate-spin"></div>
+            </div>
+        </div>
+    </div>
+
     <div id="card-summary-modal" class="hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
         <div class="w-full max-w-5xl rounded-[32px] border border-slate-800 bg-slate-950/95 shadow-2xl relative">
             <button onclick="closeCardSummary()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
@@ -388,9 +406,76 @@
 }
         const urlParams = new URLSearchParams(window.location.search);
         const stanzaId = urlParams.get('stanzaId');
-        const ruolo = urlParams.get('ruolo');
         const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{"nickname":"Giocatore","avatar":"🦊"}');
-        const isHost = ruolo === 'host';
+
+        function normalizzaNickname(nickname) {
+            return String(nickname || '').trim().toLowerCase();
+        }
+
+        function nicknameCorrente() {
+            return currentUser.nickname || 'Giocatore';
+        }
+
+        function uidCorrente() {
+            return currentUser.uid || null;
+        }
+
+        function sanitizePlayer(player, role) {
+            return {
+                nickname: String(player.nickname || 'Giocatore').trim(),
+                avatar: player.avatar || '🦊',
+                uid: player.uid || null,
+                role: role || player.role || 'player'
+            };
+        }
+
+        function trovaIndiceGiocatore(players, data) {
+            const uid = uidCorrente();
+            if (uid) {
+                const byUid = players.findIndex(player => player.uid === uid);
+                if (byUid !== -1) return byUid;
+            }
+
+            const nickNorm = normalizzaNickname(nicknameCorrente());
+            let index = players.findIndex(player => normalizzaNickname(player.nickname) === nickNorm);
+            if (index !== -1) return index;
+
+            const localSelf = findLobby()?.players?.find(player => player.isSelf);
+            if (localSelf) {
+                index = players.findIndex(player =>
+                    normalizzaNickname(player.nickname) === normalizzaNickname(localSelf.nickname)
+                );
+                if (index !== -1) return index;
+            }
+
+            if (data?.owner && normalizzaNickname(data.owner) === nickNorm) {
+                index = players.findIndex(player =>
+                    player.role === 'host'
+                    || normalizzaNickname(player.nickname) === normalizzaNickname(data.owner)
+                );
+                if (index !== -1) return index;
+            }
+
+            return -1;
+        }
+
+        function giocatoreEraHost(player, data) {
+            return player?.role === 'host'
+                || (data?.owner && normalizzaNickname(data.owner) === normalizzaNickname(player?.nickname));
+        }
+
+        function isUtenteHost(lobby) {
+            const uid = uidCorrente();
+            const nickNorm = normalizzaNickname(nicknameCorrente());
+            const me = (lobby?.players || []).find(player =>
+                (uid && player.uid === uid) || normalizzaNickname(player.nickname) === nickNorm
+            );
+            return me?.role === 'host';
+        }
+
+        function showLoadingOverlay() {
+            document.getElementById('modal-loading-room')?.classList.remove('hidden');
+        }
         const databaseCarte = [
             { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: 20, effetto: "Nessuno. Giocabili solo se l'ultimo numero coincide o su carte speciali incolori.", cat: "⚪ Incolore" },
             { id: "c_piu2", nome: "Classico: +2", quantita: 2, effetto: "Il bersaglio pesca 2 carte e salta il turno corrente.", cat: "🟥🟨🟩🟦 Classico" },
@@ -504,15 +589,16 @@
             [2, 3, 5].forEach(value => {
                 document.getElementById(`pistolhp-${value}`)?.classList.toggle('selected', currentLobby.settings.pistolHp === value);
             });
-            document.getElementById('role-badge').innerText = isHost ? 'Host' : 'Ospite';
-            startButton.classList.toggle('hidden', !isHost);
+            const hostAttivo = isUtenteHost(currentLobby);
+            document.getElementById('role-badge').innerText = hostAttivo ? 'Host' : 'Ospite';
+            startButton.classList.toggle('hidden', !hostAttivo);
             document.querySelectorAll('.toggle-switch').forEach(btn => {
-                btn.disabled = !isHost;
-                btn.classList.toggle('opacity-40', !isHost);
+                btn.disabled = !hostAttivo;
+                btn.classList.toggle('opacity-40', !hostAttivo);
             });
             document.querySelectorAll('.option-pill').forEach(btn => {
-                btn.disabled = !isHost;
-                btn.classList.toggle('opacity-40', !isHost);
+                btn.disabled = !hostAttivo;
+                btn.classList.toggle('opacity-40', !hostAttivo);
             });
         }
 
@@ -619,10 +705,12 @@
         }
 
         function applicaIsSelfLocale(lobbyRemota) {
-            const myNick = currentUser.nickname || 'Giocatore';
+            const uid = uidCorrente();
+            const nickNorm = normalizzaNickname(nicknameCorrente());
             const players = (lobbyRemota.players || []).map(player => ({
                 ...player,
-                isSelf: player.nickname === myNick
+                isSelf: (uid && player.uid === uid)
+                    || normalizzaNickname(player.nickname) === nickNorm
             }));
             return { ...lobbyRemota, id: stanzaId, players };
         }
@@ -640,42 +728,137 @@
             });
         }
 
-        async function leaveLobby() {
-            const list = readLobbyList();
-            const index = list.findIndex(room => room.id === stanzaId);
-            if (index !== -1) {
-                const lobby = list[index];
-                const remainingPlayers = (lobby.players || []).filter(player => !player.isSelf);
+        async function trasferisciHostELasciaLobbyRemota() {
+            if (!window.db || !window.doc || !window.runTransaction) {
+                throw new Error('Firebase non disponibile');
+            }
 
-                if (remainingPlayers.length === 0) {
-                    // Ultimo giocatore: elimino completamente la lobby
+            const lobbyRef = window.doc(window.db, 'lobbies', stanzaId);
+
+            await window.runTransaction(window.db, async (transaction) => {
+                const snap = await transaction.get(lobbyRef);
+                if (!snap.exists()) {
+                    return;
+                }
+
+                const data = snap.data();
+                const players = Array.isArray(data.players) ? [...data.players] : [];
+                const myIndex = trovaIndiceGiocatore(players, data);
+
+                if (myIndex === -1) {
+                    throw new Error('Giocatore non trovato nella lobby');
+                }
+
+                const leavingPlayer = players[myIndex];
+                const eraHost = giocatoreEraHost(leavingPlayer, data);
+                const remaining = players.filter((_, index) => index !== myIndex);
+
+                if (remaining.length === 0) {
+                    transaction.delete(lobbyRef);
+                    return;
+                }
+
+                const playersAggiornati = remaining.map((player, index) => {
+                    if (!eraHost) {
+                        return sanitizePlayer(player, player.role);
+                    }
+                    return sanitizePlayer(player, index === 0 ? 'host' : 'player');
+                });
+
+                const updatePayload = {
+                    players: playersAggiornati,
+                    status: 'waiting'
+                };
+
+                if (eraHost) {
+                    updatePayload.owner = playersAggiornati[0].nickname;
+                }
+
+                transaction.update(lobbyRef, updatePayload);
+            });
+
+            const snap = await window.getDoc(lobbyRef);
+            if (!snap.exists()) {
+                return { deleted: true, lobby: null };
+            }
+
+            return {
+                deleted: false,
+                lobby: { id: stanzaId, ...snap.data() }
+            };
+        }
+
+        async function leaveLobby() {
+            showLoadingOverlay();
+
+            try {
+                await waitForFirebase();
+                const risultato = await trasferisciHostELasciaLobbyRemota();
+                const list = readLobbyList();
+                const index = list.findIndex(room => room.id === stanzaId);
+
+                if (risultato.deleted) {
+                    if (index !== -1) {
+                        list.splice(index, 1);
+                    }
+                } else if (risultato.lobby) {
+                    const lobbyLocale = applicaIsSelfLocale(risultato.lobby);
+                    if (index !== -1) {
+                        list[index] = lobbyLocale;
+                    } else {
+                        list.push(lobbyLocale);
+                    }
+                }
+
+                saveLobbyList(list);
+            } catch (error) {
+                console.warn('Uscita lobby remota non riuscita, fallback locale:', error);
+
+                const list = readLobbyList();
+                const index = list.findIndex(room => room.id === stanzaId);
+                if (index === -1) {
+                    document.getElementById('modal-loading-room')?.classList.add('hidden');
+                    alert('Impossibile uscire dalla lobby.');
+                    return;
+                }
+
+                const lobby = list[index];
+                const players = [...(lobby.players || [])];
+                const myIndex = trovaIndiceGiocatore(players, lobby);
+
+                if (myIndex === -1) {
+                    document.getElementById('modal-loading-room')?.classList.add('hidden');
+                    alert('Impossibile identificare il tuo profilo nella lobby.');
+                    return;
+                }
+
+                const eraHost = giocatoreEraHost(players[myIndex], lobby);
+                const remaining = players.filter((_, i) => i !== myIndex);
+
+                if (remaining.length === 0) {
                     list.splice(index, 1);
                     await eliminaLobbyRemota(lobby.id);
-                } else if (isHost) {
-                    // Il proprietario lascia, trasferisco la proprietà al primo giocatore rimanente
-                    const nuovoHost = remainingPlayers[0];
-                    nuovoHost.role = 'host';
-                    lobby.owner = nuovoHost.nickname;
-                    lobby.players = remainingPlayers;
-                    lobby.status = 'waiting';
-                    await aggiornaLobbyRemota(lobby);
                 } else {
-                    // Un semplice partecipante lascia
-                    lobby.players = remainingPlayers;
+                    lobby.players = remaining.map((player, i) =>
+                        sanitizePlayer(player, eraHost && i === 0 ? 'host' : (eraHost ? 'player' : player.role))
+                    );
+                    if (eraHost) {
+                        lobby.owner = lobby.players[0].nickname;
+                    }
                     lobby.status = 'waiting';
                     await aggiornaLobbyRemota(lobby);
+                    list[index] = applicaIsSelfLocale(lobby);
                 }
 
                 saveLobbyList(list);
             }
 
-            setTimeout(() => {
-                window.location.href = 'Menu_principale.html';
-            }, 80);
+            window.location.href = 'Menu_principale.html';
         }
 
         function startGame() {
-            if (!isHost) {
+            const lobby = initializeLobbyData();
+            if (!isUtenteHost(lobby)) {
                 alert('Solo l\'host può avviare la partita.');
                 return;
             }
@@ -696,7 +879,7 @@
         }
 
         function toggleLobbySetting(setting) {
-            if (!isHost) {
+            if (!isUtenteHost(initializeLobbyData())) {
                 alert('Solo l\'host può modificare le impostazioni.');
                 return;
             }
@@ -707,7 +890,7 @@
         }
 
         function selectPistolHp(value) {
-            if (!isHost) {
+            if (!isUtenteHost(initializeLobbyData())) {
                 alert('Solo l\'host può modificare le impostazioni.');
                 return;
             }
@@ -768,7 +951,7 @@
         }
 
         function modifyCardQuantity(id, delta) {
-            if (!isHost) {
+            if (!isUtenteHost(initializeLobbyData())) {
                 alert('Solo l\'host può modificare le carte.');
                 return;
             }

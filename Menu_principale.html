@@ -334,7 +334,11 @@
                 document.getElementById('stat-livello').innerText = "LIV. " + liv;
                 document.getElementById('stat-xp-bar').style.width = percentualeXp + "%";
                 document.getElementById('stat-xp-testo').innerText = `${xpAttuali}/${xpTarget} XP`;
-                localStorage.setItem('unoCurrentUser', JSON.stringify({ nickname: dati.nickname, avatar: dati.avatar }));
+                localStorage.setItem('unoCurrentUser', JSON.stringify({
+                    nickname: dati.nickname,
+                    avatar: dati.avatar,
+                    uid: window.currentUserUid || null
+                }));
             } catch(e) {
                 console.error("Errore sincro dati:", e);
             }
@@ -393,8 +397,8 @@
     <div class="game-panel-dark p-8 rounded-3xl text-center max-w-md w-full shadow-2xl">
         <div class="text-6xl mb-4 animate-pulse">⏳</div>
 
-        <h2 class="text-2xl font-black text-amber-400 uppercase tracking-wider">
-            Creazione stanza in corso...
+        <h2 id="modal-loading-room-title" class="text-2xl font-black text-amber-400 uppercase tracking-wider">
+            Caricamento in corso...
         </h2>
 
         <p class="text-slate-400 font-bold mt-3">
@@ -898,9 +902,23 @@
             }
         }
 
-        async function aggiungiGiocatoreAllaLobbyRemota(lobbyId, playerName, playerAvatar) {
+        function normalizzaNickname(nickname) {
+            return String(nickname || '').trim().toLowerCase();
+        }
+
+        function creaRecordGiocatore({ nickname, avatar, role, uid }) {
+            return {
+                nickname: String(nickname || 'Giocatore').trim(),
+                avatar: avatar || '🦊',
+                role: role || 'player',
+                uid: uid || null
+            };
+        }
+
+        async function aggiungiGiocatoreAllaLobbyRemota(lobbyId, playerName, playerAvatar, playerUid) {
             if (!window.db || !window.doc || !window.runTransaction) return false;
             const lobbyRef = window.doc(window.db, 'lobbies', lobbyId);
+            const nickNorm = normalizzaNickname(playerName);
             await window.runTransaction(window.db, async (transaction) => {
                 const snap = await transaction.get(lobbyRef);
                 if (!snap.exists()) {
@@ -908,28 +926,34 @@
                 }
                 const data = snap.data();
                 const players = Array.isArray(data.players) ? [...data.players] : [];
-                if (players.some(p => p.nickname === playerName)) {
+                const giaPresente = players.some(player => {
+                    if (playerUid && player.uid === playerUid) return true;
+                    return normalizzaNickname(player.nickname) === nickNorm;
+                });
+                if (giaPresente) {
                     return;
                 }
                 const maxPlayers = parseInt(data.maxPlayers, 10) || 15;
                 if (players.length >= maxPlayers) {
                     throw new Error('Lobby piena');
                 }
-                players.push({
+                players.push(creaRecordGiocatore({
                     nickname: playerName,
                     avatar: playerAvatar,
                     role: 'player',
-                    isSelf: false
-                });
+                    uid: playerUid
+                }));
                 transaction.update(lobbyRef, { players });
             });
             return true;
         }
 
-        function applicaIsSelfLocale(lobby, playerName) {
+        function applicaIsSelfLocale(lobby, playerName, playerUid) {
+            const nickNorm = normalizzaNickname(playerName);
             const players = (lobby.players || []).map(player => ({
                 ...player,
-                isSelf: player.nickname === playerName
+                isSelf: (playerUid && player.uid === playerUid)
+                    || normalizzaNickname(player.nickname) === nickNorm
             }));
             return { ...lobby, players };
         }
@@ -971,8 +995,11 @@
             }
 
             const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{}');
-            const hostName = currentUser.nickname || document.getElementById('header-nickname').innerText || 'PLAYER';
+            const hostName = currentUser.nickname
+                || document.getElementById('settings-nickname-input')?.value?.trim()
+                || 'Giocatore';
             const hostAvatar = currentUser.avatar || '🦊';
+            const hostUid = window.currentUserUid || currentUser.uid || null;
 
             const lobbies = leggiLobbySalvate();
             const maxPlayers = parseInt(document.getElementById('create-room-max').value, 10);
@@ -993,7 +1020,7 @@
                 maxPlayers,
                 owner: hostName,
                 players: [
-                    { nickname: hostName, avatar: hostAvatar, role: 'host', isSelf: true }
+                    creaRecordGiocatore({ nickname: hostName, avatar: hostAvatar, role: 'host', uid: hostUid })
                 ],
                 settings: {
                     brainrot: roomSettings.brainrot,
@@ -1029,8 +1056,11 @@
 
         window.entraInLobby = async function(id) {
             const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{}');
-            const playerName = currentUser.nickname || document.getElementById('header-nickname').innerText || 'PLAYER';
+            const playerName = currentUser.nickname
+                || document.getElementById('settings-nickname-input')?.value?.trim()
+                || 'Giocatore';
             const playerAvatar = currentUser.avatar || '🦊';
+            const playerUid = window.currentUserUid || currentUser.uid || null;
 
             let lobby = null;
             if (window.db && window.doc && window.getDoc) {
@@ -1073,7 +1103,7 @@
             const alreadyInLobby = lobby.players?.some(p => p.nickname === playerName);
             if (!alreadyInLobby) {
                 try {
-                    await aggiungiGiocatoreAllaLobbyRemota(id, playerName, playerAvatar);
+                    await aggiungiGiocatoreAllaLobbyRemota(id, playerName, playerAvatar, playerUid);
                 } catch (error) {
                     playSynth('error');
                     alert(error.message || 'Impossibile entrare nella lobby.');
@@ -1092,7 +1122,7 @@
                 }
             }
 
-            lobby = applicaIsSelfLocale(lobby, playerName);
+            lobby = applicaIsSelfLocale(lobby, playerName, playerUid);
             const lobbies = leggiLobbySalvate();
             const lobbyIndex = lobbies.findIndex(item => item.id === id);
             if (lobbyIndex === -1) {
