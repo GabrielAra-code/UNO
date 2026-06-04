@@ -257,7 +257,7 @@
     </style>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-        import { getFirestore, doc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+        import { getFirestore, doc, updateDoc, setDoc, deleteDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const firebaseConfig = {
             apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
@@ -275,6 +275,7 @@
         window.doc = doc;
         window.updateDoc = updateDoc;
         window.setDoc = setDoc;
+        window.deleteDoc = deleteDoc;
     </script>
 </head>
 <body>
@@ -338,12 +339,12 @@
                                 <div class="setting-pill"><span>Stato</span><span id="setting-status">In attesa</span></div>
                             </div>
                         </div>
-                        <button onclick="openCardSummary()" class="btn-chunky btn-yellow w-full py-4 mt-5 text-sm" data-sound="click">Riepilogo Carte</button>
+                        <button onclick="openCardSummary()" class="btn-chunky btn-yellow w-full py-4 mt-5 text-sm" data-sound="bloop">Riepilogo Carte</button>
                     </div>
 
                     <div class="flex flex-col gap-3 sm:flex-row">
-                        <button id="btn-start-game" onclick="startGame()" class="btn-chunky btn-emerald w-full py-4" data-sound="click">Avvia Partita</button>
-                        <button onclick="leaveLobby()" class="btn-chunky btn-slate w-full py-4" data-sound="click">Esci dalla Lobby</button>
+                        <button id="btn-start-game" onclick="startGame()" class="btn-chunky btn-emerald w-full py-4" data-sound="bloop">Avvia Partita</button>
+                        <button onclick="leaveLobby()" class="btn-chunky btn-slate w-full py-4" data-sound="error">Esci dalla Lobby</button>
                     </div>
                 </section>
             </div>
@@ -369,7 +370,14 @@
         </div>
     </div>
 
+
     <script>
+
+        function wait(seconds) {
+    return new Promise(resolve => {
+        setTimeout(resolve, seconds * 1000);
+    });
+}
         const urlParams = new URLSearchParams(window.location.search);
         const stanzaId = urlParams.get('stanzaId');
         const ruolo = urlParams.get('ruolo');
@@ -455,7 +463,6 @@
             const currentLobby = initializeLobbyData();
 
             if (!currentLobby) {
-                alert('La lobby non è più disponibile.');
                 window.location.href = 'Menu_principale.html';
                 return;
             }
@@ -577,17 +584,53 @@
             });
         }
 
-        function leaveLobby() {
+        async function eliminaLobbyRemota(id) {
+            if (!window.db || !window.doc || !window.deleteDoc) return;
+            try {
+                await window.deleteDoc(window.doc(window.db, 'lobbies', id));
+            } catch (error) {
+                console.warn('Impossibile eliminare la lobby remota:', error);
+            }
+        }
+
+        async function aggiornaLobbyRemota(lobby) {
+            if (!window.db || !window.doc || !window.updateDoc) return;
+            try {
+                await window.updateDoc(window.doc(window.db, 'lobbies', lobby.id), lobby);
+            } catch (error) {
+                console.warn('Impossibile aggiornare la lobby remota:', error);
+            }
+        }
+
+        async function leaveLobby() {
             const list = readLobbyList();
             const index = list.findIndex(room => room.id === stanzaId);
             if (index !== -1) {
-                if (isHost) {
-                    list[index].status = 'closed';
+                const lobby = list[index];
+                const remainingPlayers = (lobby.players || []).filter(player => !player.isSelf);
+
+                if (remainingPlayers.length === 0) {
+                    // Ultimo giocatore: elimino completamente la lobby
+                    list.splice(index, 1);
+                    await eliminaLobbyRemota(lobby.id);
+                } else if (isHost) {
+                    // Il proprietario lascia, trasferisco la proprietà al primo giocatore rimanente
+                    const nuovoHost = remainingPlayers[0];
+                    nuovoHost.role = 'host';
+                    lobby.owner = nuovoHost.nickname;
+                    lobby.players = remainingPlayers;
+                    lobby.status = 'waiting';
+                    await aggiornaLobbyRemota(lobby);
                 } else {
-                    list[index].players = list[index].players.filter(player => !player.isSelf);
+                    // Un semplice partecipante lascia
+                    lobby.players = remainingPlayers;
+                    lobby.status = 'waiting';
+                    await aggiornaLobbyRemota(lobby);
                 }
+
                 saveLobbyList(list);
             }
+
             setTimeout(() => {
                 window.location.href = 'Menu_principale.html';
             }, 80);
