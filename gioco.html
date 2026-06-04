@@ -308,10 +308,30 @@
         .color-green { color: #4ade80; }
         .color-blue { color: #60a5fa; }
 
+        /* Colori carte (sempre disponibili, anche su mobile senza Tailwind JIT) */
+        .hand-card.card-red, .pile-card.card-red { background: #dc2626; color: #fff; }
+        .hand-card.card-yellow, .pile-card.card-yellow { background: #eab308; color: #0f172a; }
+        .hand-card.card-green, .pile-card.card-green { background: #16a34a; color: #fff; }
+        .hand-card.card-blue, .pile-card.card-blue { background: #2563eb; color: #fff; }
+        .hand-card.card-black, .pile-card.card-black {
+            background: #0f172a; color: #fff; border-color: #f59e0b;
+        }
+        .hand-card.card-wild, .pile-card.card-wild {
+            background: linear-gradient(135deg, #9333ea, #db2777); color: #fff;
+        }
+        .hand-card.card-brainrot, .pile-card.card-brainrot {
+            background: #581c87; color: #fff; border-color: #c084fc;
+        }
+        .hand-card.card-battle-yellow { background: #eab308; color: #0f172a; border-color: #fcd34d; }
+        .hand-card.card-battle-white { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
+        .hand-card.card-battle-pink { background: #ec4899; color: #fff; border-color: #f9a8d4; }
+        .hand-card.card-battle-blue { background: #2563eb; color: #fff; border-color: #93c5fd; }
+        .hand-card.card-default, .pile-card.card-default { background: #475569; color: #fff; }
+
         .hand-scroll-wrap {
             width: 100%;
             max-width: 100%;
-            overflow: hidden;
+            overflow: visible;
             position: relative;
         }
         .hand-scroll-wrap::after {
@@ -332,9 +352,10 @@
             justify-content: flex-start;
             gap: 0.5rem;
             overflow-x: auto;
-            overflow-y: hidden;
+            overflow-y: visible;
             width: 100%;
             max-width: 100%;
+            padding-top: 0.75rem;
             -webkit-overflow-scrolling: touch;
             overscroll-behavior-x: contain;
             scroll-snap-type: x proximity;
@@ -750,7 +771,7 @@
                         <span id="draw-count" class="draw-count">0</span>
                     </div>
                     <div>
-                        <div id="deck-discard" class="pile-card bg-blue-600">
+                        <div id="deck-discard" class="pile-card card-blue">
                             <span class="pile-corner">—</span>
                             <span class="pile-center">—</span>
                         </div>
@@ -776,7 +797,7 @@
                 <button type="button" id="btn-cancel-play" class="btn-play-cancel">Annulla</button>
             </div>
             <div class="hand-scroll-wrap max-w-5xl mx-auto">
-                <div id="my-hand" class="hand-size-normal py-2 min-h-[8.5rem] px-1"></div>
+                <div id="my-hand" class="hand-size-normal py-2 px-1" style="min-height: 8.5rem;"></div>
             </div>
         </section>
         </div>

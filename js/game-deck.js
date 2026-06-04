@@ -172,28 +172,29 @@
         return card?.kind === 'brainrot' || card?.value === 'brainrot';
     }
 
+    /** Classi CSS statiche (gioco.html) — non dipendono da Tailwind JIT. */
     function colorStyle(card, opts = {}) {
         if (opts.battleColor && card?.battleColor) {
             const battleMap = {
-                yellow: 'bg-yellow-500 text-slate-900 border-amber-300',
-                white: 'bg-slate-100 text-slate-900 border-slate-400',
-                pink: 'bg-pink-500 border-pink-300',
-                blue: 'bg-blue-600 border-blue-400'
+                yellow: 'card-battle-yellow',
+                white: 'card-battle-white',
+                pink: 'card-battle-pink',
+                blue: 'card-battle-blue'
             };
-            return battleMap[card.battleColor] || 'bg-purple-700 border-purple-400';
+            return battleMap[card.battleColor] || 'card-brainrot';
         }
         if (isBrainrotCard(card)) {
-            return 'bg-purple-900 border-purple-400';
+            return 'card-brainrot';
         }
         const map = {
-            red: 'bg-red-600',
-            yellow: 'bg-yellow-500 text-slate-900',
-            green: 'bg-emerald-600',
-            blue: 'bg-blue-600',
-            black: 'bg-slate-900 border-amber-500',
-            wild: 'bg-gradient-to-br from-purple-600 to-pink-600'
+            red: 'card-red',
+            yellow: 'card-yellow',
+            green: 'card-green',
+            blue: 'card-blue',
+            black: 'card-black',
+            wild: 'card-wild'
         };
-        return map[card?.color] || 'bg-slate-700';
+        return map[card?.color] || 'card-default';
     }
 
     function cardDisplayName(card) {

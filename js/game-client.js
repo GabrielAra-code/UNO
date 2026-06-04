@@ -548,6 +548,19 @@
         }
     }
 
+    function syncHandDockHeight() {
+        if (window.innerWidth > 768) {
+            document.documentElement.style.removeProperty('--game-hand-dock');
+            return;
+        }
+        const section = document.querySelector('.uno-game .hand-section');
+        if (!section) return;
+        const h = Math.ceil(section.getBoundingClientRect().height);
+        if (h > 0) {
+            document.documentElement.style.setProperty('--game-hand-dock', `${h}px`);
+        }
+    }
+
     function applyHandLayoutSizing() {
         const handEl = $('my-hand');
         if (!handEl) return;
@@ -588,6 +601,15 @@
         const ladderHintIds = playSelection?.mode === 'ladder'
             ? new Set(playSelection.ids)
             : null;
+
+        if (!hand.length && gameState) {
+            const empty = document.createElement('p');
+            empty.className = 'hand-empty-msg';
+            empty.textContent = gameState.hands?.[myPlayerId]
+                ? 'Nessuna carta in mano'
+                : 'In attesa della mano…';
+            handEl.appendChild(empty);
+        }
 
         hand.forEach(card => {
             const btn = document.createElement('button');
@@ -635,6 +657,7 @@
             if (el && el.scrollWidth > el.clientWidth) {
                 el.scrollLeft = el.scrollWidth - el.clientWidth;
             }
+            syncHandDockHeight();
         });
     }
 
@@ -1028,6 +1051,10 @@
     }
 
     function wireControls() {
+        const onResizeHandDock = () => syncHandDockHeight();
+        window.addEventListener('resize', onResizeHandDock);
+        window.addEventListener('orientationchange', () => setTimeout(onResizeHandDock, 150));
+
         $('deck-draw')?.addEventListener('click', async () => {
             if (!Engine.canDraw(gameState, myPlayerId)) {
                 playSound('error');
