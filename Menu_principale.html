@@ -2,9 +2,10 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#070f24">
     <title>UNO? REVOLUTION - Hub</title>
-    
+    <link rel="stylesheet" href="css/mobile.css">
     <script src="https://cdn.tailwindcss.com"></script>
 
     <style>
@@ -421,16 +422,16 @@
         };
     </script>
 </head>
-<body class="w-full h-screen text-white flex items-center justify-center relative p-6">
+<body class="uno-page uno-menu w-full h-screen text-white flex items-center justify-center relative p-6">
 
     <div class="w-full h-full max-w-5xl flex flex-col justify-between relative z-10">
         <!-- Header -->
-        <header class="flex justify-between items-center mb-4">
-            <div>
+        <header class="hub-header flex justify-between items-center mb-4">
+            <div class="hub-brand">
                 <h1 class="text-5xl font-black text-amber-500 tracking-tight drop-shadow-[0_3px_0_rgba(0,0,0,1)] -rotate-1">UNO?</h1>
                 <span class="bg-pink-600 px-3 py-0.5 rounded-full text-[10px] font-black uppercase shadow-md inline-block text-white tracking-widest">Revolution</span>
             </div>
-            <div class="flex items-center gap-4 game-panel-dark px-5 py-2 rounded-2xl shadow-xl">
+            <div class="hub-profile flex items-center gap-4 game-panel-dark px-5 py-2 rounded-2xl shadow-xl">
                 <div class="avatar-render w-10 h-10 bg-slate-950 rounded-full flex items-center justify-center text-xl border-2 border-slate-800 cursor-pointer hover:scale-105 transition-transform shadow-inner" onclick="openModal('modal-options')">🦊</div>
                 <div>
                     <div id="header-nickname" class="font-black text-sm tracking-wide text-white">CARICAMENTO...</div>
@@ -440,8 +441,8 @@
         </header>
 
         <!-- Menu Principale -->
-        <main class="flex-1 flex items-center justify-center">
-            <div class="grid grid-cols-2 gap-4 max-w-xl w-full">
+        <main class="hub-main flex-1 flex items-center justify-center">
+            <div class="hub-menu-grid grid grid-cols-2 gap-4 max-w-xl w-full">
                 <button onclick="openModal('modal-create')" class="btn-chunky btn-yellow p-5 flex flex-col items-center justify-center gap-1.5 cursor-pointer" data-sound="bloop">
                     <span class="text-3xl">🎮</span>
                     <span class="text-base font-black">Crea Stanza</span>

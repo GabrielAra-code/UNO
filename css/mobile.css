@@ -1,0 +1,537 @@
+/**
+ * UNO? Revolution — layout mobile (telefono / tablet verticale)
+ */
+
+:root {
+    --safe-top: env(safe-area-inset-top, 0px);
+    --safe-right: env(safe-area-inset-right, 0px);
+    --safe-bottom: env(safe-area-inset-bottom, 0px);
+    --safe-left: env(safe-area-inset-left, 0px);
+    --touch-min: 44px;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+.uno-page {
+    overflow-x: hidden;
+    padding-top: var(--safe-top);
+    padding-right: var(--safe-right);
+    padding-bottom: var(--safe-bottom);
+    padding-left: var(--safe-left);
+}
+
+/* Target touch comodi su mobile */
+@media (max-width: 768px) {
+    .uno-page button,
+    .uno-page .btn-chunky,
+    .uno-page .toggle-switch,
+    .uno-page .option-pill,
+    .uno-page .room-checkbox-button,
+    .uno-page input[type="submit"],
+    .uno-page .hand-card {
+        touch-action: manipulation;
+    }
+
+    .uno-page .btn-chunky,
+    .uno-page .toggle-switch {
+        min-height: var(--touch-min);
+    }
+
+    .uno-page input,
+    .uno-page select,
+    .uno-page textarea {
+        font-size: 16px; /* evita zoom iOS su focus */
+    }
+}
+
+/* ---------- INDEX (login) ---------- */
+@media (max-width: 768px) {
+    .uno-index {
+        height: auto !important;
+        min-height: 100dvh;
+        overflow-x: hidden;
+        overflow-y: auto;
+        align-items: flex-start !important;
+        padding: max(12px, var(--safe-top)) max(12px, var(--safe-right)) max(16px, var(--safe-bottom)) max(12px, var(--safe-left));
+    }
+
+    .uno-index #screen-auth,
+    .uno-index #screen-banned {
+        margin-top: 8vh;
+        margin-bottom: 24px;
+        padding: 1.25rem !important;
+        max-width: 100%;
+    }
+
+    .uno-index #screen-auth h1 {
+        font-size: 2.5rem !important;
+    }
+}
+
+/* ---------- MENU PRINCIPALE ---------- */
+@media (max-width: 768px) {
+    .uno-menu {
+        height: auto !important;
+        min-height: 100dvh;
+        overflow-y: auto;
+        overflow-x: hidden;
+        align-items: stretch !important;
+        padding: 10px !important;
+    }
+
+    .uno-menu > .max-w-5xl {
+        max-width: 100%;
+        min-height: min(100dvh, 100%);
+        justify-content: flex-start !important;
+        gap: 12px;
+    }
+
+    .uno-menu .hub-header {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 10px;
+        margin-bottom: 8px !important;
+    }
+
+    .uno-menu .hub-header .hub-brand h1 {
+        font-size: 2.25rem !important;
+        line-height: 1;
+    }
+
+    .uno-menu .hub-profile {
+        width: 100%;
+        justify-content: flex-start;
+        padding: 10px 12px !important;
+        gap: 12px;
+    }
+
+    .uno-menu .hub-main {
+        flex: none;
+        padding: 8px 0 16px;
+    }
+
+    .uno-menu .hub-menu-grid {
+        max-width: 100%;
+        gap: 10px;
+    }
+
+    .uno-menu .hub-menu-grid .btn-chunky {
+        padding: 14px 10px !important;
+    }
+
+    .uno-menu .hub-menu-grid .btn-chunky span.text-3xl {
+        font-size: 1.75rem;
+    }
+
+    .uno-menu .hub-menu-grid .btn-chunky span.text-base,
+    .uno-menu .hub-menu-grid .btn-chunky span.text-lg {
+        font-size: 0.8rem;
+    }
+
+    .uno-menu #modal-overlay {
+        padding: 8px;
+        align-items: flex-end;
+    }
+
+    .uno-menu .modal-content,
+    .uno-menu .modal-shell {
+        width: 100% !important;
+        max-width: 100% !important;
+        max-height: 92dvh;
+        border-radius: 1.25rem 1.25rem 0.5rem 0.5rem;
+    }
+
+    .uno-menu .modal-shell .modal-frame {
+        max-height: 88dvh;
+    }
+
+    .uno-menu .modal-shell .modal-close-outside {
+        top: -10px;
+        right: 4px;
+    }
+
+    .uno-menu [data-admin-tab] {
+        font-size: 0.6rem !important;
+        padding: 8px 4px !important;
+        letter-spacing: 0;
+    }
+
+    .uno-menu #modal-admin-panel .flex.gap-2 {
+        flex-wrap: wrap;
+    }
+
+    .uno-menu #modal-admin-panel .flex.gap-2 > button {
+        flex: 1 1 45%;
+        min-width: 0;
+    }
+
+    .uno-menu .option-pill {
+        width: 48px;
+        height: 48px;
+    }
+
+    .uno-menu #modal-create {
+        padding: 1rem !important;
+    }
+}
+
+@media (max-width: 380px) {
+    .uno-menu .hub-menu-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .uno-menu .hub-menu-grid .col-span-2 {
+        grid-column: span 1;
+    }
+}
+
+/* ---------- SALA D'ATTESA ---------- */
+@media (max-width: 768px) {
+    .uno-waiting {
+        align-items: flex-start !important;
+        padding: 8px !important;
+        min-height: 100dvh;
+        height: auto !important;
+    }
+
+    .uno-waiting .container {
+        padding: 4px;
+        width: 100%;
+    }
+
+    .uno-waiting .card-inner {
+        padding: 12px !important;
+        border-radius: 20px;
+        max-height: none !important;
+    }
+
+    .uno-waiting .waiting-grid {
+        min-height: 0;
+        gap: 12px;
+    }
+
+    .uno-waiting .waiting-column {
+        border-radius: 20px;
+        padding: 12px !important;
+    }
+
+    .uno-waiting .waiting-column h1 {
+        font-size: 1.75rem !important;
+    }
+
+    .uno-waiting #room-code {
+        font-size: 1.75rem !important;
+        letter-spacing: 0.2em !important;
+        word-break: break-all;
+    }
+
+    .uno-waiting .room-settings-panel {
+        padding: 12px !important;
+        max-height: none;
+    }
+
+    .uno-waiting .settings-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .uno-waiting .option-pill {
+        width: 48px;
+        height: 48px;
+    }
+
+    .uno-waiting #card-summary-modal .game-panel-dark {
+        margin: 8px;
+        max-height: 94dvh;
+        width: calc(100% - 16px);
+    }
+
+    .uno-waiting #summary-cards-grid {
+        grid-template-columns: 1fr !important;
+        max-height: 50dvh;
+    }
+}
+
+@media (max-width: 480px) {
+    .uno-waiting .title-small {
+        letter-spacing: 0.2em;
+        font-size: 0.65rem;
+    }
+}
+
+/* ---------- TAVOLO GIOCO ---------- */
+@media (max-width: 768px) {
+    .uno-game {
+        height: 100dvh;
+        height: 100svh;
+    }
+
+    .uno-game .game-header {
+        flex-wrap: wrap;
+        height: auto !important;
+        min-height: 48px;
+        padding: 8px 10px !important;
+        gap: 6px;
+    }
+
+    .uno-game .game-header-title {
+        font-size: 0.85rem !important;
+        width: 100%;
+        text-align: center;
+        order: -1;
+    }
+
+    .uno-game .game-header-meta {
+        width: 100%;
+        justify-content: space-between;
+        gap: 6px;
+        font-size: 0.7rem;
+    }
+
+    .uno-game .game-header-meta #game-direction {
+        font-size: 0.7rem;
+    }
+
+    .uno-game #turn-alert {
+        flex: 1;
+        text-align: center;
+        padding: 6px 8px !important;
+        font-size: 0.65rem !important;
+        min-width: 0;
+    }
+
+    .uno-game .game-table-area {
+        padding: 4px 6px !important;
+    }
+
+    .uno-game .table-wrap {
+        width: min(88vw, 340px);
+        height: min(88vw, 340px);
+    }
+
+    .uno-game .table-seat {
+        width: 72px;
+        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-min(38vw, 130px)) rotate(calc(-1 * var(--angle)));
+    }
+
+    .uno-game .seat-inner {
+        padding: 5px 6px;
+        border-radius: 12px;
+    }
+
+    .uno-game .seat-avatar {
+        font-size: 1.15rem;
+    }
+
+    .uno-game .seat-name {
+        font-size: 0.55rem;
+    }
+
+    .uno-game .seat-meta,
+    .uno-game .seat-hp {
+        font-size: 0.5rem;
+    }
+
+    .uno-game .dir-arrow {
+        width: 36px;
+        height: 36px;
+        font-size: 30px;
+    }
+
+    .uno-game .pile-card {
+        width: 4.5rem;
+        height: 6.25rem;
+        padding: 0.4rem;
+    }
+
+    .uno-game .pile-center {
+        font-size: 1.35rem;
+    }
+
+    .uno-game .pile-corner {
+        font-size: 0.85rem;
+    }
+
+    .uno-game .table-center {
+        gap: 0.65rem;
+    }
+
+    .uno-game .color-hint {
+        font-size: 0.55rem;
+        bottom: -2rem;
+    }
+
+    .uno-game #stack-alert {
+        top: 2px;
+        font-size: 0.6rem;
+        padding: 6px 10px;
+        max-width: 92vw;
+        text-align: center;
+    }
+
+    .uno-game .hand-section {
+        padding-bottom: max(12px, var(--safe-bottom)) !important;
+    }
+
+    .uno-game #my-hand {
+        min-height: 6.5rem;
+        justify-content: flex-start;
+        padding-left: 8px;
+        padding-right: 8px;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .uno-game .hand-card {
+        width: 3.75rem;
+        height: 5.5rem;
+        flex-shrink: 0;
+    }
+
+    .uno-game .hand-label {
+        font-size: 0.85rem;
+    }
+
+    .uno-game #btn-uno {
+        min-height: var(--touch-min);
+        padding: 10px 16px !important;
+        font-size: 0.7rem !important;
+    }
+
+    .uno-game #game-log-mini {
+        max-height: 2.5rem;
+        font-size: 9px;
+    }
+
+    .uno-game #game-modal > div {
+        width: 100%;
+        max-width: 100%;
+        margin: 8px;
+        max-height: 90dvh;
+        overflow-y: auto;
+    }
+
+    .uno-game .roulette-panel {
+        width: 100%;
+        max-width: 100%;
+        margin-bottom: max(12px, var(--safe-bottom));
+        border-radius: 1.25rem 1.25rem 0 0;
+    }
+
+    .uno-game .roulette-wheel-wrap {
+        width: min(72vw, 240px);
+        height: min(72vw, 240px);
+    }
+
+    .uno-game .roulette-label {
+        font-size: 0.55rem;
+        max-width: 56px;
+    }
+
+    .uno-game #end-overlay h2 {
+        font-size: 1.75rem !important;
+    }
+
+    .uno-game #game-toast {
+        bottom: max(120px, calc(100px + var(--safe-bottom)));
+        max-width: 90vw;
+        text-align: center;
+    }
+}
+
+@media (max-width: 380px) and (max-height: 700px) {
+    .uno-game .table-wrap {
+        width: min(82vw, 280px);
+        height: min(82vw, 280px);
+    }
+
+    .uno-game .table-seat {
+        transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-min(36vw, 115px)) rotate(calc(-1 * var(--angle)));
+    }
+}
+
+/* Landscape telefono — tavolo + mano affiancati */
+@media (max-height: 520px) and (orientation: landscape) {
+    body.uno-game {
+        flex-direction: column !important;
+    }
+
+    .uno-game .game-header {
+        flex-wrap: nowrap;
+        min-height: 40px;
+        padding: 4px 10px !important;
+    }
+
+    .uno-game .game-header-title {
+        width: auto;
+        text-align: left;
+        font-size: 0.75rem !important;
+    }
+
+    .uno-game .game-header-meta {
+        width: auto;
+        flex: 1;
+        justify-content: flex-end;
+    }
+
+    .uno-game .game-main-column {
+        display: grid !important;
+        grid-template-columns: 1fr minmax(120px, 34%);
+        grid-template-rows: 1fr auto;
+        min-height: 0;
+    }
+
+    .uno-game .game-table-area {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .uno-game #game-log-mini {
+        grid-column: 1;
+        grid-row: 2;
+        max-height: 1.75rem;
+    }
+
+    .uno-game .hand-section {
+        grid-column: 2;
+        grid-row: 1 / span 2;
+        border-top: none !important;
+        border-left: 1px solid #1e293b;
+        padding: 6px !important;
+    }
+
+    .uno-game #my-hand {
+        flex-direction: column;
+        overflow-y: auto;
+        overflow-x: hidden;
+        max-height: 100%;
+        align-items: center;
+        min-height: 0;
+    }
+
+    .uno-game .table-wrap {
+        width: min(38vh, 240px);
+        height: min(38vh, 240px);
+    }
+}
+
+/* Modali globali (tutte le pagine con #modal-overlay) */
+@media (max-width: 768px) {
+    #modal-overlay {
+        padding: 0 !important;
+        align-items: flex-end !important;
+    }
+
+    #modal-overlay .modal-content:not(.hidden),
+    #modal-overlay .modal-shell:not(.hidden) {
+        border-bottom-left-radius: 0;
+        border-bottom-right-radius: 0;
+        margin-bottom: 0;
+    }
+
+    #modal-loading-room > div {
+        margin: 16px;
+        max-width: calc(100% - 32px);
+    }
+}

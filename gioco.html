@@ -2,8 +2,10 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#020617">
     <title>UNO? REVOLUTION — Tavolo</title>
+    <link rel="stylesheet" href="css/mobile.css">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         body { background: #020617; }
@@ -354,21 +356,21 @@
         window.onSnapshot = onSnapshot;
     </script>
 </head>
-<body class="w-full h-screen text-white flex flex-col overflow-hidden font-sans select-none">
+<body class="uno-page uno-game w-full h-screen text-white flex flex-col overflow-hidden font-sans select-none">
 
-    <header class="w-full h-12 shrink-0 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between px-4 z-20">
-        <span class="text-lg font-black text-amber-500 tracking-wider">UNO? REVOLUTION</span>
-        <div class="flex items-center gap-4 text-sm">
-            <span class="text-slate-400">Giro: <span id="game-direction" class="text-emerald-400 font-bold">Oraria ↻</span></span>
+    <header class="game-header w-full h-12 shrink-0 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between px-4 z-20">
+        <span class="game-header-title text-lg font-black text-amber-500 tracking-wider">UNO? REVOLUTION</span>
+        <div class="game-header-meta flex items-center gap-4 text-sm">
+            <span class="text-slate-400 shrink-0">Giro: <span id="game-direction" class="text-emerald-400 font-bold">Oraria ↻</span></span>
             <div id="turn-alert" class="bg-amber-500/15 text-amber-300 px-3 py-1 rounded-lg border border-amber-500/30 font-bold text-xs hidden">—</div>
-            <button id="btn-leave" type="button" class="text-xs text-slate-400 hover:text-white underline">Esci</button>
+            <button id="btn-leave" type="button" class="text-xs text-slate-400 hover:text-white underline shrink-0 min-h-[44px] px-1">Esci</button>
         </div>
     </header>
 
-    <main class="flex-1 min-h-0 flex flex-col tavolo-bg relative">
+    <main class="game-main-column flex-1 min-h-0 flex flex-col tavolo-bg relative">
         <div id="stack-alert" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-rose-950/90 border border-rose-500 text-rose-200 text-xs font-bold px-4 py-2 rounded-full"></div>
 
-        <div class="flex-1 flex items-center justify-center p-2 pt-1 min-h-0 overflow-hidden">
+        <div class="game-table-area flex-1 flex items-center justify-center p-2 pt-1 min-h-0 overflow-hidden">
             <div class="table-wrap">
                 <div id="table-direction-ring" class="table-direction-ring"></div>
                 <!-- Frecce direzione -->
@@ -397,7 +399,7 @@
 
         <div id="game-log-mini" class="shrink-0 max-h-16 overflow-y-auto px-4 text-[10px] font-mono text-slate-500 space-y-0.5 no-scrollbar"></div>
 
-        <section class="shrink-0 bg-slate-950/90 border-t border-slate-800 p-3">
+        <section class="hand-section shrink-0 bg-slate-950/90 border-t border-slate-800 p-3">
             <div class="max-w-5xl mx-auto flex items-center justify-between mb-2 px-1">
                 <span class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">La tua mano</span>
                 <button id="btn-uno" type="button" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-1 rounded-full font-black text-xs uppercase">UNO!</button>

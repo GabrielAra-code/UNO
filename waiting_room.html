@@ -2,8 +2,10 @@
 <html lang="it">
 <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <meta name="theme-color" content="#070f24" />
     <title>Sala d'attesa</title>
+    <link rel="stylesheet" href="css/mobile.css" />
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Nunito:wght@400;700;900&display=swap');
@@ -254,6 +256,15 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        @media (max-width: 480px) {
+            .waiting-column .p-5 {
+                padding: 12px !important;
+            }
+            #room-code {
+                letter-spacing: 0.15em !important;
+            }
+        }
     </style>
     <script src="js/anti-cheat.js"></script>
     <script src="js/game-deck.js"></script>
@@ -294,7 +305,7 @@
         window.getDoc = getDoc;
     </script>
 </head>
-<body>
+<body class="uno-page uno-waiting">
     <div class="container">
         <div class="card card-inner">
             <div class="waiting-grid">
