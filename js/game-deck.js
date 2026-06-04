@@ -14,7 +14,14 @@
         c_scudo: { value: 'shield', kind: 'special', label: 'Scudo', colors: ['black'], count: 4 },
         c_death: { value: 'death', kind: 'special', label: 'Death', colors: ['black'], count: 1 },
         c_blobby: { value: 'blobby', kind: 'special', label: 'Blobby', colors: ['black'], count: 1 },
-        c_righello: { value: 'cancel', kind: 'special', label: 'X?', colors: ['black'], count: 4 },
+        c_righello: {
+            value: 'cancel',
+            kind: 'special',
+            label: 'Righello',
+            colors: ['black'],
+            count: 4,
+            variants: ['Tavolo?', 'Cane?', 'Centrale nucleare?', 'X?']
+        },
         c_donna: { value: 'reset', kind: 'special', label: 'Donna', colors: ['black'], count: 1 },
         c_imprevisti: { value: 'surprise', kind: 'special', label: 'Imprev.', colors: ['wild'], count: 1 },
         c_scambio: { value: 'swap', kind: 'special', label: 'Scambio', colors: ['black'], count: 2 },
@@ -90,8 +97,17 @@
 
             for (let i = 0; i < total; i += 1) {
                 const color = def.colors[i % def.colors.length] || 'black';
-                const extra = def.variants ? { planPart: def.variants[i] } : {};
-                cards.push(makeCard(defId, color, def.value, def.kind, def.label, extra));
+                const extra = {};
+                if (def.variants) {
+                    const variantLabel = def.variants[i % def.variants.length];
+                    if (defId === 'c_righello') {
+                        extra.righelloLabel = `Righello o ${variantLabel}`;
+                    } else if (defId === 'c_piani') {
+                        extra.planPart = variantLabel;
+                    }
+                }
+                const displayLabel = extra.righelloLabel || def.label;
+                cards.push(makeCard(defId, color, def.value, def.kind, displayLabel, extra));
             }
         });
 
@@ -109,8 +125,9 @@
 
     function cardDisplayName(card) {
         if (!card) return '—';
-        if (card.kind === 'number') return `${COLOR_LABEL[card.color] || card.color} ${card.label}`;
-        return `${card.label} (${COLOR_LABEL[card.color] || card.color})`;
+        const label = card.righelloLabel || card.label;
+        if (card.kind === 'number') return `${COLOR_LABEL[card.color] || card.color} ${label}`;
+        return `${label} (${COLOR_LABEL[card.color] || card.color})`;
     }
 
     function colorStyle(card) {

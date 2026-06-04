@@ -314,6 +314,15 @@
             min-height: 1.25rem;
         }
 
+        #btn-uno.uno-flash {
+            animation: uno-pulse 0.9s ease-in-out infinite;
+            box-shadow: 0 0 20px rgba(251, 191, 36, 0.7);
+        }
+        @keyframes uno-pulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.08); }
+        }
+
         #game-toast {
             position: fixed;
             bottom: 140px;
@@ -435,7 +444,8 @@
     <div id="end-overlay" class="hidden fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-6">
         <div class="text-center max-w-md">
             <h2 id="end-title" class="text-4xl font-black text-amber-400 mb-3">—</h2>
-            <p id="end-duration" class="text-lg text-slate-300 font-mono mb-4">—</p>
+            <p id="end-duration" class="text-lg text-slate-300 font-mono mb-2">—</p>
+            <p id="end-rewards" class="text-sm text-emerald-400 font-bold mb-4"></p>
             <p class="text-sm text-slate-500">Ritorno alla sala d'attesa tra pochi secondi…</p>
         </div>
     </div>

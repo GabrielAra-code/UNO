@@ -22,6 +22,7 @@
             maxPistolHp: pistolHp,
             eliminated: false,
             saidUno: false,
+            unoRequired: false,
             planParts: []
         };
     }
@@ -120,10 +121,11 @@
             return true;
         }
         if (pending?.type === 'bulletRoulette') return false;
+        if (pending?.type === 'defense') return pending.defenderId === myId;
         if (pending?.playerId === myId) {
             if (pending.type === 'chooseColor' || pending.type === 'chooseTarget') return true;
         }
-        if (pending && pending.type !== 'bulletRoulette') return false;
+        if (pending) return false;
         if (state.drawStack > 0) return currentPlayerId(state) === myId;
         return currentPlayerId(state) === myId;
     }
@@ -216,6 +218,9 @@
 
     function nextTurn(state, steps = 1) {
         const len = state.turnOrder.length;
+        const leaving = state.turnOrder[state.currentTurnIndex];
+        if (leaving) applyUnoPenaltyIfNeeded(state, leaving);
+
         let idx = state.currentTurnIndex;
         for (let i = 0; i < steps; i += 1) {
             idx = advanceIndex(idx, state.direction, len);
@@ -228,37 +233,84 @@
         state.currentTurnIndex = idx;
     }
 
-    function cardStackKey(card) {
-        if (!card) return '';
-        if (card.kind === 'number') return `num:${card.color}:${card.value}`;
-        return `card:${card.color}:${card.value}:${card.defId || card.label}`;
+    function comboValueKey(card) {
+        if (!card || card.kind !== 'number') return '';
+        return `val:${card.value}`;
     }
 
-    function canStackTogether(card) {
-        return card.kind === 'number';
+    function cardStackKey(card) {
+        return comboValueKey(card) || `card:${card.color}:${card.value}:${card.defId || card.label}`;
+    }
+
+    function canComboTogether(state, card, first) {
+        return card.kind === 'number'
+            && first.kind === 'number'
+            && String(card.value) === String(first.value)
+            && canPlayCard(state, card);
     }
 
     function getMatchingPlayableCards(state, playerId, instanceId) {
         const hand = state.hands[playerId] || [];
         const card = hand.find(c => c.instanceId === instanceId);
-        if (!card || !canPlayCard(state, card) || !canStackTogether(card)) {
+        if (!card || !canPlayCard(state, card)) {
             return card ? [card] : [];
         }
-        const key = cardStackKey(card);
-        return hand.filter(c => cardStackKey(c) === key && canPlayCard(state, c));
+        if (card.kind !== 'number') return [card];
+        return hand.filter(c => canComboTogether(state, c, card));
     }
 
-    function checkWinner(state, playerId) {
-        const count = state.hands[playerId]?.length || 0;
-        if (count === 0 && state.status === 'playing') {
-            state.status = 'finished';
-            state.winnerId = playerId;
-            state.winnerName = state.players[playerId]?.nickname || playerId;
-            state.endedAt = nowIso();
-            const start = new Date(state.startedAt).getTime();
-            state.durationMs = Date.now() - start;
-            addLog(state, `${state.winnerName} ha vinto!`);
+    function activePlayers(state) {
+        return state.turnOrder.filter(id => !state.players[id]?.eliminated);
+    }
+
+    function declareWinner(state, winnerId) {
+        if (state.status !== 'playing' || !winnerId) return false;
+        state.status = 'finished';
+        state.winnerId = winnerId;
+        state.winnerName = state.players[winnerId]?.nickname || winnerId;
+        state.endedAt = nowIso();
+        state.durationMs = Date.now() - new Date(state.startedAt).getTime();
+        state.pendingAction = null;
+        state.pendingColor = false;
+        addLog(state, `${state.winnerName} ha vinto!`);
+        return true;
+    }
+
+    function checkLastPlayerStanding(state, preferredWinnerId) {
+        const alive = activePlayers(state);
+        if (alive.length === 1) {
+            declareWinner(state, alive[0]);
+            return true;
         }
+        if (alive.length === 0 && preferredWinnerId) {
+            declareWinner(state, preferredWinnerId);
+            return true;
+        }
+        return false;
+    }
+
+    function updateUnoStateAfterPlay(state, playerId) {
+        const p = state.players[playerId];
+        if (!p) return;
+        const count = state.hands[playerId]?.length || 0;
+        if (count === 1) {
+            p.unoRequired = true;
+            p.saidUno = false;
+        } else if (count > 1) {
+            p.unoRequired = false;
+            p.saidUno = false;
+        }
+    }
+
+    function applyUnoPenaltyIfNeeded(state, playerId) {
+        const p = state.players[playerId];
+        const count = state.hands[playerId]?.length || 0;
+        if (!p || count !== 1 || !p.unoRequired || p.saidUno) return false;
+        applyDrawToPlayer(state, playerId, 1);
+        p.unoRequired = false;
+        p.saidUno = false;
+        addLog(state, `${p.nickname} non ha detto UNO! Pesca 1.`);
+        return true;
     }
 
     /** @returns {'win'|'penalty'|null} */
@@ -266,13 +318,57 @@
         const count = state.hands[playerId]?.length || 0;
         if (count !== 0 || state.status !== 'playing') return null;
         if (!state.players[playerId]?.saidUno) {
-            applyDrawToPlayer(state, playerId, 2);
-            if (state.players[playerId]) state.players[playerId].saidUno = false;
-            addLog(state, `${state.players[playerId]?.nickname} non ha detto UNO! Pesca 2.`);
+            applyDrawToPlayer(state, playerId, 1);
+            const p = state.players[playerId];
+            if (p) {
+                p.saidUno = false;
+                p.unoRequired = false;
+            }
+            addLog(state, `${state.players[playerId]?.nickname} non ha detto UNO! Pesca 1.`);
             return 'penalty';
         }
-        checkWinner(state, playerId);
+        declareWinner(state, playerId);
         return state.status === 'finished' ? 'win' : null;
+    }
+
+    function hasRighello(state, playerId) {
+        return (state.hands[playerId] || []).some(c =>
+            c.value === 'cancel' || c.defId === 'c_righello'
+        );
+    }
+
+    function consumeRighello(state, playerId) {
+        const hand = state.hands[playerId] || [];
+        const idx = hand.findIndex(c => c.value === 'cancel' || c.defId === 'c_righello');
+        if (idx === -1) return null;
+        const [card] = hand.splice(idx, 1);
+        syncHandCounts(state);
+        return card;
+    }
+
+    function applyMariDrawLoop(state, playerId) {
+        const name = state.players[playerId]?.nickname || playerId;
+        let safety = 0;
+        while (safety < 40) {
+            safety += 1;
+            const drawn = drawFromPile(state, 1);
+            if (!drawn.length) {
+                addLog(state, `${name}: mazzo esaurito durante Marihuana.`);
+                break;
+            }
+            const c = drawn[0];
+            if (c.color === 'green') {
+                state.discardPile.push(c);
+                state.topCard = c;
+                state.activeColor = 'green';
+                state.forcedColor = null;
+                addLog(state, `${name} pesca Verde e la gioca.`);
+                break;
+            }
+            state.hands[playerId].push(c);
+            syncHandCounts(state);
+            addLog(state, `${name} pesca ${Deck.cardDisplayName(c)} (in mano).`);
+        }
     }
 
     function startBulletRoulette(state, shooterId) {
@@ -361,13 +457,9 @@
         }
 
         if (cards.length > 1) {
-            if (!cards.every(c => canStackTogether(c) && cardStackKey(c) === cardStackKey(first))) {
-                return { ok: false, error: 'Puoi giocare insieme solo carte numero uguali.' };
+            if (first.kind !== 'number' || !cards.every(c => canComboTogether(s, c, first))) {
+                return { ok: false, error: 'Puoi giocare insieme solo carte con lo stesso numero.' };
             }
-        }
-
-        if (cards.length > 1 && !canStackTogether(first)) {
-            return { ok: false, error: 'Solo i numeri si possono giocare in gruppo.' };
         }
 
         const wildOrTarget = cards.some(c =>
@@ -403,23 +495,25 @@
             : Deck.cardDisplayName(card);
         addLog(s, `${s.players[playerId]?.nickname} gioca ${playLabel}`);
         syncHandCounts(s);
-        if (s.players[playerId] && (s.hands[playerId]?.length || 0) > 1) {
-            s.players[playerId].saidUno = false;
-        }
+        updateUnoStateAfterPlay(s, playerId);
 
         const effect = resolveCardEffect(s, playerId, card, options);
         if (!effect.ok) {
             return effect;
         }
 
-        const outcome = checkWinOrUnoPenalty(s, playerId);
-        if (outcome === 'win' || s.status === 'finished') {
-            return { ok: true, state: s, outcome };
-        }
-        if (outcome === 'penalty') {
-            if (!s.pendingAction && !s.pendingColor) nextTurn(s, 1);
-            syncHandCounts(s);
-            return { ok: true, state: s, outcome: 'penalty' };
+        if (s.status !== 'finished') {
+            const outcome = checkWinOrUnoPenalty(s, playerId);
+            if (outcome === 'win' || s.status === 'finished') {
+                return { ok: true, state: s, outcome };
+            }
+            if (outcome === 'penalty') {
+                if (!s.pendingAction && !s.pendingColor) nextTurn(s, 1);
+                syncHandCounts(s);
+                return { ok: true, state: s, outcome: 'penalty' };
+            }
+        } else {
+            return { ok: true, state: s, outcome: 'win' };
         }
 
         if (!s.pendingAction && !s.pendingColor) {
@@ -490,8 +584,19 @@
                 return { ok: true, skipAdvance: true };
             case 'death': {
                 const target = options.targetId || nextPlayerId(state);
+                if (hasRighello(state, target)) {
+                    state.pendingAction = {
+                        type: 'defense',
+                        defenderId: target,
+                        attackerId: playerId,
+                        effect: 'death'
+                    };
+                    addLog(state, `${state.players[target]?.nickname} può usare Righello contro Death Note!`);
+                    return { ok: true, skipAdvance: true };
+                }
                 eliminatePlayer(state, target);
                 addLog(state, `Death Note elimina ${state.players[target]?.nickname}.`);
+                checkLastPlayerStanding(state, playerId);
                 return { ok: true };
             }
             case 'blobby': {
@@ -539,11 +644,13 @@
                 state.forcedColor = null;
                 addLog(state, 'Vaffanculo! Stack e vincoli annullati.');
                 return { ok: true };
-            case 'mari':
-                state.forcedColor = 'green';
-                state.activeColor = 'green';
-                addLog(state, 'Marihuana: solo Verde fino alla prossima verde.');
-                return { ok: true };
+            case 'mari': {
+                const target = nextPlayerId(state);
+                addLog(state, 'Marihuana: pesca fino a una carta Verde da giocare.');
+                applyMariDrawLoop(state, target);
+                nextTurn(state, 2);
+                return { ok: true, skipAdvance: true };
+            }
             case 'bullet':
                 startBulletRoulette(state, playerId);
                 return { ok: true, skipAdvance: true };
@@ -569,27 +676,26 @@
             case 'cancel': {
                 if (state.discardPile.length > 1) {
                     state.discardPile.pop();
-                    const prev = state.discardPile[state.discardPile.length - 1];
-                    state.topCard = prev;
-                    state.activeColor = prev.color === 'black' ? state.activeColor : prev.color;
-                    state.hands[playerId].push(prev);
-                    syncHandCounts(state);
-                    addLog(state, 'Righello: ultima carta annullata.');
+                    const undone = state.discardPile.pop();
+                    if (undone) {
+                        state.topCard = state.discardPile[state.discardPile.length - 1] || undone;
+                        if (state.topCard.color && state.topCard.color !== 'black') {
+                            state.activeColor = state.topCard.color;
+                        }
+                        addLog(state, `Righello annulla ${Deck.cardDisplayName(undone)}.`);
+                    }
                 }
                 return { ok: true };
             }
             case 'reset':
-                Object.keys(state.hands).forEach(id => {
-                    state.hands[id] = [];
-                });
-                const fresh = Deck.buildFromQuantities({});
-                state.drawPile = fresh;
-                state.discardPile = [];
-                state.turnOrder.forEach(id => {
-                    for (let i = 0; i < 7; i += 1) state.hands[id].push(state.drawPile.pop());
-                });
-                syncHandCounts(state);
-                addLog(state, 'Donna: reset totale!');
+                state.drawStack = 0;
+                state.drawStackType = null;
+                state.forcedColor = null;
+                state.pendingColor = false;
+                if (state.pendingAction?.type !== 'defense') {
+                    state.pendingAction = null;
+                }
+                addLog(state, 'Donna di Mazze: catene ed effetti globali annullati.');
                 return { ok: true };
             case 'gift': {
                 const target = options.targetId;
@@ -747,6 +853,9 @@
         } else {
             resolveCardEffect(s, playerId, s.topCard, { targetId });
         }
+        if (s.status === 'finished') {
+            return { ok: true, state: s };
+        }
         if (!s.pendingAction) nextTurn(s, 1);
         return { ok: true, state: s };
     }
@@ -757,8 +866,40 @@
         if (count !== 1) {
             return { ok: false, error: 'Puoi dire UNO! solo con 1 carta in mano.' };
         }
-        if (s.players[playerId]) s.players[playerId].saidUno = true;
+        const p = s.players[playerId];
+        if (p) {
+            p.saidUno = true;
+            p.unoRequired = false;
+        }
         addLog(s, `${s.players[playerId]?.nickname} dice UNO!`);
+        return { ok: true, state: s };
+    }
+
+    function respondDefense(state, defenderId, useRighello) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'defense' || pending.defenderId !== defenderId) {
+            return { ok: false, error: 'Nessuna difesa richiesta.' };
+        }
+
+        if (useRighello) {
+            if (!hasRighello(s, defenderId)) {
+                return { ok: false, error: 'Non hai un Righello.' };
+            }
+            const used = consumeRighello(s, defenderId);
+            addLog(s, `${s.players[defenderId]?.nickname} usa ${used?.righelloLabel || used?.label || 'Righello'}: effetto annullato!`);
+            s.pendingAction = null;
+            nextTurn(s, 1);
+            return { ok: true, state: s };
+        }
+
+        if (pending.effect === 'death') {
+            eliminatePlayer(s, pending.defenderId);
+            addLog(s, `Death Note elimina ${s.players[pending.defenderId]?.nickname}.`);
+            checkLastPlayerStanding(s, pending.attackerId);
+        }
+        s.pendingAction = null;
+        if (s.status === 'playing') nextTurn(s, 1);
         return { ok: true, state: s };
     }
 
@@ -780,8 +921,10 @@
         chooseColor,
         chooseTarget,
         declareUno,
+        respondDefense,
         spinBulletRoulette,
         stripForFirestore,
-        topMatches
+        topMatches,
+        comboValueKey
     };
 })(window);

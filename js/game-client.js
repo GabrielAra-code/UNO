@@ -35,6 +35,34 @@
         return gameState?.hands?.[myPlayerId] || [];
     }
 
+    function cardLabel(card) {
+        return card?.righelloLabel || card?.label || '—';
+    }
+
+    let rewardsGranted = false;
+
+    async function grantWinRewards() {
+        if (rewardsGranted || gameState?.winnerId !== myPlayerId) return;
+        const uid = currentUser.uid;
+        if (!uid || !window.db || !window.updateDoc || !window.getDoc || !window.doc) return;
+        rewardsGranted = true;
+        try {
+            const ref = window.doc(window.db, 'utenti', uid);
+            const snap = await window.getDoc(ref);
+            const data = snap.exists() ? snap.data() : {};
+            const xpGain = 50;
+            await window.updateDoc(ref, {
+                xp: (data.xp || 0) + xpGain,
+                vittorie: (data.vittorie || 0) + 1,
+                partiteGiocate: (data.partiteGiocate || 0) + 1
+            });
+            const el = $('end-rewards');
+            if (el) el.textContent = `+${xpGain} XP · Vittoria registrata`;
+        } catch (err) {
+            console.error('Ricompense vittoria:', err);
+        }
+    }
+
     function resolveMyPlayerId(lobby) {
         const uid = currentUser.uid || null;
         const players = lobby?.players || [];
@@ -80,6 +108,11 @@
         const lr = newState.lastRoulette;
         if (lr?.at && lr.at !== lastRouletteAnimatedAt) {
             animateBulletRouletteSpin(lr);
+        }
+
+        if (newPending?.type === 'defense' && newPending.defenderId === myPlayerId
+            && (!oldPending || oldPending.type !== 'defense')) {
+            showDefenseModal();
         }
     }
 
@@ -233,11 +266,12 @@
         const count = $('draw-count');
         if (count) count.textContent = String(gameState?.drawPile?.length ?? 0);
         if (discard && top) {
+            const lbl = cardLabel(top);
             discard.className = `pile-card ${Deck.colorStyle(top)}`;
             discard.innerHTML = `
-                <span class="pile-corner">${top.label}</span>
-                <span class="pile-center">${top.label}</span>
-                <span class="pile-corner br">${top.label}</span>
+                <span class="pile-corner">${lbl}</span>
+                <span class="pile-center">${lbl}</span>
+                <span class="pile-corner br">${lbl}</span>
             `;
         }
         const colorHint = $('active-color-hint');
@@ -267,7 +301,7 @@
 
         hand.forEach(card => {
             if (Engine.canPlayCard(gameState, card) && card.kind === 'number') {
-                const k = Engine.cardStackKey(card);
+                const k = String(card.value);
                 stackCounts[k] = (stackCounts[k] || 0) + 1;
             }
         });
@@ -275,13 +309,13 @@
         hand.forEach(card => {
             const btn = document.createElement('button');
             const playable = canPlay && Engine.canPlayCard(gameState, card) && Engine.isMyTurn(gameState, myPlayerId);
-            const key = Engine.cardStackKey(card);
-            const stackSize = stackCounts[key] || 1;
+            const stackSize = card.kind === 'number' ? (stackCounts[String(card.value)] || 1) : 1;
             const showStack = playable && stackSize > 1 && card.kind === 'number';
+            const lbl = cardLabel(card);
 
             btn.type = 'button';
             btn.className = `hand-card ${Deck.colorStyle(card)} ${playable ? '' : 'hand-card-disabled'}`;
-            btn.innerHTML = `<span class="hand-label">${card.label}${showStack ? `<small class="block text-[9px] opacity-80">×${stackSize}</small>` : ''}</span>`;
+            btn.innerHTML = `<span class="hand-label">${lbl}${showStack ? `<small class="block text-[9px] opacity-80">×${stackSize}</small>` : ''}</span>`;
             if (playable) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
             }
@@ -305,6 +339,14 @@
             el.classList.toggle('animate-pulse', pending.shooterId === myPlayerId);
             return;
         }
+        if (pending?.type === 'defense') {
+            el.classList.remove('hidden');
+            el.textContent = pending.defenderId === myPlayerId
+                ? 'Death Note! Scegli se usare Righello'
+                : 'Difesa in corso…';
+            el.classList.toggle('animate-pulse', pending.defenderId === myPlayerId);
+            return;
+        }
         el.classList.remove('hidden');
         const cur = Engine.currentPlayerId(gameState);
         const name = cur === myPlayerId ? 'Tu' : (gameState.players[cur]?.nickname || '—');
@@ -318,6 +360,20 @@
         log.innerHTML = gameState.log.slice(-6).map(e => `<p class="log-line">${e.msg}</p>`).join('');
     }
 
+    function renderUnoButton() {
+        const btn = $('btn-uno');
+        if (!btn || !gameState) return;
+        const count = myHand().length;
+        const p = gameState.players?.[myPlayerId];
+        const mustCall = count === 1 && p?.unoRequired && !p?.saidUno;
+        btn.classList.toggle('uno-flash', mustCall);
+        btn.classList.toggle('opacity-40', count !== 1);
+        btn.disabled = count !== 1;
+        btn.title = count === 1
+            ? (p?.saidUno ? 'UNO! già detto' : 'Premi prima di giocare l\'ultima carta!')
+            : 'Disponibile con 1 carta';
+    }
+
     function renderEndScreen() {
         if (gameState?.status !== 'finished') {
             $('end-overlay')?.classList.add('hidden');
@@ -328,6 +384,7 @@
             ? 'Hai vinto!'
             : `${gameState.winnerName || '—'} vince!`;
         $('end-duration').textContent = `Durata partita: ${formatDuration(gameState.durationMs)}`;
+        grantWinRewards();
         if (returnTimer) clearTimeout(returnTimer);
         returnTimer = setTimeout(async () => {
             try {
@@ -348,6 +405,7 @@
         renderSeats();
         renderCenter();
         renderHand();
+        renderUnoButton();
         renderTurnBanner();
         renderLog();
         renderEndScreen();
@@ -396,7 +454,35 @@
         }
     }
 
+    function showDefenseModal() {
+        const modal = $('game-modal');
+        const content = $('modal-content');
+        $('modal-title').textContent = 'Death Note!';
+        $('modal-description').textContent = 'Vuoi usare un Righello per annullare l\'eliminazione?';
+        content.innerHTML = '';
+        const yes = document.createElement('button');
+        yes.className = 'modal-target-btn';
+        yes.textContent = 'Usa Righello';
+        yes.onclick = async () => {
+            modal.classList.add('hidden');
+            await commitAction(() => Engine.respondDefense(gameState, myPlayerId, true));
+        };
+        const no = document.createElement('button');
+        no.className = 'modal-target-btn';
+        no.textContent = 'Non difenderti';
+        no.onclick = async () => {
+            modal.classList.add('hidden');
+            await commitAction(() => Engine.respondDefense(gameState, myPlayerId, false));
+        };
+        content.appendChild(yes);
+        content.appendChild(no);
+        modal.classList.remove('hidden');
+    }
+
     function handlePending(state) {
+        if (state.pendingAction?.type === 'defense' && state.pendingAction.defenderId === myPlayerId) {
+            showDefenseModal();
+        }
         if (state.pendingAction?.type === 'chooseColor' && state.pendingAction.playerId === myPlayerId) {
             showColorModal(null);
         }
@@ -538,9 +624,7 @@
             prevGameState = gameState;
             gameState = pub;
             renderAll();
-            if (pub.pendingAction?.playerId === myPlayerId) {
-                handlePending(pub);
-            }
+            handlePending(pub);
             if (pub.pendingAction?.type === 'bulletRoulette' && !pub.pendingAction.spun) {
                 showBulletRouletteWaiting(pub.pendingAction);
             }
