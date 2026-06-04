@@ -329,22 +329,29 @@
     function effectiveTopColor(state) {
         const top = state.topCard;
         if (!top) return state.activeColor;
-        if (top.value === 'wild' || top.value === 'wild4' || top.color === 'black') {
+        if (top.value === 'wild' || top.value === 'wild4' || top.color === 'black' || top.color === 'wild') {
             return state.activeColor;
         }
         return top.color;
+    }
+
+    /** Jolly, +4 e speciali nere/incolore: giocabili sul mazzo in tavola (salvo stack +2/+4). */
+    function isFreePlayCard(card) {
+        if (!card) return false;
+        if (card.value === 'wild' || card.value === 'wild4') return true;
+        if (card.kind === 'wild') return true;
+        if (card.kind === 'special' && (card.color === 'black' || card.color === 'wild')) return true;
+        return false;
     }
 
     function topMatches(card, state) {
         const top = state.topCard;
         if (!top || !card) return false;
 
-        if (card.value === 'wild' || card.value === 'wild4') return true;
+        if (isFreePlayCard(card)) return true;
 
         if (state.forcedColor) {
-            return card.color === state.forcedColor
-                || card.value === 'wild'
-                || card.value === 'wild4';
+            return card.color === state.forcedColor || isFreePlayCard(card);
         }
 
         const topColor = effectiveTopColor(state);
@@ -352,8 +359,13 @@
 
         if (String(card.value) === String(topValue)) return true;
 
-        if (card.color && card.color !== 'black' && card.color !== 'wild' && topColor) {
-            return card.color === topColor;
+        if (card.color && topColor && card.color === topColor) {
+            return true;
+        }
+
+        if (top.color === 'black' || top.kind === 'special' || top.kind === 'wild') {
+            if (card.kind === 'action' && card.color === topColor) return true;
+            if (card.kind === 'special' && card.color === topColor) return true;
         }
 
         return false;
@@ -379,10 +391,25 @@
             if (!state.settings.stack) return false;
             if (state.drawStackType === 'draw2' && card.value === 'draw2') return true;
             if (state.drawStackType === 'wild4' && card.value === 'wild4') return true;
+            if (isFreePlayCard(card)) return false;
             return false;
         }
         if (state.pendingColor) return false;
         return topMatches(card, state);
+    }
+
+    /** Carta giocabile nel turno corrente (una sola azione di gioco per turno). */
+    function canPlayCardThisTurn(state, playerId, card) {
+        if (currentPlayerId(state) !== playerId) return false;
+        if (!canPlayCard(state, card)) return false;
+        syncTurnFlags(state);
+        if (state.turnFlags.played) return false;
+        return true;
+    }
+
+    function hasPlayableCardThisTurn(state, playerId) {
+        const hand = state.hands[playerId] || [];
+        return hand.some(c => canPlayCardThisTurn(state, playerId, c));
     }
 
     function canDraw(state, playerId) {
@@ -394,9 +421,10 @@
         if (pending?.type === 'counterWindow' || pending?.type === 'bulletRoulette') return false;
         if (state.pendingColor) return false;
         syncTurnFlags(state);
+        if (state.turnFlags.played) return false;
         if (state.turnFlags.drawn && state.drawStack === 0) return false;
         if (state.drawStack > 0) return true;
-        return !hasPlayableCard(state, playerId);
+        return !hasPlayableCardThisTurn(state, playerId);
     }
 
     function removeFromHand(hands, playerId, instanceId) {
@@ -676,7 +704,7 @@
         if (!cards?.length) return false;
         if (cards.length === 1) return canPlayCard(state, cards[0]);
         if (isValidLadder(cards)) return canPlayCard(state, cards[0]);
-        return canPlaySameNumberBatch(state, cards) || canPlaySameColorBatch(state, cards);
+        return canPlaySameNumberBatch(state, cards);
     }
 
     function getMatchingPlayableCards(state, playerId, instanceId) {
@@ -868,6 +896,9 @@
             return { ok: false, error: 'Non è il tuo turno.' };
         }
         syncTurnFlags(s);
+        if (s.turnFlags.played) {
+            return { ok: false, error: 'Hai già giocato in questo turno. Premi Finisci Turno.' };
+        }
         if (!instanceIds?.length) {
             return { ok: false, error: 'Nessuna carta selezionata.' };
         }
@@ -879,13 +910,13 @@
         }
 
         const first = cards[0];
-        if (!canPlayCard(s, first)) {
+        if (!canPlayCardThisTurn(s, playerId, first)) {
             return { ok: false, error: 'Carta non giocabile.' };
         }
 
         if (cards.length > 1) {
             if (!isValidPlayGroup(s, cards)) {
-                return { ok: false, error: 'Combinazione di carte non valida.' };
+                return { ok: false, error: 'Puoi giocare insieme solo carte con lo stesso numero o una scala 0→1→2…' };
             }
             if (isValidLadder(cards)) {
                 cards.sort((a, b) => numberRank(a) - numberRank(b));
@@ -1325,8 +1356,10 @@
         isCounterWindow,
         canPlayCounter,
         canPlayCard,
+        canPlayCardThisTurn,
         canDraw,
         hasPlayableCard,
+        hasPlayableCardThisTurn,
         cardStackKey,
         getMatchingPlayableCards,
         getSameNumberBatch,

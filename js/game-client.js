@@ -505,7 +505,10 @@
         hand.forEach(card => {
             const btn = document.createElement('button');
             const playableMari = mariMyTurn && Engine.canPlayMariGreen(gameState, myPlayerId, card);
-            const playableTurn = canPlay && Engine.canPlayCard(gameState, card) && Engine.isMyTurn(gameState, myPlayerId) && !mariActive;
+            const playableTurn = canPlay
+                && Engine.canPlayCardThisTurn(gameState, myPlayerId, card)
+                && Engine.isMyTurn(gameState, myPlayerId)
+                && !mariActive;
             const playableCounter = canCounter && Engine.canPlayCounter(gameState, myPlayerId, card);
             const playable = playableTurn || playableCounter || playableMari;
             const stackSize = card.kind === 'number' ? (stackCounts[String(card.value)] || 1) : 1;
