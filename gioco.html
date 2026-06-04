@@ -15,8 +15,8 @@
 
         .table-wrap {
             position: relative;
-            width: min(92vmin, 640px);
-            height: min(92vmin, 640px);
+            width: min(68vmin, 420px);
+            height: min(68vmin, 420px);
             margin: 0 auto;
         }
 
@@ -41,7 +41,7 @@
             inset: 2%;
             border-radius: 50%;
             border: 3px dashed rgba(251, 191, 36, 0.45);
-            animation: spin-dir 12s linear infinite;
+            animation: spin-dir 28s linear infinite;
         }
         .table-direction-ring.dir-ccw::before {
             animation-direction: reverse;
@@ -52,12 +52,13 @@
 
         .dir-arrow {
             position: absolute;
-            width: 28px;
-            height: 28px;
+            width: 48px;
+            height: 48px;
             color: #fbbf24;
-            font-size: 22px;
+            font-size: 40px;
+            line-height: 1;
             font-weight: 900;
-            text-shadow: 0 2px 8px rgba(0,0,0,0.8);
+            text-shadow: 0 3px 12px rgba(0,0,0,0.85);
             transform: translate(-50%, -50%);
         }
 
@@ -71,7 +72,7 @@
             left: 50%;
             top: 50%;
             width: 100px;
-            transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-min(42vmin, 280px)) rotate(calc(-1 * var(--angle)));
+            transform: translate(-50%, -50%) rotate(var(--angle)) translateY(-min(30vmin, 168px)) rotate(calc(-1 * var(--angle)));
         }
         .seat-inner {
             background: rgba(15, 23, 42, 0.92);
@@ -207,6 +208,110 @@
         .modal-color-btn.color-green { background: #16a34a; border-color: #86efac; }
         .modal-color-btn.color-blue { background: #2563eb; border-color: #93c5fd; }
 
+        #bullet-roulette-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 80;
+            display: flex;
+            align-items: flex-end;
+            justify-content: center;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(4px);
+            pointer-events: none;
+        }
+        #bullet-roulette-overlay.active { pointer-events: auto; }
+        #bullet-roulette-overlay.hidden { display: none; }
+
+        .roulette-panel {
+            width: min(92vw, 360px);
+            margin-bottom: 8vh;
+            padding: 1.25rem 1rem 1.5rem;
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            border: 3px solid #fbbf24;
+            border-radius: 1.5rem 1.5rem 0.75rem 0.75rem;
+            box-shadow: 0 -8px 40px rgba(251, 191, 36, 0.25);
+            transform: translateY(110%);
+            transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+            text-align: center;
+        }
+        #bullet-roulette-overlay.active .roulette-panel {
+            transform: translateY(0);
+        }
+
+        .roulette-pointer {
+            font-size: 2rem;
+            color: #ef4444;
+            line-height: 1;
+            margin-bottom: 0.25rem;
+            filter: drop-shadow(0 2px 4px rgba(0,0,0,0.8));
+        }
+
+        .roulette-wheel-wrap {
+            position: relative;
+            width: 260px;
+            height: 260px;
+            margin: 0 auto;
+        }
+
+        .roulette-wheel {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            border: 5px solid #422006;
+            box-shadow: inset 0 0 20px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.5);
+            transition: transform 4.5s cubic-bezier(0.12, 0.8, 0.2, 1);
+        }
+
+        .roulette-labels {
+            position: absolute;
+            inset: 0;
+            border-radius: 50%;
+            pointer-events: none;
+        }
+        .roulette-label {
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform-origin: center center;
+            font-size: 0.65rem;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+            white-space: nowrap;
+            max-width: 72px;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .roulette-spin-btn {
+            margin-top: 1rem;
+            width: 100%;
+            padding: 0.85rem;
+            border-radius: 999px;
+            background: #ef4444;
+            color: #fff;
+            font-weight: 900;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            border: 3px solid rgba(0,0,0,0.2);
+            box-shadow: 0 6px 0 #b91c1c;
+            cursor: pointer;
+        }
+        .roulette-spin-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .roulette-result {
+            margin-top: 0.75rem;
+            font-size: 0.9rem;
+            font-weight: 800;
+            color: #fca5a5;
+            min-height: 1.25rem;
+        }
+
         #game-toast {
             position: fixed;
             bottom: 140px;
@@ -222,6 +327,7 @@
             font-weight: 700;
         }
     </style>
+    <script src="js/game-sounds.js"></script>
     <script src="js/game-deck.js"></script>
     <script src="js/game-engine.js"></script>
     <script src="js/game-firestore.js"></script>
@@ -262,7 +368,7 @@
     <main class="flex-1 min-h-0 flex flex-col tavolo-bg relative">
         <div id="stack-alert" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-rose-950/90 border border-rose-500 text-rose-200 text-xs font-bold px-4 py-2 rounded-full"></div>
 
-        <div class="flex-1 flex items-center justify-center p-4 min-h-0">
+        <div class="flex-1 flex items-center justify-center p-2 pt-1 min-h-0 overflow-hidden">
             <div class="table-wrap">
                 <div id="table-direction-ring" class="table-direction-ring"></div>
                 <!-- Frecce direzione -->
@@ -307,6 +413,20 @@
             <h2 id="modal-title" class="text-xl font-black text-amber-500 uppercase mb-1">—</h2>
             <p id="modal-description" class="text-sm text-slate-400 mb-4"></p>
             <div id="modal-content"></div>
+        </div>
+    </div>
+
+    <div id="bullet-roulette-overlay" class="hidden">
+        <div class="roulette-panel">
+            <div class="text-xs font-black uppercase tracking-widest text-amber-400 mb-2">🔫 Roulette Russa</div>
+            <div class="roulette-pointer">▼</div>
+            <div class="roulette-wheel-wrap">
+                <div id="roulette-wheel" class="roulette-wheel"></div>
+                <div id="roulette-labels" class="roulette-labels"></div>
+            </div>
+            <p id="roulette-hint" class="text-[11px] text-slate-400 mt-2 font-bold"></p>
+            <button type="button" id="roulette-spin-btn" class="roulette-spin-btn" disabled>Gira la ruota</button>
+            <p id="roulette-result" class="roulette-result"></p>
         </div>
     </div>
 

@@ -2,17 +2,25 @@
     const Engine = global.GameEngine;
     const Deck = global.GameDeck;
     const FS = global.GameFirestore;
+    const Sounds = global.GameSounds;
 
     let lobbyId = null;
     let myPlayerId = null;
     let gameState = null;
+    let prevGameState = null;
     let unsubGame = null;
     let returnTimer = null;
+    let lastRouletteAnimatedAt = null;
+    let rouletteHideTimer = null;
 
     const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{"nickname":"Giocatore","avatar":"🦊"}');
 
     function $(id) {
         return document.getElementById(id);
+    }
+
+    function playSound(type) {
+        Sounds?.play?.(type);
     }
 
     function formatDuration(ms) {
@@ -38,6 +46,150 @@
         const byNick = players.find(x => x.nickname === nick);
         if (byNick) return Engine.playerKey(byNick);
         return uid || nick || 'local';
+    }
+
+    function reactToStateChanges(oldState, newState) {
+        if (!oldState || !newState) return;
+
+        const oldLog = oldState.log?.length || 0;
+        const newLog = newState.log?.length || 0;
+        if (newLog > oldLog) {
+            const msg = newState.log[newLog - 1]?.msg || '';
+            if (msg.includes('UNO!')) playSound('uno');
+            else if (msg.includes('non ha detto UNO')) playSound('penalty');
+            else if (msg.includes('Proiettile colpisce')) playSound('shot');
+            else if (msg.includes('pesca')) playSound('draw');
+            else if (msg.includes('gioca')) playSound(msg.includes('×') ? 'cards' : 'card');
+            else if (msg.includes('vinto')) playSound('win');
+        }
+
+        const oldTurn = Engine.currentPlayerId(oldState);
+        const newTurn = Engine.currentPlayerId(newState);
+        if (oldTurn !== newTurn && newState.status === 'playing' && newTurn === myPlayerId) {
+            playSound('turn');
+        }
+
+        const oldPending = oldState.pendingAction;
+        const newPending = newState.pendingAction;
+        if (newPending?.type === 'bulletRoulette' && !newPending.spun
+            && (!oldPending || oldPending.type !== 'bulletRoulette')) {
+            playSound('roulette');
+            showBulletRouletteWaiting(newPending);
+        }
+
+        const lr = newState.lastRoulette;
+        if (lr?.at && lr.at !== lastRouletteAnimatedAt) {
+            animateBulletRouletteSpin(lr);
+        }
+    }
+
+    function buildWheelSegments(segments) {
+        const wheel = $('roulette-wheel');
+        const labels = $('roulette-labels');
+        if (!wheel || !labels) return;
+        const n = segments.length;
+        if (!n) return;
+        const colors = ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2'];
+        const stops = segments.map((seg, i) => {
+            const c = colors[i % colors.length];
+            const start = (i / n) * 100;
+            const end = ((i + 1) / n) * 100;
+            return `${c} ${start}% ${end}%`;
+        }).join(', ');
+        wheel.style.background = `conic-gradient(from -90deg, ${stops})`;
+        wheel.style.transform = 'rotate(0deg)';
+        labels.innerHTML = '';
+        segments.forEach((seg, i) => {
+            const angle = (i / n) * 360 + 360 / n / 2 - 90;
+            const el = document.createElement('span');
+            el.className = 'roulette-label';
+            el.textContent = seg.nickname || seg.id;
+            el.style.transform = `rotate(${angle}deg) translateY(-95px) rotate(${-angle}deg)`;
+            labels.appendChild(el);
+        });
+    }
+
+    function showBulletRouletteWaiting(pending) {
+        const overlay = $('bullet-roulette-overlay');
+        const btn = $('roulette-spin-btn');
+        const hint = $('roulette-hint');
+        const result = $('roulette-result');
+        if (!overlay) return;
+
+        buildWheelSegments(pending.segments || []);
+        if (result) result.textContent = '';
+        const canSpin = pending.shooterId === myPlayerId;
+        if (btn) {
+            btn.disabled = !canSpin;
+            btn.textContent = canSpin ? 'Gira la ruota' : 'In attesa del tiratore…';
+        }
+        if (hint) {
+            const shooter = gameState?.players?.[pending.shooterId]?.nickname || '—';
+            hint.textContent = canSpin
+                ? 'Clicca per girare la roulette!'
+                : `${shooter} deve girare la ruota`;
+        }
+
+        overlay.classList.remove('hidden');
+        requestAnimationFrame(() => overlay.classList.add('active'));
+
+        if (!btn?.dataset.wired) {
+            btn.dataset.wired = '1';
+            btn.addEventListener('click', async () => {
+                if (!gameState?.pendingAction || gameState.pendingAction.type !== 'bulletRoulette') return;
+                if (gameState.pendingAction.shooterId !== myPlayerId) return;
+                playSound('click');
+                btn.disabled = true;
+                await commitAction(() => Engine.spinBulletRoulette(gameState, myPlayerId));
+            });
+        }
+    }
+
+    function animateBulletRouletteSpin(lr) {
+        lastRouletteAnimatedAt = lr.at;
+        const overlay = $('bullet-roulette-overlay');
+        const wheel = $('roulette-wheel');
+        const btn = $('roulette-spin-btn');
+        const result = $('roulette-result');
+        if (!overlay || !wheel) return;
+
+        buildWheelSegments(lr.segments || []);
+        overlay.classList.remove('hidden');
+        overlay.classList.add('active');
+        if (btn) {
+            btn.disabled = true;
+            btn.textContent = 'Gira…';
+        }
+
+        wheel.style.transition = 'none';
+        wheel.style.transform = 'rotate(0deg)';
+        requestAnimationFrame(() => {
+            requestAnimationFrame(() => {
+                wheel.style.transition = 'transform 4.5s cubic-bezier(0.12, 0.8, 0.2, 1)';
+                wheel.style.transform = `rotate(${lr.spinDeg}deg)`;
+                playSound('roulette');
+            });
+        });
+
+        const hitName = gameState?.players?.[lr.hitId]?.nickname || lr.hitId;
+        if (result) result.textContent = '';
+
+        clearTimeout(rouletteHideTimer);
+        rouletteHideTimer = setTimeout(() => {
+            if (result) result.textContent = `💥 Colpito: ${hitName}!`;
+            playSound('shot');
+            rouletteHideTimer = setTimeout(() => {
+                overlay.classList.remove('active');
+                setTimeout(() => overlay.classList.add('hidden'), 500);
+            }, 2200);
+        }, 4600);
+    }
+
+    function hideBulletRouletteIfIdle() {
+        const pending = gameState?.pendingAction;
+        if (pending?.type === 'bulletRoulette' && !pending.spun) return;
+        if (gameState?.lastRoulette?.at === lastRouletteAnimatedAt) return;
+        $('bullet-roulette-overlay')?.classList.remove('active');
     }
 
     function renderDirection() {
@@ -111,14 +263,28 @@
         handEl.innerHTML = '';
         const canPlay = gameState?.status === 'playing';
         const hand = myHand();
+        const stackCounts = {};
+
+        hand.forEach(card => {
+            if (Engine.canPlayCard(gameState, card) && card.kind === 'number') {
+                const k = Engine.cardStackKey(card);
+                stackCounts[k] = (stackCounts[k] || 0) + 1;
+            }
+        });
 
         hand.forEach(card => {
             const btn = document.createElement('button');
             const playable = canPlay && Engine.canPlayCard(gameState, card) && Engine.isMyTurn(gameState, myPlayerId);
+            const key = Engine.cardStackKey(card);
+            const stackSize = stackCounts[key] || 1;
+            const showStack = playable && stackSize > 1 && card.kind === 'number';
+
             btn.type = 'button';
             btn.className = `hand-card ${Deck.colorStyle(card)} ${playable ? '' : 'hand-card-disabled'}`;
-            btn.innerHTML = `<span class="hand-label">${card.label}</span>`;
-            if (playable) btn.addEventListener('click', () => onPlayCard(card.instanceId));
+            btn.innerHTML = `<span class="hand-label">${card.label}${showStack ? `<small class="block text-[9px] opacity-80">×${stackSize}</small>` : ''}</span>`;
+            if (playable) {
+                btn.addEventListener('click', () => onPlayCard(card.instanceId));
+            }
             handEl.appendChild(btn);
         });
     }
@@ -128,6 +294,15 @@
         if (!el || !gameState) return;
         if (gameState.status !== 'playing') {
             el.classList.add('hidden');
+            return;
+        }
+        const pending = gameState.pendingAction;
+        if (pending?.type === 'bulletRoulette' && !pending.spun) {
+            el.classList.remove('hidden');
+            el.textContent = pending.shooterId === myPlayerId
+                ? 'Gira la roulette!'
+                : 'Roulette in corso…';
+            el.classList.toggle('animate-pulse', pending.shooterId === myPlayerId);
             return;
         }
         el.classList.remove('hidden');
@@ -186,20 +361,37 @@
         setTimeout(() => t.classList.add('hidden'), 2800);
     }
 
-    async function commitAction(fn) {
+    function playResultSound(result) {
+        const lastMsg = result.state?.log?.[result.state.log.length - 1]?.msg || '';
+        if (result.outcome === 'win') playSound('win');
+        else if (result.outcome === 'penalty') playSound('penalty');
+        else if (lastMsg.includes('UNO!')) playSound('uno');
+        else if (lastMsg.includes('pesca')) playSound('draw');
+        else if (result.cardsPlayed > 1) playSound('cards');
+        else if (lastMsg.includes('gioca')) playSound('card');
+    }
+
+    async function commitAction(fn, opts = {}) {
         if (!gameState) return;
         const result = fn();
         if (!result.ok) {
+            playSound('error');
             showToast(result.error || 'Mossa non valida');
             return;
         }
         try {
             await FS.persistState(lobbyId, result.state);
+            prevGameState = gameState;
             gameState = result.state;
+            if (!opts.quiet) playResultSound(result);
+            if (result.state.lastRoulette?.at !== lastRouletteAnimatedAt) {
+                animateBulletRouletteSpin(result.state.lastRoulette);
+            }
             renderAll();
             handlePending(result.state);
         } catch (err) {
             console.error(err);
+            playSound('error');
             showToast('Errore salvataggio mossa');
         }
     }
@@ -211,21 +403,33 @@
         if (state.pendingAction?.type === 'chooseTarget' && state.pendingAction.playerId === myPlayerId) {
             showTargetModal(null, state.pendingAction.effect);
         }
+        if (state.pendingAction?.type === 'bulletRoulette' && !state.pendingAction.spun) {
+            showBulletRouletteWaiting(state.pendingAction);
+        }
     }
 
     async function onPlayCard(instanceId) {
-        const card = myHand().find(c => c.instanceId === instanceId);
+        const matching = Engine.getMatchingPlayableCards(gameState, myPlayerId, instanceId);
+        const instanceIds = matching.map(c => c.instanceId);
+        const card = matching[0];
         if (!card) return;
 
+        playSound('click');
+
         if (card.value === 'wild' || card.value === 'wild4') {
-            showColorModal(instanceId);
+            showColorModal(instanceIds[0]);
             return;
         }
         if (['death', 'swap', 'gift', 'heart', 'communism', 'blobby'].includes(card.value)) {
-            showTargetModal(instanceId, card.value);
+            showTargetModal(instanceIds[0], card.value);
             return;
         }
-        await commitAction(() => Engine.playCard(gameState, myPlayerId, instanceId, {}));
+        if (card.value === 'bullet') {
+            await commitAction(() => Engine.playCards(gameState, myPlayerId, instanceIds, {}));
+            return;
+        }
+
+        await commitAction(() => Engine.playCards(gameState, myPlayerId, instanceIds, {}));
     }
 
     function showColorModal(pendingCardId) {
@@ -240,9 +444,10 @@
             b.textContent = Deck.COLOR_LABEL[color];
             b.onclick = async () => {
                 modal.classList.add('hidden');
+                playSound('click');
                 if (pendingCardId) {
                     await commitAction(() =>
-                        Engine.playCard(gameState, myPlayerId, pendingCardId, { chosenColor: color })
+                        Engine.playCards(gameState, myPlayerId, [pendingCardId], { chosenColor: color })
                     );
                 } else {
                     await commitAction(() => Engine.chooseColor(gameState, myPlayerId, color));
@@ -268,8 +473,9 @@
             b.textContent = p.nickname || id;
             b.onclick = async () => {
                 modal.classList.add('hidden');
+                playSound('click');
                 if (pendingCardId) {
-                    await commitAction(() => Engine.playCard(gameState, myPlayerId, pendingCardId, { targetId: id }));
+                    await commitAction(() => Engine.playCards(gameState, myPlayerId, [pendingCardId], { targetId: id }));
                 } else {
                     await commitAction(() => Engine.chooseTarget(gameState, myPlayerId, id));
                 }
@@ -282,12 +488,15 @@
     function wireControls() {
         $('deck-draw')?.addEventListener('click', async () => {
             if (!Engine.isMyTurn(gameState, myPlayerId)) {
+                playSound('error');
                 showToast('Non è il tuo turno');
                 return;
             }
+            playSound('click');
             await commitAction(() => Engine.drawCard(gameState, myPlayerId));
         });
         $('btn-uno')?.addEventListener('click', async () => {
+            playSound('click');
             await commitAction(() => Engine.declareUno(gameState, myPlayerId));
         });
         $('btn-leave')?.addEventListener('click', () => {
@@ -295,6 +504,7 @@
                 window.location.href = `waiting_room.html?stanzaId=${encodeURIComponent(lobbyId)}`;
             }
         });
+
     }
 
     async function init() {
@@ -324,11 +534,17 @@
                 }, 2000);
                 return;
             }
+            reactToStateChanges(gameState, pub);
+            prevGameState = gameState;
             gameState = pub;
             renderAll();
             if (pub.pendingAction?.playerId === myPlayerId) {
                 handlePending(pub);
             }
+            if (pub.pendingAction?.type === 'bulletRoulette' && !pub.pendingAction.spun) {
+                showBulletRouletteWaiting(pub.pendingAction);
+            }
+            hideBulletRouletteIfIdle();
         });
     }
 

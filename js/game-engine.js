@@ -116,10 +116,14 @@
     function isMyTurn(state, myId) {
         if (state.status !== 'playing') return false;
         const pending = state.pendingAction;
+        if (pending?.type === 'bulletRoulette' && !pending.spun && pending.shooterId === myId) {
+            return true;
+        }
+        if (pending?.type === 'bulletRoulette') return false;
         if (pending?.playerId === myId) {
             if (pending.type === 'chooseColor' || pending.type === 'chooseTarget') return true;
         }
-        if (pending && pending.playerId !== myId) return false;
+        if (pending && pending.type !== 'bulletRoulette') return false;
         if (state.drawStack > 0) return currentPlayerId(state) === myId;
         return currentPlayerId(state) === myId;
     }
@@ -224,6 +228,26 @@
         state.currentTurnIndex = idx;
     }
 
+    function cardStackKey(card) {
+        if (!card) return '';
+        if (card.kind === 'number') return `num:${card.color}:${card.value}`;
+        return `card:${card.color}:${card.value}:${card.defId || card.label}`;
+    }
+
+    function canStackTogether(card) {
+        return card.kind === 'number';
+    }
+
+    function getMatchingPlayableCards(state, playerId, instanceId) {
+        const hand = state.hands[playerId] || [];
+        const card = hand.find(c => c.instanceId === instanceId);
+        if (!card || !canPlayCard(state, card) || !canStackTogether(card)) {
+            return card ? [card] : [];
+        }
+        const key = cardStackKey(card);
+        return hand.filter(c => cardStackKey(c) === key && canPlayCard(state, c));
+    }
+
     function checkWinner(state, playerId) {
         const count = state.hands[playerId]?.length || 0;
         if (count === 0 && state.status === 'playing') {
@@ -237,20 +261,126 @@
         }
     }
 
+    /** @returns {'win'|'penalty'|null} */
+    function checkWinOrUnoPenalty(state, playerId) {
+        const count = state.hands[playerId]?.length || 0;
+        if (count !== 0 || state.status !== 'playing') return null;
+        if (!state.players[playerId]?.saidUno) {
+            applyDrawToPlayer(state, playerId, 2);
+            if (state.players[playerId]) state.players[playerId].saidUno = false;
+            addLog(state, `${state.players[playerId]?.nickname} non ha detto UNO! Pesca 2.`);
+            return 'penalty';
+        }
+        checkWinner(state, playerId);
+        return state.status === 'finished' ? 'win' : null;
+    }
+
+    function startBulletRoulette(state, shooterId) {
+        const alive = state.turnOrder.filter(id => !state.players[id]?.eliminated);
+        if (!alive.length) return;
+        const hitId = alive[Math.floor(Math.random() * alive.length)];
+        const n = alive.length;
+        const hitIndex = alive.indexOf(hitId);
+        const slice = 360 / n;
+        const spinDeg = 360 * 6 + (360 - hitIndex * slice - slice / 2);
+
+        state.pendingAction = {
+            type: 'bulletRoulette',
+            shooterId,
+            hitId,
+            segments: alive.map(id => ({
+                id,
+                nickname: state.players[id]?.nickname || id
+            })),
+            spun: false,
+            spinDeg
+        };
+        addLog(state, '🔫 Roulette: in attesa del giro...');
+    }
+
+    function applyBulletHit(state, hitId) {
+        const p = state.players[hitId];
+        if (!p || p.eliminated) return;
+        p.pistolHp -= 1;
+        addLog(state, `Proiettile colpisce ${p.nickname}! (${p.pistolHp} HP)`);
+        if (p.pistolHp <= 0) {
+            eliminatePlayer(state, hitId);
+            addLog(state, `${p.nickname} eliminato.`);
+        }
+    }
+
+    function spinBulletRoulette(state, playerId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'bulletRoulette') {
+            return { ok: false, error: 'Nessuna roulette attiva.' };
+        }
+        if (pending.shooterId !== playerId) {
+            return { ok: false, error: 'Solo chi ha giocato il proiettile può girare.' };
+        }
+        if (pending.spun) {
+            return { ok: false, error: 'Roulette già girata.' };
+        }
+        pending.spun = true;
+        s.lastRoulette = {
+            hitId: pending.hitId,
+            spinDeg: pending.spinDeg,
+            segments: pending.segments,
+            shooterId: pending.shooterId,
+            at: Date.now()
+        };
+        applyBulletHit(s, pending.hitId);
+        s.pendingAction = null;
+        nextTurn(s, 1);
+        return { ok: true, state: s };
+    }
+
     function playCard(state, playerId, instanceId, options = {}) {
+        const ids = options.instanceIds || [instanceId];
+        return playCards(state, playerId, ids, options);
+    }
+
+    function playCards(state, playerId, instanceIds, options = {}) {
         const s = clone(state);
         if (!isMyTurn(s, playerId)) {
             return { ok: false, error: 'Non è il tuo turno.' };
         }
+        if (!instanceIds?.length) {
+            return { ok: false, error: 'Nessuna carta selezionata.' };
+        }
 
-        const card = removeFromHand(s.hands, playerId, instanceId);
-        if (!card) return { ok: false, error: 'Carta non in mano.' };
-        if (!canPlayCard(s, card)) {
-            s.hands[playerId].push(card);
+        const hand = s.hands[playerId] || [];
+        const cards = instanceIds.map(id => hand.find(c => c.instanceId === id)).filter(Boolean);
+        if (cards.length !== instanceIds.length) {
+            return { ok: false, error: 'Carta non in mano.' };
+        }
+
+        const first = cards[0];
+        if (!canPlayCard(s, first)) {
             return { ok: false, error: 'Carta non giocabile.' };
         }
 
-        s.discardPile.push(card);
+        if (cards.length > 1) {
+            if (!cards.every(c => canStackTogether(c) && cardStackKey(c) === cardStackKey(first))) {
+                return { ok: false, error: 'Puoi giocare insieme solo carte numero uguali.' };
+            }
+        }
+
+        if (cards.length > 1 && !canStackTogether(first)) {
+            return { ok: false, error: 'Solo i numeri si possono giocare in gruppo.' };
+        }
+
+        const wildOrTarget = cards.some(c =>
+            ['wild', 'wild4'].includes(c.value)
+            || ['death', 'swap', 'gift', 'heart', 'communism', 'blobby', 'bullet'].includes(c.value)
+        );
+        if (cards.length > 1 && wildOrTarget) {
+            return { ok: false, error: 'Una sola carta speciale per volta.' };
+        }
+
+        cards.forEach(c => removeFromHand(s.hands, playerId, c.instanceId));
+        cards.forEach(c => s.discardPile.push(c));
+        const card = cards[cards.length - 1];
         s.topCard = card;
         if (options.chosenColor) {
             s.activeColor = options.chosenColor;
@@ -268,31 +398,42 @@
             s.drawStack = 0;
             s.drawStackType = null;
         }
-        addLog(s, `${s.players[playerId]?.nickname} gioca ${Deck.cardDisplayName(card)}`);
+        const playLabel = cards.length > 1
+            ? `${cards.length}× ${Deck.cardDisplayName(card)}`
+            : Deck.cardDisplayName(card);
+        addLog(s, `${s.players[playerId]?.nickname} gioca ${playLabel}`);
         syncHandCounts(s);
+        if (s.players[playerId] && (s.hands[playerId]?.length || 0) > 1) {
+            s.players[playerId].saidUno = false;
+        }
 
         const effect = resolveCardEffect(s, playerId, card, options);
         if (!effect.ok) {
             return effect;
         }
 
-        checkWinner(s, playerId);
-        if (s.status === 'finished') {
-            return { ok: true, state: s };
+        const outcome = checkWinOrUnoPenalty(s, playerId);
+        if (outcome === 'win' || s.status === 'finished') {
+            return { ok: true, state: s, outcome };
+        }
+        if (outcome === 'penalty') {
+            if (!s.pendingAction && !s.pendingColor) nextTurn(s, 1);
+            syncHandCounts(s);
+            return { ok: true, state: s, outcome: 'penalty' };
         }
 
         if (!s.pendingAction && !s.pendingColor) {
             if (effect.skipAdvance) {
                 /* turn already moved */
             } else if (s.drawStack > 0) {
-                /* wait for stack response or draw */
+                /* wait for stack */
             } else {
                 nextTurn(s, 1);
             }
         }
 
         syncHandCounts(s);
-        return { ok: true, state: s };
+        return { ok: true, state: s, cardsPlayed: cards.length };
     }
 
     function resolveCardEffect(state, playerId, card, options) {
@@ -404,8 +545,8 @@
                 addLog(state, 'Marihuana: solo Verde fino alla prossima verde.');
                 return { ok: true };
             case 'bullet':
-                roulettePistol(state);
-                return { ok: true };
+                startBulletRoulette(state, playerId);
+                return { ok: true, skipAdvance: true };
             case 'halfdraw': {
                 const active = state.turnOrder.filter(id => !state.players[id]?.eliminated);
                 const n = Math.ceil(active.length / 2);
@@ -547,21 +688,6 @@
         state.players[playerId].handCount = 0;
     }
 
-    function roulettePistol(state) {
-        const alive = state.turnOrder.filter(id => !state.players[id]?.eliminated);
-        if (!alive.length) return;
-        const hit = alive[Math.floor(Math.random() * alive.length)];
-        const p = state.players[hit];
-        if (p) {
-            p.pistolHp -= 1;
-            addLog(state, `Proiettile colpisce ${p.nickname}! (${p.pistolHp} HP)`);
-            if (p.pistolHp <= 0) {
-                eliminatePlayer(state, hit);
-                addLog(state, `${p.nickname} eliminato.`);
-            }
-        }
-    }
-
     function drawCard(state, playerId) {
         const s = clone(state);
         if (currentPlayerId(s) !== playerId) {
@@ -627,6 +753,10 @@
 
     function declareUno(state, playerId) {
         const s = clone(state);
+        const count = s.hands[playerId]?.length || 0;
+        if (count !== 1) {
+            return { ok: false, error: 'Puoi dire UNO! solo con 1 carta in mano.' };
+        }
         if (s.players[playerId]) s.players[playerId].saidUno = true;
         addLog(s, `${s.players[playerId]?.nickname} dice UNO!`);
         return { ok: true, state: s };
@@ -642,11 +772,15 @@
         currentPlayerId,
         isMyTurn,
         canPlayCard,
+        cardStackKey,
+        getMatchingPlayableCards,
         playCard,
+        playCards,
         drawCard,
         chooseColor,
         chooseTarget,
         declareUno,
+        spinBulletRoulette,
         stripForFirestore,
         topMatches
     };
