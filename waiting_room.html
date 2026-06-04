@@ -255,6 +255,27 @@
             }
         }
     </style>
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
+        import { getFirestore, doc, updateDoc, setDoc } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
+            authDomain: "unoforse-a553d.firebaseapp.com",
+            databaseURL: "https://unoforse-a553d-default-rtdb.europe-west1.firebasedatabase.app",
+            projectId: "unoforse-a553d",
+            storageBucket: "unoforse-a553d.firebasestorage.app",
+            messagingSenderId: "396941322053",
+            appId: "1:396941322053:web:86b8f596b4e05aac8ec02c",
+            measurementId: "G-9SEK0SY996"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        window.db = getFirestore(app);
+        window.doc = doc;
+        window.updateDoc = updateDoc;
+        window.setDoc = setDoc;
+    </script>
 </head>
 <body>
     <div class="container">
@@ -485,7 +506,10 @@
 
         function playSynth(type) {
             if (sfxVolume <= 0) return;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => playSynth(type)).catch(() => {});
+                return;
+            }
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             osc.connect(gainNode);
@@ -534,7 +558,7 @@
                 playSynth(soundType);
             }, true);
         }
-        setTimeout(initializeSfxListeners, 500);
+        initializeSfxListeners();
 
         function copyRoomCode() {
             const codeText = document.getElementById('room-code').innerText;
@@ -564,7 +588,9 @@
                 }
                 saveLobbyList(list);
             }
-            window.location.href = 'Menu_principale.html';
+            setTimeout(() => {
+                window.location.href = 'Menu_principale.html';
+            }, 80);
         }
 
         function startGame() {

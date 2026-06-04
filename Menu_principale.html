@@ -537,7 +537,8 @@
             <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
             <h2 class="text-xl font-black mb-1 text-cyan-400">LOBBY DISPONIBILI</h2>
             <p class="text-xs text-slate-400 font-bold mb-4">Le stanze private sono marcate con 🔒 e richiedono password.</p>
-            <div id="public-lobbies-list" class="space-y-2 max-h-[78vh] overflow-y-auto custom-scroll pr-1"></div>
+            <input id="public-lobbies-search" type="text" placeholder="Cerca tramite codice stanza..." class="room-input w-full rounded-3xl px-4 py-3 mb-4 text-sm font-black outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" oninput="renderListaLobby()" />
+            <div id="public-lobbies-list" class="space-y-2 max-h-[68vh] overflow-y-auto custom-scroll pr-1"></div>
         </div>
 
         <!-- 7. POPUP REGOLAMENTO -->
@@ -649,7 +650,10 @@
 
         function playSynth(type) {
             if (sfxVolume <= 0) return;
-            if (audioCtx.state === 'suspended') audioCtx.resume();
+            if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => playSynth(type)).catch(() => {});
+                return;
+            }
             const osc = audioCtx.createOscillator();
             const gainNode = audioCtx.createGain();
             osc.connect(gainNode);
@@ -705,7 +709,7 @@
                 playSynth(soundType);
             }, true);
         }
-        setTimeout(inizializzaAscoltatoriSuoni, 500);
+        inizializzaAscoltatoriSuoni();
 
         const overlay = document.getElementById('modal-overlay');
         let modalAttiva = null;
@@ -727,13 +731,15 @@
                 resetCreateRoomFlow();
             }
             if(id === 'modal-public-lobbies') {
+                const search = document.getElementById('public-lobbies-search');
+                if (search) search.value = '';
                 renderListaLobby();
             }
         }
 
-        function closeModal() {
+        function closeModal(playAudio = true) {
             if(!modalAttiva) return;
-            playSynth('pop');
+            if (playAudio) playSynth('pop');
             document.getElementById(modalAttiva).classList.add('hidden');
             overlay.classList.add('hidden');
             modalAttiva = null;
@@ -844,7 +850,41 @@
             localStorage.setItem('unoLobbyList', JSON.stringify(lobbies));
         }
 
-        window.creaLobbySelezionata = function() {
+        async function salvaLobbyRemota(lobby) {
+            if (!window.db || !window.doc || !window.setDoc) return;
+            try {
+                await window.setDoc(window.doc(window.db, 'lobbies', lobby.id), lobby);
+            } catch(error) {
+                console.warn('Sincronizzazione lobby remota non disponibile:', error);
+            }
+        }
+
+        async function aggiornaLobbyRemota(lobby) {
+            if (!window.db || !window.doc || !window.updateDoc) return;
+            try {
+                await window.updateDoc(window.doc(window.db, 'lobbies', lobby.id), lobby);
+            } catch(error) {
+                console.warn('Aggiornamento lobby remota non disponibile:', error);
+            }
+        }
+
+        async function leggiLobbyRemote() {
+            if (!window.db || !window.collection || !window.query || !window.orderBy || !window.limit || !window.getDocs) return [];
+            try {
+                const ref = window.query(
+                    window.collection(window.db, 'lobbies'),
+                    window.orderBy('createdAt', 'desc'),
+                    window.limit(50)
+                );
+                const snapshot = await window.getDocs(ref);
+                return snapshot.docs.map(docSnap => docSnap.data());
+            } catch(error) {
+                console.warn('Recupero lobby remote non disponibile:', error);
+                return [];
+            }
+        }
+
+        window.creaLobbySelezionata = async function() {
             const errore = document.getElementById('room-create-error');
             const nome = document.getElementById('create-room-name-input').value.trim() || `${document.getElementById('header-nickname').innerText || 'PLAYER'} ROOM`;
             roomSettings.password = document.getElementById('create-room-password-input').value.trim();
@@ -905,9 +945,11 @@
 
             lobbies.unshift(nuovaLobby);
             salvaLobby(lobbies.slice(0, 12));
-            playSynth('bloop');
-            closeModal();
-            window.location.href = `waiting_room.html?stanzaId=${nuovaLobby.id}&ruolo=host`;
+            await salvaLobbyRemota(nuovaLobby);
+            closeModal(false);
+            setTimeout(() => {
+                window.location.href = `waiting_room.html?stanzaId=${nuovaLobby.id}&ruolo=host`;
+            }, 80);
         }
 
         window.entraInLobby = function(id) {
@@ -937,31 +979,41 @@
                 lobby.players.push({ nickname: playerName, avatar: playerAvatar, role: 'player', isSelf: true });
                 lobbies[lobbyIndex] = lobby;
                 salvaLobby(lobbies);
+                aggiornaLobbyRemota(lobby);
             }
 
-            playSynth('bloop');
-            window.location.href = `waiting_room.html?stanzaId=${lobby.id}&ruolo=player`;
+            setTimeout(() => {
+                window.location.href = `waiting_room.html?stanzaId=${lobby.id}&ruolo=player`;
+            }, 80);
         }
 
-        function renderListaLobby() {
+        function lobbyDisponibile(item) {
+            const players = Array.isArray(item.players) ? item.players : [];
+            const maxPlayers = parseInt(item.maxPlayers, 10) || 15;
+            const status = String(item.status || 'waiting').toLowerCase();
+            return players.length > 0
+                && players.length < maxPlayers
+                && !['closed', 'started', 'destroyed', 'deleted', 'eliminated'].includes(status);
+        }
+
+        window.renderListaLobby = async function() {
             const container = document.getElementById('public-lobbies-list');
-            const lobbies = leggiLobbySalvate().filter(item => {
-                return Array.isArray(item.players)
-                    && item.players.length > 0
-                    && item.players.length < (item.maxPlayers || 15)
-                    && item.maxPlayers >= 2
-                    && item.maxPlayers <= 15
-                    && ['waiting', 'open'].includes(item.status)
-                    && item.status !== 'closed'
-                    && item.status !== 'started'
-                    && item.status !== 'destroyed';
+            const searchValue = (document.getElementById('public-lobbies-search')?.value || '').trim().toUpperCase();
+            const tutteLobby = [...await leggiLobbyRemote(), ...leggiLobbySalvate()];
+            const lobbiesById = new Map();
+            tutteLobby.forEach(lobby => {
+                if (lobby?.id && !lobbiesById.has(lobby.id)) lobbiesById.set(lobby.id, lobby);
             });
+            salvaLobby([...lobbiesById.values()].slice(0, 50));
+            const lobbies = [...lobbiesById.values()]
+                .filter(lobbyDisponibile)
+                .filter(item => !searchValue || String(item.id || '').toUpperCase().includes(searchValue));
             if(!lobbies.length) {
                 container.innerHTML = `
                     <div class="bg-black/40 border border-slate-900 rounded-2xl p-4 text-center">
                         <div class="text-2xl mb-1">🎮</div>
-                        <div class="text-sm font-black text-slate-300 uppercase">Nessuna lobby in attesa</div>
-                        <div class="text-[10px] text-slate-500 font-bold mt-1">Apri una lobby per trovarla qui in tempo reale.</div>
+                        <div class="text-sm font-black text-slate-300 uppercase">${searchValue ? 'Nessuna lobby trovata' : 'Nessuna lobby in attesa'}</div>
+                        <div class="text-[10px] text-slate-500 font-bold mt-1">${searchValue ? 'Controlla il codice stanza inserito.' : 'Apri una lobby per trovarla qui in tempo reale.'}</div>
                     </div>`;
                 return;
             }
@@ -971,7 +1023,7 @@
                 const ownerLobby = escapeHtml(lobby.owner);
                 const idLobby = escapeHtml(lobby.id);
                 return `
-                <button onclick="entraInLobby('${lobby.id}')" class="room-action-btn w-full bg-black/40 border ${lobby.locked ? 'border-amber-500/40' : 'border-cyan-500/30'} rounded-2xl p-3 text-left cursor-pointer shadow-inner" data-sound="bloop">
+                <button onclick="entraInLobby('${lobby.id}')" class="room-action-btn w-full bg-black/40 border ${lobby.locked ? 'border-amber-500/40' : 'border-cyan-500/30'} rounded-2xl p-3 text-left cursor-pointer shadow-inner" data-sound="click">
                     <div class="flex items-center justify-between gap-3">
                         <div>
                             <div class="text-sm font-black text-white uppercase">${lobby.locked ? '🔒 ' : '🌍 '}${nomeLobby}</div>
@@ -982,6 +1034,13 @@
                 </button>
             `}).join('');
         }
+
+        window.addEventListener('storage', () => {
+            if (modalAttiva === 'modal-public-lobbies') renderListaLobby();
+        });
+        setInterval(() => {
+            if (modalAttiva === 'modal-public-lobbies') renderListaLobby();
+        }, 1000);
 
         const databaseCarte = [
             { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: "2 per numero", effetto: "Nessuno. Giocabili solo se l'ultimo numero coincide o su carte speciali incolori.", cat: "⚪ Incolore" },
