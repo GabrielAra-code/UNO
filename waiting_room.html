@@ -921,6 +921,7 @@
                     throw new Error('Motore di gioco non caricato.');
                 }
                 await window.GameFirestore.createGameFromLobby(list[index]);
+                sessionStorage.removeItem(`unoLeftGame_${stanzaId}`);
                 list[index].status = 'playing';
                 saveLobbyList(list);
                 window.location.href = `gioco.html?stanzaId=${encodeURIComponent(stanzaId)}`;
@@ -1047,7 +1048,15 @@
                         return;
                     }
 
-                    if (String(data.status || '').toLowerCase() === 'playing') {
+                    const lobbyStatus = String(data.status || '').toLowerCase();
+                    if (lobbyStatus !== 'playing') {
+                        sessionStorage.removeItem(`unoLeftGame_${stanzaId}`);
+                    }
+
+                    if (lobbyStatus === 'playing') {
+                        if (sessionStorage.getItem(`unoLeftGame_${stanzaId}`)) {
+                            return;
+                        }
                         const list = readLobbyList();
                         const idx = list.findIndex(room => room.id === stanzaId);
                         if (idx !== -1) {

@@ -1,5 +1,10 @@
 (function (global) {
     const Deck = global.GameDeck;
+    const COUNTER_WINDOW_MS = 5000;
+    const COUNTER_RULES = {
+        blobby: { allowed: ['cancel', 'shield'] },
+        death: { allowed: ['cancel'] }
+    };
 
     function playerKey(p) {
         return p.uid || p.nickname;
@@ -102,6 +107,7 @@
             log: [{ at: nowIso(), msg: 'Partita iniziata.' }],
             players,
             pendingAction: null,
+            turnAdvanceSteps: 0,
             hands
         };
     }
@@ -114,6 +120,22 @@
         return state.turnOrder[state.currentTurnIndex];
     }
 
+    function isCounterWindow(state) {
+        return state.pendingAction?.type === 'counterWindow';
+    }
+
+    function canPlayCounter(state, playerId, card) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'counterWindow') return false;
+        if (playerId === pending.sourcePlayerId) return false;
+        if (pending.responses?.[playerId]) return false;
+        const rules = COUNTER_RULES[pending.cardValue];
+        if (!rules) return false;
+        if (card.value === 'cancel' || card.defId === 'c_righello') return true;
+        if (card.value === 'shield' && rules.allowed.includes('shield')) return true;
+        return rules.allowed.includes(card.value);
+    }
+
     function isMyTurn(state, myId) {
         if (state.status !== 'playing') return false;
         const pending = state.pendingAction;
@@ -121,13 +143,177 @@
             return true;
         }
         if (pending?.type === 'bulletRoulette') return false;
-        if (pending?.type === 'defense') return pending.defenderId === myId;
+        if (pending?.type === 'counterWindow') return false;
         if (pending?.playerId === myId) {
             if (pending.type === 'chooseColor' || pending.type === 'chooseTarget') return true;
         }
-        if (pending) return false;
+        if (pending && pending.type !== 'bulletRoulette') return false;
         if (state.drawStack > 0) return currentPlayerId(state) === myId;
         return currentPlayerId(state) === myId;
+    }
+
+    function canEndTurn(state, playerId) {
+        if (state.status !== 'playing' || currentPlayerId(state) !== playerId) return false;
+        if (isCounterWindow(state)) return false;
+        const pending = state.pendingAction;
+        if (state.pendingColor) return false;
+        if (!pending) return true;
+        return pending.type === 'bulletRoulette' && pending.spun;
+    }
+
+    function leaveGame(state, playerId) {
+        const s = clone(state);
+        removePlayerFromGame(s, playerId);
+        return { ok: true, state: s };
+    }
+
+    function openCounterWindow(state, sourcePlayerId, card, options = {}) {
+        state.pendingAction = {
+            type: 'counterWindow',
+            sourcePlayerId,
+            cardValue: card.value,
+            targetId: options.targetId || null,
+            startedAt: Date.now(),
+            resolvesAt: Date.now() + COUNTER_WINDOW_MS,
+            responses: {}
+        };
+        addLog(state, 'Attesa risposte... (5s)');
+    }
+
+    function executeDeferredEffect(state, sourcePlayerId, effect) {
+        const { cardValue, targetId } = effect;
+        if (cardValue === 'death') {
+            const target = targetId || nextPlayerId(state);
+            eliminatePlayer(state, target);
+            addLog(state, `Death Note elimina ${state.players[target]?.nickname}.`);
+            checkLastPlayerStanding(state, sourcePlayerId);
+            return;
+        }
+        if (cardValue === 'blobby') {
+            state.status = 'finished';
+            state.winnerId = sourcePlayerId;
+            state.winnerName = state.players[sourcePlayerId]?.nickname;
+            state.endedAt = nowIso();
+            state.durationMs = Date.now() - new Date(state.startedAt).getTime();
+            addLog(state, 'Blobby! Vittoria immediata.');
+        }
+    }
+
+    function resolveCounterWindow(state, playerId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'counterWindow') {
+            return { ok: false, error: 'Nessuna finestra di contrasto attiva.' };
+        }
+        const expired = Date.now() >= pending.resolvesAt;
+        if (!expired && playerId !== pending.sourcePlayerId) {
+            return { ok: false, error: 'Attendi la fine del countdown.' };
+        }
+
+        const responses = pending.responses || {};
+        let cancelled = false;
+        Object.entries(responses).forEach(([responderId, r]) => {
+            if (r.cardValue === 'cancel') cancelled = true;
+            if (r.cardValue === 'shield' && pending.cardValue === 'blobby') cancelled = true;
+            const label = r.label || 'Contrasto';
+            addLog(s, `${s.players[responderId]?.nickname} contrasta con ${label}!`);
+        });
+
+        const deferred = { cardValue: pending.cardValue, targetId: pending.targetId };
+        const source = pending.sourcePlayerId;
+        s.pendingAction = null;
+
+        if (cancelled) {
+            addLog(s, 'Effetto annullato dal contrasto.');
+            return { ok: true, state: s };
+        }
+
+        executeDeferredEffect(s, source, deferred);
+        return { ok: true, state: s };
+    }
+
+    function playCounterCard(state, playerId, instanceId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'counterWindow') {
+            return { ok: false, error: 'Nessuna finestra di contrasto attiva.' };
+        }
+        if (playerId === pending.sourcePlayerId) {
+            return { ok: false, error: 'Non puoi contrastare la tua carta.' };
+        }
+        if (!pending.responses) pending.responses = {};
+        if (pending.responses[playerId]) {
+            return { ok: false, error: 'Hai già contrastato.' };
+        }
+
+        const card = removeFromHand(s.hands, playerId, instanceId);
+        if (!card) return { ok: false, error: 'Carta non in mano.' };
+        if (!canPlayCounter(s, playerId, card)) {
+            s.hands[playerId].push(card);
+            return { ok: false, error: 'Carta non valida per contrastare.' };
+        }
+
+        s.discardPile.push(card);
+        s.topCard = card;
+        pending.responses[playerId] = {
+            cardValue: card.value,
+            label: card.righelloLabel || card.label
+        };
+        syncHandCounts(s);
+        addLog(s, `${s.players[playerId]?.nickname} gioca contrasto: ${Deck.cardDisplayName(card)}`);
+        return { ok: true, state: s };
+    }
+
+    function endTurn(state, playerId) {
+        const s = clone(state);
+        if (!canEndTurn(s, playerId)) {
+            return { ok: false, error: 'Non puoi terminare il turno ora.' };
+        }
+        applyUnoPenaltyIfNeeded(s, playerId);
+        const steps = 1 + (s.turnAdvanceSteps || 0);
+        s.turnAdvanceSteps = 0;
+        nextTurn(s, steps);
+        addLog(s, `${s.players[playerId]?.nickname} termina il turno.`);
+        return { ok: true, state: s };
+    }
+
+    function removePlayerFromGame(state, playerId) {
+        const nickname = state.players[playerId]?.nickname || playerId;
+        const wasCurrent = currentPlayerId(state) === playerId;
+        const oldIdx = state.currentTurnIndex;
+
+        delete state.hands[playerId];
+        delete state.players[playerId];
+        state.turnOrder = state.turnOrder.filter(id => id !== playerId);
+
+        if (state.turnOrder.length === 0) {
+            state.status = 'finished';
+            addLog(state, `${nickname} ha lasciato la partita.`);
+            return;
+        }
+
+        if (wasCurrent) {
+            state.currentTurnIndex = Math.min(oldIdx, state.turnOrder.length - 1);
+        } else {
+            const cur = state.turnOrder[oldIdx];
+            const newIdx = state.turnOrder.indexOf(cur);
+            state.currentTurnIndex = newIdx >= 0 ? newIdx : 0;
+        }
+
+        let guard = 0;
+        while (state.players[state.turnOrder[state.currentTurnIndex]]?.eliminated && guard < state.turnOrder.length) {
+            state.currentTurnIndex = advanceIndex(state.currentTurnIndex, state.direction, state.turnOrder.length);
+            guard += 1;
+        }
+
+        if (state.pendingAction?.sourcePlayerId === playerId
+            || state.pendingAction?.defenderId === playerId
+            || state.pendingAction?.shooterId === playerId) {
+            state.pendingAction = null;
+        }
+
+        addLog(state, `${nickname} ha lasciato la partita.`);
+        checkLastPlayerStanding(state, currentPlayerId(state));
     }
 
     function topMatches(card, state) {
@@ -218,9 +404,6 @@
 
     function nextTurn(state, steps = 1) {
         const len = state.turnOrder.length;
-        const leaving = state.turnOrder[state.currentTurnIndex];
-        if (leaving) applyUnoPenaltyIfNeeded(state, leaving);
-
         let idx = state.currentTurnIndex;
         for (let i = 0; i < steps; i += 1) {
             idx = advanceIndex(idx, state.direction, len);
@@ -427,7 +610,6 @@
         };
         applyBulletHit(s, pending.hitId);
         s.pendingAction = null;
-        nextTurn(s, 1);
         return { ok: true, state: s };
     }
 
@@ -508,22 +690,11 @@
                 return { ok: true, state: s, outcome };
             }
             if (outcome === 'penalty') {
-                if (!s.pendingAction && !s.pendingColor) nextTurn(s, 1);
                 syncHandCounts(s);
                 return { ok: true, state: s, outcome: 'penalty' };
             }
         } else {
             return { ok: true, state: s, outcome: 'win' };
-        }
-
-        if (!s.pendingAction && !s.pendingColor) {
-            if (effect.skipAdvance) {
-                /* turn already moved */
-            } else if (s.drawStack > 0) {
-                /* wait for stack */
-            } else {
-                nextTurn(s, 1);
-            }
         }
 
         syncHandCounts(s);
@@ -537,12 +708,14 @@
         switch (v) {
             case 'skip':
                 addLog(state, 'Salta il prossimo giocatore.');
-                nextTurn(state, 1);
-                return { ok: true, skipAdvance: true };
+                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                return { ok: true };
             case 'reverse':
                 state.direction *= -1;
                 addLog(state, `Direzione ${state.direction > 0 ? 'oraria' : 'antioraria'}.`);
-                if (state.turnOrder.length === 2) nextTurn(state, 1);
+                if (state.turnOrder.length === 2) {
+                    state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                }
                 return { ok: true };
             case 'draw2':
                 if (settings.stack && (state.drawStackType === 'draw2' || state.drawStack === 0)) {
@@ -551,8 +724,7 @@
                     addLog(state, `Stack +2 (totale ${state.drawStack}).`);
                 } else {
                     applyDrawToPlayer(state, nextPlayerId(state), 2);
-                    nextTurn(state, 2);
-                    return { ok: true, skipAdvance: true };
+                    state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
                 }
                 return { ok: true };
             case 'wild':
@@ -576,43 +748,21 @@
                 return { ok: true };
             case 'draw10':
                 applyDrawToPlayer(state, nextPlayerId(state), 10);
-                nextTurn(state, 2);
-                return { ok: true, skipAdvance: true };
+                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                return { ok: true };
             case 'draw16':
                 applyDrawToPlayer(state, nextPlayerId(state), 16);
-                nextTurn(state, 2);
-                return { ok: true, skipAdvance: true };
+                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                return { ok: true };
             case 'death': {
                 const target = options.targetId || nextPlayerId(state);
-                if (hasRighello(state, target)) {
-                    state.pendingAction = {
-                        type: 'defense',
-                        defenderId: target,
-                        attackerId: playerId,
-                        effect: 'death'
-                    };
-                    addLog(state, `${state.players[target]?.nickname} può usare Righello contro Death Note!`);
-                    return { ok: true, skipAdvance: true };
-                }
-                eliminatePlayer(state, target);
-                addLog(state, `Death Note elimina ${state.players[target]?.nickname}.`);
-                checkLastPlayerStanding(state, playerId);
-                return { ok: true };
+                openCounterWindow(state, playerId, card, { targetId: target });
+                return { ok: true, defer: true };
             }
             case 'blobby': {
                 const target = options.targetId || nextPlayerId(state);
-                if (hasShield(state, target)) {
-                    consumeShield(state, target);
-                    addLog(state, 'Blobby bloccato dallo Scudo!');
-                } else {
-                    state.status = 'finished';
-                    state.winnerId = playerId;
-                    state.winnerName = state.players[playerId]?.nickname;
-                    state.endedAt = nowIso();
-                    state.durationMs = Date.now() - new Date(state.startedAt).getTime();
-                    addLog(state, 'Blobby! Vittoria immediata.');
-                }
-                return { ok: true };
+                openCounterWindow(state, playerId, card, { targetId: target });
+                return { ok: true, defer: true };
             }
             case 'swap': {
                 const target = options.targetId;
@@ -648,8 +798,8 @@
                 const target = nextPlayerId(state);
                 addLog(state, 'Marihuana: pesca fino a una carta Verde da giocare.');
                 applyMariDrawLoop(state, target);
-                nextTurn(state, 2);
-                return { ok: true, skipAdvance: true };
+                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                return { ok: true };
             }
             case 'bullet':
                 startBulletRoulette(state, playerId);
@@ -737,7 +887,6 @@
                 return { ok: true };
             case 'mirror':
                 addLog(state, 'Specchio: effetto riflesso (semplificato).');
-                nextTurn(state, 0);
                 return { ok: true };
             case 'jack':
                 addLog(state, 'Jack: copia ultima azione.');
@@ -805,7 +954,6 @@
             addLog(s, `${s.players[playerId]?.nickname} pesca ${n} (stack).`);
             s.drawStack = 0;
             s.drawStackType = null;
-            nextTurn(s, 1);
             syncHandCounts(s);
             return { ok: true, state: s };
         }
@@ -813,7 +961,6 @@
         const n = applyDrawToPlayer(s, playerId, 1);
         if (n === 0) return { ok: false, error: 'Mazzo vuoto.' };
         addLog(s, `${s.players[playerId]?.nickname} pesca 1.`);
-        nextTurn(s, 1);
         syncHandCounts(s);
         return { ok: true, state: s };
     }
@@ -832,9 +979,7 @@
             applyDrawToPlayer(s, target, s.drawStack);
             s.drawStack = 0;
             s.drawStackType = null;
-            nextTurn(s, 2);
-        } else {
-            nextTurn(s, 1);
+            s.turnAdvanceSteps = (s.turnAdvanceSteps || 0) + 1;
         }
         return { ok: true, state: s };
     }
@@ -856,7 +1001,6 @@
         if (s.status === 'finished') {
             return { ok: true, state: s };
         }
-        if (!s.pendingAction) nextTurn(s, 1);
         return { ok: true, state: s };
     }
 
@@ -912,19 +1056,28 @@
         createInitialState,
         currentPlayerId,
         isMyTurn,
+        canEndTurn,
+        isCounterWindow,
+        canPlayCounter,
         canPlayCard,
         cardStackKey,
         getMatchingPlayableCards,
         playCard,
         playCards,
+        playCounterCard,
+        resolveCounterWindow,
         drawCard,
         chooseColor,
         chooseTarget,
         declareUno,
+        endTurn,
+        leaveGame,
         respondDefense,
         spinBulletRoulette,
+        removePlayerFromGame,
         stripForFirestore,
         topMatches,
-        comboValueKey
+        comboValueKey,
+        COUNTER_WINDOW_MS
     };
 })(window);

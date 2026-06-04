@@ -51,11 +51,22 @@
         }, onError || console.error);
     }
 
+    async function leaveGameParticipant(lobbyId, playerId) {
+        const ref = gameRef(lobbyId);
+        const snap = await global.getDoc(ref);
+        if (!snap.exists()) return null;
+        const result = Engine.leaveGame(snap.data(), playerId);
+        if (!result.ok) return null;
+        await persistState(lobbyId, result.state);
+        return result.state;
+    }
+
     global.GameFirestore = {
         waitForFirebase,
         createGameFromLobby,
         persistState,
         returnLobbyToWaiting,
+        leaveGameParticipant,
         subscribeGame
     };
 })(window);

@@ -12,6 +12,13 @@
     let returnTimer = null;
     let lastRouletteAnimatedAt = null;
     let rouletteHideTimer = null;
+    let counterResolveTimer = null;
+    let counterTickTimer = null;
+    let counterWindowKey = null;
+
+    function leftGameKey(id) {
+        return `unoLeftGame_${id}`;
+    }
 
     const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{"nickname":"Giocatore","avatar":"🦊"}');
 
@@ -110,16 +117,84 @@
             animateBulletRouletteSpin(lr);
         }
 
-        if (newPending?.type === 'defense' && newPending.defenderId === myPlayerId
-            && (!oldPending || oldPending.type !== 'defense')) {
-            showDefenseModal();
+        if (newPending?.type === 'counterWindow'
+            && (!oldPending || oldPending.startedAt !== newPending.startedAt)) {
+            playSound('turn');
+            scheduleCounterWindow(newPending);
+        }
+    }
+
+    function firstCounterCard() {
+        const hand = myHand();
+        return hand.find(c => Engine.canPlayCounter(gameState, myPlayerId, c));
+    }
+
+    function clearCounterTimers() {
+        clearTimeout(counterResolveTimer);
+        clearInterval(counterTickTimer);
+        counterResolveTimer = null;
+        counterTickTimer = null;
+        counterWindowKey = null;
+    }
+
+    function scheduleCounterWindow(pending) {
+        const key = `${pending.startedAt}-${pending.cardValue}`;
+        if (counterWindowKey === key && counterResolveTimer) {
+            renderCounterOverlay(pending);
+            return;
+        }
+        clearCounterTimers();
+        counterWindowKey = key;
+        renderCounterOverlay(pending);
+
+        const tick = () => {
+            if (!gameState?.pendingAction || gameState.pendingAction.type !== 'counterWindow') {
+                hideCounterOverlay();
+                return;
+            }
+            const left = Math.max(0, Math.ceil((pending.resolvesAt - Date.now()) / 1000));
+            const el = $('counter-timer');
+            if (el) el.textContent = String(left);
+            if (left <= 0) hideCounterOverlayTick();
+        };
+        tick();
+        counterTickTimer = setInterval(tick, 200);
+
+        const delay = Math.max(0, pending.resolvesAt - Date.now() + 80);
+        counterResolveTimer = setTimeout(async () => {
+            if (counterWindowKey !== key) return;
+            if (!gameState?.pendingAction || gameState.pendingAction.type !== 'counterWindow') return;
+            await commitAction(() => Engine.resolveCounterWindow(gameState, myPlayerId), { quiet: true });
+            clearCounterTimers();
+            hideCounterOverlay();
+        }, delay);
+    }
+
+    function hideCounterOverlayTick() {
+        const el = $('counter-timer');
+        if (el) el.textContent = '0';
+    }
+
+    function hideCounterOverlay() {
+        $('counter-overlay')?.classList.add('hidden');
+        $('btn-contrast')?.classList.add('hidden');
+    }
+
+    function renderCounterOverlay(pending) {
+        const overlay = $('counter-overlay');
+        const btn = $('btn-contrast');
+        if (!overlay) return;
+        overlay.classList.remove('hidden');
+        const canCounter = pending.sourcePlayerId !== myPlayerId && !!firstCounterCard();
+        if (btn) {
+            btn.classList.toggle('hidden', !canCounter);
+            btn.disabled = !canCounter;
         }
     }
 
     function buildWheelSegments(segments) {
         const wheel = $('roulette-wheel');
-        const labels = $('roulette-labels');
-        if (!wheel || !labels) return;
+        if (!wheel) return;
         const n = segments.length;
         if (!n) return;
         const colors = ['#dc2626', '#2563eb', '#16a34a', '#ca8a04', '#9333ea', '#0891b2'];
@@ -131,14 +206,14 @@
         }).join(', ');
         wheel.style.background = `conic-gradient(from -90deg, ${stops})`;
         wheel.style.transform = 'rotate(0deg)';
-        labels.innerHTML = '';
+        wheel.innerHTML = '';
         segments.forEach((seg, i) => {
             const angle = (i / n) * 360 + 360 / n / 2 - 90;
             const el = document.createElement('span');
             el.className = 'roulette-label';
             el.textContent = seg.nickname || seg.id;
-            el.style.transform = `rotate(${angle}deg) translateY(-95px) rotate(${-angle}deg)`;
-            labels.appendChild(el);
+            el.style.transform = `rotate(${angle}deg) translateY(-95px)`;
+            wheel.appendChild(el);
         });
     }
 
@@ -306,21 +381,34 @@
             }
         });
 
+        const counterActive = Engine.isCounterWindow(gameState);
+        const canCounter = counterActive && gameState.pendingAction?.sourcePlayerId !== myPlayerId;
+
         hand.forEach(card => {
             const btn = document.createElement('button');
-            const playable = canPlay && Engine.canPlayCard(gameState, card) && Engine.isMyTurn(gameState, myPlayerId);
+            const playableTurn = canPlay && Engine.canPlayCard(gameState, card) && Engine.isMyTurn(gameState, myPlayerId);
+            const playableCounter = canCounter && Engine.canPlayCounter(gameState, myPlayerId, card);
+            const playable = playableTurn || playableCounter;
             const stackSize = card.kind === 'number' ? (stackCounts[String(card.value)] || 1) : 1;
-            const showStack = playable && stackSize > 1 && card.kind === 'number';
+            const showStack = playableTurn && stackSize > 1 && card.kind === 'number';
             const lbl = cardLabel(card);
 
             btn.type = 'button';
             btn.className = `hand-card ${Deck.colorStyle(card)} ${playable ? '' : 'hand-card-disabled'}`;
+            if (playableCounter) btn.classList.add('hand-card-counter');
             btn.innerHTML = `<span class="hand-label">${lbl}${showStack ? `<small class="block text-[9px] opacity-80">×${stackSize}</small>` : ''}</span>`;
-            if (playable) {
+            if (playableTurn) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
+            } else if (playableCounter) {
+                btn.addEventListener('click', () => onPlayCounter(card.instanceId));
             }
             handEl.appendChild(btn);
         });
+    }
+
+    async function onPlayCounter(instanceId) {
+        playSound('click');
+        await commitAction(() => Engine.playCounterCard(gameState, myPlayerId, instanceId));
     }
 
     function renderTurnBanner() {
@@ -339,12 +427,13 @@
             el.classList.toggle('animate-pulse', pending.shooterId === myPlayerId);
             return;
         }
-        if (pending?.type === 'defense') {
+        if (pending?.type === 'counterWindow') {
             el.classList.remove('hidden');
-            el.textContent = pending.defenderId === myPlayerId
-                ? 'Death Note! Scegli se usare Righello'
-                : 'Difesa in corso…';
-            el.classList.toggle('animate-pulse', pending.defenderId === myPlayerId);
+            const src = gameState.players[pending.sourcePlayerId]?.nickname || '—';
+            el.textContent = pending.sourcePlayerId === myPlayerId
+                ? 'Attesa risposte al tuo effetto…'
+                : `Attesa risposte… (${src})`;
+            el.classList.toggle('animate-pulse', pending.sourcePlayerId !== myPlayerId && !!firstCounterCard());
             return;
         }
         el.classList.remove('hidden');
@@ -358,6 +447,14 @@
         const log = $('game-log-mini');
         if (!log || !gameState?.log) return;
         log.innerHTML = gameState.log.slice(-6).map(e => `<p class="log-line">${e.msg}</p>`).join('');
+    }
+
+    function renderEndTurnButton() {
+        const btn = $('btn-end-turn');
+        if (!btn || !gameState) return;
+        const can = Engine.canEndTurn(gameState, myPlayerId);
+        btn.disabled = !can;
+        btn.title = can ? 'Termina il tuo turno' : 'Non puoi terminare il turno ora';
     }
 
     function renderUnoButton() {
@@ -405,8 +502,14 @@
         renderSeats();
         renderCenter();
         renderHand();
+        renderEndTurnButton();
         renderUnoButton();
         renderTurnBanner();
+        if (gameState?.pendingAction?.type === 'counterWindow') {
+            renderCounterOverlay(gameState.pendingAction);
+        } else if (!counterResolveTimer) {
+            hideCounterOverlay();
+        }
         renderLog();
         renderEndScreen();
     }
@@ -454,34 +557,9 @@
         }
     }
 
-    function showDefenseModal() {
-        const modal = $('game-modal');
-        const content = $('modal-content');
-        $('modal-title').textContent = 'Death Note!';
-        $('modal-description').textContent = 'Vuoi usare un Righello per annullare l\'eliminazione?';
-        content.innerHTML = '';
-        const yes = document.createElement('button');
-        yes.className = 'modal-target-btn';
-        yes.textContent = 'Usa Righello';
-        yes.onclick = async () => {
-            modal.classList.add('hidden');
-            await commitAction(() => Engine.respondDefense(gameState, myPlayerId, true));
-        };
-        const no = document.createElement('button');
-        no.className = 'modal-target-btn';
-        no.textContent = 'Non difenderti';
-        no.onclick = async () => {
-            modal.classList.add('hidden');
-            await commitAction(() => Engine.respondDefense(gameState, myPlayerId, false));
-        };
-        content.appendChild(yes);
-        content.appendChild(no);
-        modal.classList.remove('hidden');
-    }
-
     function handlePending(state) {
-        if (state.pendingAction?.type === 'defense' && state.pendingAction.defenderId === myPlayerId) {
-            showDefenseModal();
+        if (state.pendingAction?.type === 'counterWindow') {
+            scheduleCounterWindow(state.pendingAction);
         }
         if (state.pendingAction?.type === 'chooseColor' && state.pendingAction.playerId === myPlayerId) {
             showColorModal(null);
@@ -585,12 +663,51 @@
             playSound('click');
             await commitAction(() => Engine.declareUno(gameState, myPlayerId));
         });
-        $('btn-leave')?.addEventListener('click', () => {
-            if (confirm('Uscire dalla partita?')) {
-                window.location.href = `waiting_room.html?stanzaId=${encodeURIComponent(lobbyId)}`;
+        $('btn-end-turn')?.addEventListener('click', async () => {
+            if (!Engine.canEndTurn(gameState, myPlayerId)) {
+                playSound('error');
+                showToast('Non puoi terminare il turno ora');
+                return;
             }
+            playSound('click');
+            await commitAction(() => Engine.endTurn(gameState, myPlayerId));
         });
+        $('btn-contrast')?.addEventListener('click', async () => {
+            const card = firstCounterCard();
+            if (!card) {
+                playSound('error');
+                showToast('Nessuna carta di contrasto');
+                return;
+            }
+            await onPlayCounter(card.instanceId);
+        });
+        $('btn-leave')?.addEventListener('click', async () => {
+            if (!confirm('Uscire dalla partita?')) return;
+            await leaveGameToWaiting();
+        });
+    }
 
+    async function leaveGameToWaiting() {
+        sessionStorage.setItem(leftGameKey(lobbyId), '1');
+        clearCounterTimers();
+        if (unsubGame) {
+            unsubGame();
+            unsubGame = null;
+        }
+        try {
+            if (gameState && myPlayerId) {
+                await FS.leaveGameParticipant(lobbyId, myPlayerId);
+            }
+        } catch (err) {
+            console.error('Uscita partita:', err);
+        }
+        const list = JSON.parse(localStorage.getItem('unoLobbyList') || '[]');
+        const idx = list.findIndex(r => r.id === lobbyId);
+        if (idx !== -1) {
+            list[idx].status = 'waiting';
+            localStorage.setItem('unoLobbyList', JSON.stringify(list));
+        }
+        window.location.href = `waiting_room.html?stanzaId=${encodeURIComponent(lobbyId)}`;
     }
 
     async function init() {
@@ -599,6 +716,11 @@
         if (!lobbyId) {
             alert('Stanza non valida.');
             window.location.href = 'Menu_principale.html';
+            return;
+        }
+
+        if (sessionStorage.getItem(leftGameKey(lobbyId))) {
+            window.location.href = `waiting_room.html?stanzaId=${encodeURIComponent(lobbyId)}`;
             return;
         }
 
