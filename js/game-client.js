@@ -47,6 +47,10 @@
     }
 
     function cardLabel(card) {
+        if (Deck.isBrainrotCard?.(card)) {
+            const pt = card.pt != null ? ` ${card.pt}PT` : '';
+            return `${card.label || '—'}${pt}`;
+        }
         return card?.righelloLabel || card?.label || '—';
     }
 
@@ -121,10 +125,10 @@
             animateBulletRouletteSpin(lr);
         }
 
-        if (newPending?.type === 'counterWindow'
-            && (!oldPending || oldPending.startedAt !== newPending.startedAt)) {
+        if (newPending && Engine.isPendingTimedWindow(newPending)
+            && (!oldPending || oldPending.startedAt !== newPending.startedAt || oldPending.type !== newPending.type)) {
             playSound('turn');
-            scheduleCounterWindow(newPending);
+            schedulePendingWindow(newPending);
         }
     }
 
@@ -141,18 +145,38 @@
         counterWindowKey = null;
     }
 
-    function scheduleCounterWindow(pending) {
-        const key = `${pending.startedAt}-${pending.cardValue}`;
+    function pendingWindowKey(pending) {
+        return `${pending.type}-${pending.startedAt}`;
+    }
+
+    function resolvePendingWindowAction(pending) {
+        switch (pending.type) {
+            case 'counterWindow':
+                return Engine.resolveCounterWindow(gameState, myPlayerId);
+            case 'brainrotBattle':
+                return Engine.resolveBrainrotBattle(gameState, myPlayerId);
+            case 'drawStackWindow':
+                return Engine.resolveDrawStackWindow(gameState, myPlayerId);
+            case 'brainrotDiscard':
+                return Engine.resolveBrainrotDiscard(gameState, pending.winnerId, []);
+            default:
+                return { ok: false, error: 'Finestra sconosciuta.' };
+        }
+    }
+
+    function schedulePendingWindow(pending) {
+        const key = pendingWindowKey(pending);
         if (counterWindowKey === key && counterResolveTimer) {
-            renderCounterOverlay(pending);
+            renderPendingOverlay(pending);
             return;
         }
         clearCounterTimers();
         counterWindowKey = key;
-        renderCounterOverlay(pending);
+        renderPendingOverlay(pending);
 
         const tick = () => {
-            if (!gameState?.pendingAction || gameState.pendingAction.type !== 'counterWindow') {
+            const cur = gameState?.pendingAction;
+            if (!cur || cur.type !== pending.type || cur.startedAt !== pending.startedAt) {
                 hideCounterOverlay();
                 return;
             }
@@ -167,11 +191,22 @@
         const delay = Math.max(0, pending.resolvesAt - Date.now() + 80);
         counterResolveTimer = setTimeout(async () => {
             if (counterWindowKey !== key) return;
-            if (!gameState?.pendingAction || gameState.pendingAction.type !== 'counterWindow') return;
-            await commitAction(() => Engine.resolveCounterWindow(gameState, myPlayerId), { quiet: true });
+            const cur = gameState?.pendingAction;
+            if (!cur || pendingWindowKey(cur) !== key) return;
+            if (cur.type === 'brainrotDiscard' && cur.winnerId === myPlayerId && playSelection?.mode === 'brainrotDiscard') {
+                const ids = playSelection.ids || [];
+                await commitAction(() => Engine.resolveBrainrotDiscard(gameState, myPlayerId, ids), { quiet: true });
+            } else {
+                await commitAction(() => resolvePendingWindowAction(cur), { quiet: true });
+            }
             clearCounterTimers();
             hideCounterOverlay();
+            clearPlaySelection();
         }, delay);
+    }
+
+    function scheduleCounterWindow(pending) {
+        schedulePendingWindow(pending);
     }
 
     function hideCounterOverlayTick() {
@@ -184,16 +219,52 @@
         $('btn-contrast')?.classList.add('hidden');
     }
 
-    function renderCounterOverlay(pending) {
+    function renderPendingOverlay(pending) {
         const overlay = $('counter-overlay');
         const btn = $('btn-contrast');
+        const title = overlay?.querySelector('p');
         if (!overlay) return;
         overlay.classList.remove('hidden');
-        const canCounter = pending.sourcePlayerId !== myPlayerId && !!firstCounterCard();
-        if (btn) {
-            btn.classList.toggle('hidden', !canCounter);
-            btn.disabled = !canCounter;
+
+        let canAct = false;
+        let label = 'Attesa risposte…';
+        if (pending.type === 'counterWindow') {
+            label = 'Contrasto — 5 secondi';
+            canAct = pending.sourcePlayerId !== myPlayerId && !!firstCounterCard();
+        } else if (pending.type === 'brainrotBattle') {
+            label = 'Brainrot Battle — gioca un Brainrot (5s)';
+            canAct = Engine.canPlayBrainrotResponse(gameState, myPlayerId);
+        } else if (pending.type === 'drawStackWindow') {
+            label = `Stack +${pending.drawStack} — rispondi (5s)`;
+            canAct = Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
+        } else if (pending.type === 'brainrotDiscard') {
+            label = `Scarta fino a ${pending.maxDiscard} carte numero (5s)`;
+            canAct = pending.winnerId === myPlayerId;
         }
+        if (title) title.textContent = label;
+        if (btn) {
+            btn.classList.toggle('hidden', !canAct || pending.type !== 'counterWindow');
+            btn.disabled = !canAct || pending.type !== 'counterWindow';
+            if (pending.type === 'brainrotDiscard' && pending.winnerId === myPlayerId) {
+                btn.classList.remove('hidden');
+                btn.textContent = 'Conferma scarto';
+                btn.disabled = false;
+            } else {
+                btn.textContent = 'Contrasta';
+            }
+        }
+    }
+
+    function renderCounterOverlay(pending) {
+        renderPendingOverlay(pending);
+    }
+
+    function firstBrainrotCard() {
+        return myHand().find(c => Engine.isBrainrotCard(c) && Engine.canPlayBrainrotResponse(gameState, myPlayerId));
+    }
+
+    function firstDrawStackCard() {
+        return myHand().find(c => Engine.canPlayDrawStackResponse(gameState, myPlayerId, c));
     }
 
     function buildWheelSegments(segments) {
@@ -432,7 +503,7 @@
         bar.classList.remove('hidden');
         const nums = playSelection.cards.map(c => c.value).join(' → ');
         if (label) {
-            label.textContent = `Scala ${nums} (${playSelection.cards.length} carte)`;
+            label.textContent = `Scala da 0: ${nums} (${playSelection.cards.length} carte)`;
         }
     }
 
@@ -494,6 +565,10 @@
 
         const counterActive = Engine.isCounterWindow(gameState);
         const canCounter = counterActive && gameState.pendingAction?.sourcePlayerId !== myPlayerId;
+        const brainrotBattle = Engine.isBrainrotBattle(gameState);
+        const drawStackWin = Engine.isDrawStackWindow(gameState);
+        const brainrotDiscard = Engine.isBrainrotDiscardPhase(gameState);
+        const brainrotDiscardMine = brainrotDiscard && gameState.pendingAction?.winnerId === myPlayerId;
         const mariActive = gameState.pendingAction?.type === 'mariGreen';
         const mariMyTurn = mariActive && gameState.pendingAction?.currentId === myPlayerId;
 
@@ -508,22 +583,34 @@
             const playableTurn = canPlay
                 && Engine.canPlayCardThisTurn(gameState, myPlayerId, card)
                 && Engine.isMyTurn(gameState, myPlayerId)
-                && !mariActive;
+                && !mariActive && !brainrotBattle && !drawStackWin && !brainrotDiscard;
             const playableCounter = canCounter && Engine.canPlayCounter(gameState, myPlayerId, card);
-            const playable = playableTurn || playableCounter || playableMari;
+            const playableBrainrot = brainrotBattle && Engine.canPlayBrainrotResponse(gameState, myPlayerId)
+                && Engine.isBrainrotCard(card);
+            const playableStack = drawStackWin && Engine.canPlayDrawStackResponse(gameState, myPlayerId, card);
+            const playableBrainrotDiscard = brainrotDiscardMine && Engine.canBrainrotDiscardCard(gameState, myPlayerId, card);
+            const playable = playableTurn || playableCounter || playableMari || playableBrainrot
+                || playableStack || playableBrainrotDiscard;
+            const showBattleColor = (brainrotBattle || brainrotDiscard) && card.battleColor;
             const stackSize = card.kind === 'number' ? (stackCounts[String(card.value)] || 1) : 1;
             const showStack = playableTurn && stackSize > 1 && card.kind === 'number' && !playSelection;
             const lbl = cardLabel(card);
 
             btn.type = 'button';
-            btn.className = `hand-card ${Deck.colorStyle(card)} ${playable ? '' : 'hand-card-disabled'}`;
-            if (playableCounter) btn.classList.add('hand-card-counter');
+            btn.className = `hand-card ${Deck.colorStyle(card, { battleColor: showBattleColor })} ${playable ? '' : 'hand-card-disabled'}`;
+            if (playableCounter || playableBrainrot || playableStack) btn.classList.add('hand-card-counter');
             if (playableMari) btn.classList.add('hand-card-mari');
             if (selIds.has(card.instanceId)) btn.classList.add('hand-card-selected');
             else if (ladderHintIds?.has(card.instanceId)) btn.classList.add('hand-card-ladder-hint');
             btn.innerHTML = `<span class="hand-label">${lbl}${showStack ? `<small class="block text-[9px] opacity-80">×${stackSize}</small>` : ''}</span>`;
             if (playableMari) {
                 btn.addEventListener('click', () => onPlayMariCard(card.instanceId));
+            } else if (playableBrainrotDiscard) {
+                btn.addEventListener('click', () => onToggleBrainrotDiscard(card.instanceId));
+            } else if (playableBrainrot) {
+                btn.addEventListener('click', () => onPlayBrainrotResponse(card.instanceId));
+            } else if (playableStack) {
+                btn.addEventListener('click', () => onPlayDrawStackResponse(card.instanceId));
             } else if (playableTurn && !playSelection) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
             } else if (playableCounter) {
@@ -536,6 +623,50 @@
     async function onPlayCounter(instanceId) {
         playSound('click');
         await commitAction(() => Engine.playCounterCard(gameState, myPlayerId, instanceId));
+    }
+
+    async function onPlayBrainrotResponse(instanceId) {
+        playSound('click');
+        await commitAction(() => Engine.playBrainrotResponse(gameState, myPlayerId, instanceId));
+    }
+
+    async function onPlayDrawStackResponse(instanceId) {
+        playSound('click');
+        await commitAction(() => Engine.playDrawStackResponse(gameState, myPlayerId, instanceId));
+    }
+
+    function startBrainrotDiscardSelection(maxDiscard) {
+        playSelection = { mode: 'brainrotDiscard', ids: [], maxDiscard };
+        const bar = $('play-selection-bar');
+        if (bar) bar.classList.remove('hidden');
+        updateBrainrotDiscardLabel();
+    }
+
+    function updateBrainrotDiscardLabel() {
+        const label = $('play-selection-label');
+        if (label && playSelection?.mode === 'brainrotDiscard') {
+            label.textContent = `Scarto Brainrot: ${playSelection.ids.length}/${playSelection.maxDiscard} (solo numeri)`;
+        }
+    }
+
+    function onToggleBrainrotDiscard(instanceId) {
+        if (!playSelection || playSelection.mode !== 'brainrotDiscard') return;
+        const idx = playSelection.ids.indexOf(instanceId);
+        if (idx >= 0) {
+            playSelection.ids.splice(idx, 1);
+        } else if (playSelection.ids.length < playSelection.maxDiscard) {
+            playSelection.ids.push(instanceId);
+        }
+        updateBrainrotDiscardLabel();
+        renderHand();
+    }
+
+    async function confirmBrainrotDiscard() {
+        if (!playSelection || playSelection.mode !== 'brainrotDiscard') return;
+        const ids = [...playSelection.ids];
+        clearPlaySelection();
+        playSound('cards');
+        await commitAction(() => Engine.resolveBrainrotDiscard(gameState, myPlayerId, ids));
     }
 
     function renderTurnBanner() {
@@ -561,6 +692,31 @@
                 ? 'Attesa risposte al tuo effetto…'
                 : `Attesa risposte… (${src})`;
             el.classList.toggle('animate-pulse', pending.sourcePlayerId !== myPlayerId && !!firstCounterCard());
+            return;
+        }
+        if (pending?.type === 'brainrotBattle') {
+            el.classList.remove('hidden');
+            el.textContent = Engine.canPlayBrainrotResponse(gameState, myPlayerId)
+                ? 'Brainrot Battle: gioca un Brainrot!'
+                : 'Brainrot Battle in corso…';
+            el.classList.toggle('animate-pulse', Engine.canPlayBrainrotResponse(gameState, myPlayerId));
+            return;
+        }
+        if (pending?.type === 'drawStackWindow') {
+            el.classList.remove('hidden');
+            const def = gameState.players[pending.defenderId]?.nickname || '—';
+            el.textContent = pending.defenderId === myPlayerId
+                ? `Devi rispondere allo stack +${pending.drawStack}!`
+                : `Stack +${pending.drawStack} su ${def}`;
+            el.classList.toggle('animate-pulse', Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true }));
+            return;
+        }
+        if (pending?.type === 'brainrotDiscard') {
+            el.classList.remove('hidden');
+            el.textContent = pending.winnerId === myPlayerId
+                ? `Vittoria Brainrot: scarta fino a ${pending.maxDiscard} carte numero`
+                : 'Scarto premio Brainrot…';
+            el.classList.toggle('animate-pulse', pending.winnerId === myPlayerId);
             return;
         }
         if (pending?.type === 'mariGreen') {
@@ -642,8 +798,9 @@
         renderEndTurnButton();
         renderUnoButton();
         renderTurnBanner();
-        if (gameState?.pendingAction?.type === 'counterWindow') {
-            renderCounterOverlay(gameState.pendingAction);
+        const pa = gameState?.pendingAction;
+        if (pa && Engine.isPendingTimedWindow(pa)) {
+            renderPendingOverlay(pa);
         } else if (!counterResolveTimer) {
             hideCounterOverlay();
         }
@@ -696,8 +853,11 @@
     }
 
     function handlePending(state) {
-        if (state.pendingAction?.type === 'counterWindow') {
-            scheduleCounterWindow(state.pendingAction);
+        if (state.pendingAction && Engine.isPendingTimedWindow(state.pendingAction)) {
+            schedulePendingWindow(state.pendingAction);
+        }
+        if (state.pendingAction?.type === 'brainrotDiscard' && state.pendingAction.winnerId === myPlayerId) {
+            startBrainrotDiscardSelection(state.pendingAction.maxDiscard);
         }
         if (state.pendingAction?.type === 'chooseColor' && state.pendingAction.playerId === myPlayerId) {
             showColorModal(null);
@@ -728,7 +888,7 @@
         }
 
         const ladder = Engine.getLadderPlay(gameState, myPlayerId, instanceId);
-        if (ladder.length > 1) {
+        if (ladder.length > 1 && Engine.isValidLadder(ladder)) {
             startLadderSelection(ladder);
             return;
         }
@@ -831,12 +991,20 @@
             playSound('click');
             await commitAction(() => Engine.endTurn(gameState, myPlayerId));
         });
-        $('btn-confirm-play')?.addEventListener('click', () => confirmLadderPlay());
+        $('btn-confirm-play')?.addEventListener('click', () => {
+            if (playSelection?.mode === 'brainrotDiscard') confirmBrainrotDiscard();
+            else confirmLadderPlay();
+        });
         $('btn-cancel-play')?.addEventListener('click', () => {
             playSound('click');
             clearPlaySelection();
         });
         $('btn-contrast')?.addEventListener('click', async () => {
+            const pending = gameState?.pendingAction;
+            if (pending?.type === 'brainrotDiscard' && pending.winnerId === myPlayerId) {
+                await confirmBrainrotDiscard();
+                return;
+            }
             const card = firstCounterCard();
             if (!card) {
                 playSound('error');

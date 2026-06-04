@@ -6,6 +6,40 @@
         death: { allowed: ['cancel'] }
     };
 
+    const BRAINROT_DISCARD_BY_COLOR = { yellow: 2, white: 4, pink: 3, blue: 1 };
+
+    function isBrainrotCard(card) {
+        return Deck.isBrainrotCard ? Deck.isBrainrotCard(card) : (card?.kind === 'brainrot' || card?.value === 'brainrot');
+    }
+
+    function isPendingTimedWindow(pending) {
+        return pending && ['counterWindow', 'brainrotBattle', 'drawStackWindow'].includes(pending.type);
+    }
+
+    function brainrotEntryFromCard(playerId, card) {
+        return {
+            playerId,
+            instanceId: card.instanceId,
+            defId: card.brainrotId || card.defId,
+            pt: card.pt || 0,
+            battleColor: card.battleColor || 'blue',
+            nome: card.brainrotName || card.label,
+            label: card.label
+        };
+    }
+
+    function isBrainrotBattle(state) {
+        return state.pendingAction?.type === 'brainrotBattle';
+    }
+
+    function isDrawStackWindow(state) {
+        return state.pendingAction?.type === 'drawStackWindow';
+    }
+
+    function isBrainrotDiscardPhase(state) {
+        return state.pendingAction?.type === 'brainrotDiscard';
+    }
+
     function playerKey(p) {
         return p.uid || p.nickname;
     }
@@ -150,17 +184,24 @@
         }
         if (pending?.type === 'bulletRoulette') return false;
         if (pending?.type === 'counterWindow') return false;
+        if (pending?.type === 'brainrotBattle') return canPlayBrainrotResponse(state, myId);
+        if (pending?.type === 'brainrotDiscard') return pending.winnerId === myId;
+        if (pending?.type === 'drawStackWindow') return canPlayDrawStackResponse(state, myId, { probe: true });
         if (pending?.playerId === myId) {
             if (pending.type === 'chooseColor' || pending.type === 'chooseTarget') return true;
         }
         if (pending && pending.type !== 'bulletRoulette') return false;
-        if (state.drawStack > 0) return currentPlayerId(state) === myId;
+        if (state.drawStack > 0 && !isDrawStackWindow(state)) {
+            return currentPlayerId(state) === myId;
+        }
         return currentPlayerId(state) === myId;
     }
 
     function canEndTurn(state, playerId) {
         if (state.status !== 'playing' || currentPlayerId(state) !== playerId) return false;
-        if (isCounterWindow(state)) return false;
+        if (isCounterWindow(state) || isBrainrotBattle(state) || isBrainrotDiscardPhase(state) || isDrawStackWindow(state)) {
+            return false;
+        }
         const pending = state.pendingAction;
         if (pending?.type === 'mariGreen') return false;
         if (state.pendingColor) return false;
@@ -188,6 +229,272 @@
             responses: {}
         };
         addLog(state, 'Attesa risposte... (5s)');
+    }
+
+    function openBrainrotBattle(state, initiatorId, starterCard) {
+        const entry = brainrotEntryFromCard(initiatorId, starterCard);
+        state.pendingAction = {
+            type: 'brainrotBattle',
+            initiatorId,
+            startedAt: Date.now(),
+            resolvesAt: Date.now() + COUNTER_WINDOW_MS,
+            entries: { [initiatorId]: entry }
+        };
+        addLog(state, `Brainrot Battle! ${entry.nome} (${entry.pt}PT) — 5s per rispondere.`);
+    }
+
+    function canPlayBrainrotResponse(state, playerId) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'brainrotBattle') return false;
+        if (pending.entries?.[playerId]) return false;
+        if (state.players[playerId]?.eliminated) return false;
+        return (state.hands[playerId] || []).some(c => isBrainrotCard(c));
+    }
+
+    function pickBrainrotWinner(pending) {
+        const entries = Object.values(pending.entries || {});
+        if (!entries.length) return pending.initiatorId;
+        const maxPt = Math.max(...entries.map(e => e.pt));
+        const top = entries.filter(e => e.pt === maxPt);
+        const init = top.find(e => e.playerId === pending.initiatorId);
+        return (init || top[0]).playerId;
+    }
+
+    function startBrainrotDiscardPhase(state, winnerId, battleColor) {
+        const maxDiscard = BRAINROT_DISCARD_BY_COLOR[battleColor] || 1;
+        const winnerEntry = state.pendingAction?.entries?.[winnerId];
+        const colorLabel = Deck.BRAINROT_BATTLE_COLOR_LABEL?.[battleColor] || battleColor;
+        state.pendingAction = {
+            type: 'brainrotDiscard',
+            winnerId,
+            battleColor,
+            maxDiscard,
+            startedAt: Date.now(),
+            resolvesAt: Date.now() + COUNTER_WINDOW_MS,
+            winningPt: winnerEntry?.pt,
+            winningName: winnerEntry?.nome
+        };
+        addLog(state, `${state.players[winnerId]?.nickname} vince Brainrot (${colorLabel}): scarta fino a ${maxDiscard} carte (solo numeri).`);
+    }
+
+    function resolveBrainrotBattle(state, playerId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'brainrotBattle') {
+            return { ok: false, error: 'Nessuna battaglia Brainrot attiva.' };
+        }
+        const expired = Date.now() >= pending.resolvesAt;
+        if (!expired && playerId !== pending.initiatorId) {
+            return { ok: false, error: 'Attendi la fine del countdown Brainrot.' };
+        }
+
+        const winnerId = pickBrainrotWinner(pending);
+        const winnerEntry = pending.entries[winnerId];
+        const battleColor = winnerEntry?.battleColor || 'blue';
+        addLog(s, `${s.players[winnerId]?.nickname} vince con ${winnerEntry?.nome || 'Brainrot'} (${winnerEntry?.pt || 0}PT).`);
+
+        startBrainrotDiscardPhase(s, winnerId, battleColor);
+        return { ok: true, state: s };
+    }
+
+    function playBrainrotResponse(state, playerId, instanceId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'brainrotBattle') {
+            return { ok: false, error: 'Nessuna battaglia Brainrot attiva.' };
+        }
+        if (pending.entries?.[playerId]) {
+            return { ok: false, error: 'Hai già giocato un Brainrot in questo scontro.' };
+        }
+        const card = removeFromHand(s.hands, playerId, instanceId);
+        if (!card || !isBrainrotCard(card)) {
+            if (card) s.hands[playerId].push(card);
+            return { ok: false, error: 'Carta Brainrot non valida.' };
+        }
+
+        s.discardPile.push(card);
+        s.topCard = card;
+        pending.entries[playerId] = brainrotEntryFromCard(playerId, card);
+        syncHandCounts(s);
+        addLog(s, `${s.players[playerId]?.nickname} risponde con ${card.brainrotName || card.label} (${card.pt}PT).`);
+        return { ok: true, state: s };
+    }
+
+    function canBrainrotDiscardCard(state, playerId, card) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'brainrotDiscard') return false;
+        if (pending.winnerId !== playerId) return false;
+        if (!card || card.kind !== 'number') return false;
+        return true;
+    }
+
+    function resolveBrainrotDiscard(state, playerId, instanceIds = []) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'brainrotDiscard') {
+            return { ok: false, error: 'Nessuna fase di scarto Brainrot.' };
+        }
+        if (playerId !== pending.winnerId) {
+            return { ok: false, error: 'Solo il vincitore può scartare.' };
+        }
+        const expired = Date.now() >= pending.resolvesAt;
+        const ids = Array.isArray(instanceIds) ? instanceIds : [];
+        if (!expired && ids.length === 0 && playerId === pending.winnerId) {
+            return { ok: false, error: 'Seleziona carte da scartare o attendi il countdown.' };
+        }
+
+        const hand = s.hands[playerId] || [];
+        const toDiscard = [];
+        ids.forEach(id => {
+            const c = hand.find(x => x.instanceId === id);
+            if (c && canBrainrotDiscardCard(s, playerId, c)) toDiscard.push(c);
+        });
+        if (ids.length > 0 && toDiscard.length !== ids.length) {
+            return { ok: false, error: 'Puoi scartare solo carte numeriche senza effetti.' };
+        }
+        if (toDiscard.length > pending.maxDiscard) {
+            return { ok: false, error: `Puoi scartare al massimo ${pending.maxDiscard} carte.` };
+        }
+
+        toDiscard.forEach(c => {
+            removeFromHand(s.hands, playerId, c.instanceId);
+            s.discardPile.push(c);
+        });
+        if (toDiscard.length) {
+            s.topCard = toDiscard[toDiscard.length - 1];
+            if (s.topCard.color && s.topCard.color !== 'black') s.activeColor = s.topCard.color;
+        }
+        syncHandCounts(s);
+        addLog(s, `${s.players[playerId]?.nickname} scarta ${toDiscard.length} carta/e (Brainrot).`);
+
+        const count = s.hands[playerId]?.length || 0;
+        s.pendingAction = null;
+        if (count === 0) {
+            declareWinner(s, playerId);
+            return { ok: true, state: s, outcome: 'win' };
+        }
+
+        return { ok: true, state: s };
+    }
+
+    function openDrawStackWindow(state, defenderId, sourcePlayerId) {
+        if (state.drawStack <= 0) return;
+        state.pendingAction = {
+            type: 'drawStackWindow',
+            defenderId,
+            sourcePlayerId,
+            drawStack: state.drawStack,
+            drawStackType: state.drawStackType,
+            startedAt: Date.now(),
+            resolvesAt: Date.now() + COUNTER_WINDOW_MS,
+            responses: {}
+        };
+        addLog(state, `Stack +${state.drawStack}: ${state.players[defenderId]?.nickname} ha 5s (+2/+4/Specchio).`);
+    }
+
+    function canPlayDrawStackResponse(state, playerId, cardOrProbe) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'drawStackWindow') return false;
+        if (state.players[playerId]?.eliminated) return false;
+        if (pending.responses?.[playerId]) return false;
+
+        const card = cardOrProbe?.probe ? null : cardOrProbe;
+        if (cardOrProbe?.probe) {
+            const hand = state.hands[playerId] || [];
+            return hand.some(c => {
+                if (c.value === 'mirror') return playerId !== pending.defenderId;
+                if (pending.drawStackType === 'draw2' && c.value === 'draw2') return playerId === pending.defenderId;
+                if (pending.drawStackType === 'wild4' && c.value === 'wild4') return playerId === pending.defenderId;
+                return false;
+            });
+        }
+        if (!card) return false;
+        if (card.value === 'mirror') return playerId !== pending.defenderId;
+        if (pending.drawStackType === 'draw2' && card.value === 'draw2') return playerId === pending.defenderId;
+        if (pending.drawStackType === 'wild4' && card.value === 'wild4') return playerId === pending.defenderId;
+        return false;
+    }
+
+    function playDrawStackResponse(state, playerId, instanceId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'drawStackWindow') {
+            return { ok: false, error: 'Nessuna finestra stack attiva.' };
+        }
+        if (pending.responses?.[playerId]) {
+            return { ok: false, error: 'Hai già risposto allo stack.' };
+        }
+
+        const card = removeFromHand(s.hands, playerId, instanceId);
+        if (!card || !canPlayDrawStackResponse(s, playerId, card)) {
+            if (card) s.hands[playerId].push(card);
+            return { ok: false, error: 'Carta non valida per rispondere allo stack.' };
+        }
+
+        s.discardPile.push(card);
+        s.topCard = card;
+        if (!pending.responses) pending.responses = {};
+
+        if (card.value === 'mirror') {
+            const oldDef = pending.defenderId;
+            pending.defenderId = pending.sourcePlayerId;
+            pending.sourcePlayerId = oldDef;
+            pending.responses[playerId] = { action: 'mirror', cardValue: 'mirror' };
+            addLog(s, `${s.players[playerId]?.nickname} usa Specchio: stack rimandato!`);
+        } else if (card.value === 'draw2') {
+            pending.drawStack += 2;
+            pending.defenderId = nextPlayerId(s, pending.defenderId);
+            pending.sourcePlayerId = playerId;
+            s.drawStack = pending.drawStack;
+            pending.responses[playerId] = { action: 'stack', addAmount: 2, cardValue: 'draw2' };
+            addLog(s, `Stack +2 (totale ${pending.drawStack}).`);
+        } else if (card.value === 'wild4') {
+            pending.drawStack += 4;
+            pending.defenderId = nextPlayerId(s, pending.defenderId);
+            pending.sourcePlayerId = playerId;
+            s.drawStack = pending.drawStack;
+            s.drawStackType = 'wild4';
+            pending.drawStackType = 'wild4';
+            pending.responses[playerId] = { action: 'stack', addAmount: 4, cardValue: 'wild4' };
+            addLog(s, `Stack +4 (totale ${pending.drawStack}).`);
+        }
+
+        syncHandCounts(s);
+        return { ok: true, state: s };
+    }
+
+    function resolveDrawStackWindow(state, playerId) {
+        const s = clone(state);
+        const pending = s.pendingAction;
+        if (!pending || pending.type !== 'drawStackWindow') {
+            return { ok: false, error: 'Nessuna finestra stack attiva.' };
+        }
+        const expired = Date.now() >= pending.resolvesAt;
+        if (!expired) {
+            return { ok: false, error: 'Attendi la fine del countdown stack.' };
+        }
+
+        s.drawStack = pending.drawStack;
+        s.drawStackType = pending.drawStackType;
+        const defenderId = pending.defenderId;
+        const responses = pending.responses || {};
+        const stacked = Object.values(responses).some(r => r.action === 'stack');
+        const mirrored = Object.values(responses).some(r => r.action === 'mirror');
+
+        s.pendingAction = null;
+
+        if (!s.settings.stack && !stacked && !mirrored) {
+            const n = applyDrawToPlayer(s, defenderId, s.drawStack);
+            addLog(s, `${s.players[defenderId]?.nickname} pesca ${n} (stack risolto).`);
+            s.drawStack = 0;
+            s.drawStackType = null;
+            s.turnAdvanceSteps = (s.turnAdvanceSteps || 0) + 1;
+        } else if (mirrored && !stacked) {
+            addLog(s, `Specchio: ${s.players[defenderId]?.nickname} deve pescare lo stack.`);
+        }
+
+        syncHandCounts(s);
+        return { ok: true, state: s };
     }
 
     function executeDeferredEffect(state, sourcePlayerId, effect) {
@@ -338,6 +645,7 @@
     /** Jolly, +4 e speciali nere/incolore: giocabili sul mazzo in tavola (salvo stack +2/+4). */
     function isFreePlayCard(card) {
         if (!card) return false;
+        if (isBrainrotCard(card)) return true;
         if (card.value === 'wild' || card.value === 'wild4') return true;
         if (card.kind === 'wild') return true;
         if (card.kind === 'special' && (card.color === 'black' || card.color === 'wild')) return true;
@@ -354,26 +662,14 @@
             return card.color === state.forcedColor || isFreePlayCard(card);
         }
 
-        const topColor = effectiveTopColor(state);
-        const topValue = top.value;
-
-        if (String(card.value) === String(topValue)) return true;
-
-        if (card.color && topColor && card.color === topColor) {
-            return true;
-        }
-
-        if (top.color === 'black' || top.kind === 'special' || top.kind === 'wild') {
-            if (card.kind === 'action' && card.color === topColor) return true;
-            if (card.kind === 'special' && card.color === topColor) return true;
-        }
+        if (String(card.value) === String(top.value)) return true;
 
         return false;
     }
 
     function hasPlayableCard(state, playerId) {
         const hand = state.hands[playerId] || [];
-        return hand.some(c => canPlayCard(state, c));
+        return hand.some(c => canPlayCard(state, c, playerId));
     }
 
     function syncTurnFlags(state) {
@@ -383,11 +679,18 @@
         }
     }
 
-    function canPlayCard(state, card) {
+    function canPlayCard(state, card, playerId) {
         if (state.status !== 'playing') return false;
         const pending = state.pendingAction;
+        const pid = playerId || currentPlayerId(state);
+        if (pending?.type === 'brainrotBattle') {
+            return isBrainrotCard(card) && canPlayBrainrotResponse(state, pid);
+        }
+        if (pending?.type === 'drawStackWindow') {
+            return canPlayDrawStackResponse(state, pid, card);
+        }
         if (pending?.type === 'mariGreen') return false;
-        if (state.drawStack > 0) {
+        if (state.drawStack > 0 && pending?.type !== 'drawStackWindow') {
             if (!state.settings.stack) return false;
             if (state.drawStackType === 'draw2' && card.value === 'draw2') return true;
             if (state.drawStackType === 'wild4' && card.value === 'wild4') return true;
@@ -400,6 +703,13 @@
 
     /** Carta giocabile nel turno corrente (una sola azione di gioco per turno). */
     function canPlayCardThisTurn(state, playerId, card) {
+        if (isBrainrotBattle(state)) {
+            return canPlayBrainrotResponse(state, playerId) && isBrainrotCard(card);
+        }
+        if (isDrawStackWindow(state)) {
+            return canPlayDrawStackResponse(state, playerId, card);
+        }
+        if (isBrainrotDiscardPhase(state)) return false;
         if (currentPlayerId(state) !== playerId) return false;
         if (!canPlayCard(state, card)) return false;
         syncTurnFlags(state);
@@ -419,6 +729,7 @@
             return pending.currentId === playerId;
         }
         if (pending?.type === 'counterWindow' || pending?.type === 'bulletRoulette') return false;
+        if (isBrainrotBattle(state) || isBrainrotDiscardPhase(state) || isDrawStackWindow(state)) return false;
         if (state.pendingColor) return false;
         syncTurnFlags(state);
         if (state.turnFlags.played) return false;
@@ -647,16 +958,22 @@
         hand.filter(c => c.kind === 'number' && c.color === color).forEach(c => {
             byNum[numberRank(c)] = c;
         });
-        if (!byNum[0] || !canPlayCard(state, byNum[0])) return [card];
+
+        if (!byNum[0]) return [card];
+        if (!canPlayCard(state, byNum[0])) return [card];
 
         let maxV = 0;
-        while (byNum[maxV + 1]) maxV += 1;
-        const full = [];
-        for (let v = 0; v <= maxV; v += 1) full.push(byNum[v]);
+        while (byNum[maxV + 1] !== undefined) maxV += 1;
 
-        const idx = full.findIndex(c => c.instanceId === instanceId);
-        if (idx < 0) return [card];
-        const ladder = full.slice(0, idx + 1);
+        const idx = numberRank(card);
+        if (idx < 1) return [card];
+
+        for (let v = 0; v <= idx; v += 1) {
+            if (!byNum[v]) return [card];
+        }
+
+        const ladder = [];
+        for (let v = 0; v <= idx; v += 1) ladder.push(byNum[v]);
         return ladder.length >= 2 ? ladder : [card];
     }
 
@@ -667,17 +984,6 @@
         return hand.filter(c =>
             c.kind === 'number'
             && String(c.value) === String(card.value)
-            && canPlayCard(state, c)
-        );
-    }
-
-    function getSameColorBatch(state, playerId, instanceId) {
-        const hand = state.hands[playerId] || [];
-        const card = hand.find(c => c.instanceId === instanceId);
-        if (!card || !canPlayCard(state, card)) return card ? [card] : [];
-        if (!card.color || card.color === 'black' || card.color === 'wild') return [card];
-        return hand.filter(c =>
-            c.color === card.color
             && canPlayCard(state, c)
         );
     }
@@ -693,17 +999,12 @@
         );
     }
 
-    function canPlaySameColorBatch(state, cards) {
-        if (!cards?.length) return false;
-        const first = cards[0];
-        if (!first.color || first.color === 'black' || first.color === 'wild') return cards.length === 1;
-        return cards.every(c => c.color === first.color && canPlayCard(state, c));
-    }
-
     function isValidPlayGroup(state, cards) {
         if (!cards?.length) return false;
         if (cards.length === 1) return canPlayCard(state, cards[0]);
-        if (isValidLadder(cards)) return canPlayCard(state, cards[0]);
+        if (isValidLadder(cards)) {
+            return numberRank(cards[0]) === 0 && canPlayCard(state, cards[0]);
+        }
         return canPlaySameNumberBatch(state, cards);
     }
 
@@ -769,6 +1070,7 @@
     function checkWinOrUnoPenalty(state, playerId) {
         const count = state.hands[playerId]?.length || 0;
         if (count !== 0 || state.status !== 'playing') return null;
+        if (state.pendingAction?.type === 'brainrotDiscard') return null;
         if (!state.players[playerId]?.saidUno) {
             applyDrawToPlayer(state, playerId, 1);
             const p = state.players[playerId];
@@ -892,6 +1194,12 @@
         if (s.pendingAction?.type === 'mariGreen') {
             return { ok: false, error: 'Rispondi all\'effetto Marijuana.' };
         }
+        if (s.pendingAction?.type === 'brainrotBattle' || s.pendingAction?.type === 'drawStackWindow') {
+            return { ok: false, error: 'Usa la finestra di risposta (5s) per giocare la carta.' };
+        }
+        if (s.pendingAction?.type === 'brainrotDiscard') {
+            return { ok: false, error: 'Seleziona le carte da scartare (Brainrot).' };
+        }
         if (!isMyTurn(s, playerId)) {
             return { ok: false, error: 'Non è il tuo turno.' };
         }
@@ -965,17 +1273,19 @@
             return effect;
         }
 
-        if (s.status !== 'finished') {
-            const outcome = checkWinOrUnoPenalty(s, playerId);
-            if (outcome === 'win' || s.status === 'finished') {
-                return { ok: true, state: s, outcome };
-            }
-            if (outcome === 'penalty') {
-                syncHandCounts(s);
-                return { ok: true, state: s, outcome: 'penalty' };
-            }
-        } else {
+        if (s.status === 'finished') {
             return { ok: true, state: s, outcome: 'win' };
+        }
+        if (['brainrotBattle', 'drawStackWindow', 'brainrotDiscard'].includes(s.pendingAction?.type)) {
+            return { ok: true, state: s, defer: true };
+        }
+        const outcome = checkWinOrUnoPenalty(s, playerId);
+        if (outcome === 'win' || s.status === 'finished') {
+            return { ok: true, state: s, outcome };
+        }
+        if (outcome === 'penalty') {
+            syncHandCounts(s);
+            return { ok: true, state: s, outcome: 'penalty' };
         }
 
         syncHandCounts(s);
@@ -998,35 +1308,50 @@
                     state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
                 }
                 return { ok: true };
-            case 'draw2':
+            case 'draw2': {
+                const defender = nextPlayerId(state);
                 if (settings.stack && (state.drawStackType === 'draw2' || state.drawStack === 0)) {
                     state.drawStack += 2;
                     state.drawStackType = 'draw2';
                     addLog(state, `Stack +2 (totale ${state.drawStack}).`);
+                    openDrawStackWindow(state, defender, playerId);
                 } else {
-                    applyDrawToPlayer(state, nextPlayerId(state), 2);
-                    state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                    state.drawStack = 2;
+                    state.drawStackType = 'draw2';
+                    openDrawStackWindow(state, defender, playerId);
                 }
-                return { ok: true };
+                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                return { ok: true, defer: true };
+            }
             case 'wild':
                 if (!options.chosenColor) {
                     state.pendingColor = true;
                     state.pendingAction = { type: 'chooseColor', playerId };
                 }
                 return { ok: true };
-            case 'wild4':
+            case 'wild4': {
+                const defender = nextPlayerId(state);
                 if (settings.stack && (state.drawStackType === 'wild4' || state.drawStack === 0)) {
                     state.drawStack += 4;
                     state.drawStackType = 'wild4';
                     addLog(state, `Stack +4 (totale ${state.drawStack}).`);
+                    if (options.chosenColor) {
+                        openDrawStackWindow(state, defender, playerId);
+                        state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                    }
                 } else if (!options.chosenColor) {
-                    applyDrawToPlayer(state, nextPlayerId(state), 4);
+                    state.drawStack = 4;
+                    state.drawStackType = 'wild4';
                     state.pendingColor = true;
-                    state.pendingAction = { type: 'chooseColor', playerId };
+                    state.pendingAction = { type: 'chooseColor', playerId, drawStackDefender: defender };
                 } else {
-                    applyDrawToPlayer(state, nextPlayerId(state), 4);
+                    state.drawStack = 4;
+                    state.drawStackType = 'wild4';
+                    openDrawStackWindow(state, defender, playerId);
+                    state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
                 }
-                return { ok: true };
+                return { ok: true, defer: options.chosenColor || !options.chosenColor };
+            }
             case 'draw10':
                 applyDrawToPlayer(state, nextPlayerId(state), 10);
                 state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
@@ -1158,12 +1483,12 @@
             }
             case 'brainrot':
                 if (settings.brainrot) {
-                    state.pendingAction = { type: 'brainrot', playerId, scores: {} };
-                    addLog(state, 'Brainrot Battle!');
+                    openBrainrotBattle(state, playerId, card);
+                    return { ok: true, defer: true };
                 }
                 return { ok: true };
             case 'mirror':
-                addLog(state, 'Specchio: effetto riflesso (semplificato).');
+                addLog(state, 'Specchio: gioca durante stack +2/+4 o contrasto.');
                 return { ok: true };
             case 'jack':
                 addLog(state, 'Jack: copia ultima azione.');
@@ -1266,15 +1591,13 @@
         if (!s.pendingColor || s.pendingAction?.playerId !== playerId) {
             return { ok: false, error: 'Nessuna scelta colore richiesta.' };
         }
+        const drawTarget = s.pendingAction?.drawStackDefender || nextPlayerId(s);
         s.activeColor = color;
         s.pendingColor = false;
         s.pendingAction = null;
         addLog(s, `Colore scelto: ${Deck.COLOR_LABEL[color] || color}`);
         if (s.drawStack > 0) {
-            const target = nextPlayerId(s);
-            applyDrawToPlayer(s, target, s.drawStack);
-            s.drawStack = 0;
-            s.drawStackType = null;
+            openDrawStackWindow(s, drawTarget, playerId);
             s.turnAdvanceSteps = (s.turnAdvanceSteps || 0) + 1;
         }
         return { ok: true, state: s };
@@ -1354,6 +1677,14 @@
         isMyTurn,
         canEndTurn,
         isCounterWindow,
+        isBrainrotBattle,
+        isDrawStackWindow,
+        isBrainrotDiscardPhase,
+        canPlayBrainrotResponse,
+        canPlayDrawStackResponse,
+        canBrainrotDiscardCard,
+        isBrainrotCard,
+        isPendingTimedWindow,
         canPlayCounter,
         canPlayCard,
         canPlayCardThisTurn,
@@ -1363,7 +1694,6 @@
         cardStackKey,
         getMatchingPlayableCards,
         getSameNumberBatch,
-        getSameColorBatch,
         getLadderPlay,
         playMariGreenCard,
         canPlayMariGreen,
@@ -1373,6 +1703,11 @@
         playCards,
         playCounterCard,
         resolveCounterWindow,
+        playBrainrotResponse,
+        resolveBrainrotBattle,
+        resolveBrainrotDiscard,
+        playDrawStackResponse,
+        resolveDrawStackWindow,
         drawCard,
         chooseColor,
         chooseTarget,

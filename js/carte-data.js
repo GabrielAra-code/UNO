@@ -26,6 +26,16 @@ window.databaseCarte = [
     { id: "c_quagruppo", nome: "QUA GRUPPO!", quantita: "1", effetto: "La metà esatta dei giocatori pesca una carta (arrotondato per eccesso).", cat: "🎯 Cutruzzolà Move" },
     { id: "c_messa", nome: "La Messa è Finita", quantita: "1", effetto: "Prende tutti i rifiuti e gli scarti accumulati e li rimescola nel deck.", cat: "🎯 Cutruzzolà Move" },
     { id: "c_piani", nome: "Piani di Proiezione (P.V/P.L/P.O/L.T)", quantita: "1 per tipo", effetto: "Chi unisce tutti e 4 i pezzi sblocca la vittoria suprema.", cat: "📐 Piani di Proiezione" },
-    { id: "c_brainrot", nome: "Brainrot Battle", quantita: "Da definire", effetto: "Inizia una sfida Brainrot globale. Il punteggio PT più alto vince.", cat: "🧠 Brainrot" },
+    { id: "c_br_ladro", nome: "Ladro delle Mezze CAPPELLE", quantita: "1", effetto: "165PT — Giallo: vincendo scarti 2 carte numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_pothot", nome: "Pot HotSborr", quantita: "1", effetto: "100PT — Giallo: scarti 2 carte numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_influen", nome: "Influensborrella", quantita: "1", effetto: "50PT — Giallo: scarti 2 carte numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_frocettini", nome: "FRR FRR FROCETTINI", quantita: "1", effetto: "70PT — Rosa: scarti 3 carte numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_popp", nome: "POPP SkibidiPOPP", quantita: "1", effetto: "65PT — Rosa: scarti 3 carte numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_papero", nome: "PaperoSborratico", quantita: "1", effetto: "125PT — Rosa: scarti 3 carte numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_budinaccio", nome: "Budinaccio dello spaccio", quantita: "1", effetto: "120PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_giraffa", nome: "Giraffa Celeste", quantita: "1", effetto: "75PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_bobrini", nome: "Bobrini cactus merdini", quantita: "1", effetto: "90PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_centralucci", nome: "Centralucci Sborralucci", quantita: "1", effetto: "55PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
+    { id: "c_br_baccala", nome: "BACCALA' MAGGIOSBORR", quantita: "1", effetto: "75PT — Bianco: scarti 4 carte numero.", cat: "🧠 Brainrot" },
     { id: "c_specchio", nome: "Specchio", quantita: "Da definire", effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente.", cat: "❓ Non Definita" }
 ];

@@ -35,8 +35,29 @@
         c_quagruppo: { value: 'halfdraw', kind: 'special', label: 'Gruppo', colors: ['black'], count: 1 },
         c_messa: { value: 'reshuffle', kind: 'special', label: 'Messa', colors: ['black'], count: 1 },
         c_piani: { value: 'plan', kind: 'special', label: 'Piano', colors: ['black'], count: 4, variants: ['PV', 'PL', 'PO', 'LT'] },
-        c_brainrot: { value: 'brainrot', kind: 'special', label: 'Brain', colors: ['black'], count: 1 },
         c_specchio: { value: 'mirror', kind: 'special', label: 'Specchio', colors: ['black'], count: 1 }
+    };
+
+    /** Carte brainrot: incolore in mano; battleColor solo durante lo scontro. */
+    const BRAINROT_DEFS = {
+        c_br_ladro: { nome: 'Ladro delle Mezze CAPPELLE', pt: 165, battleColor: 'yellow', label: 'Ladro', count: 1 },
+        c_br_pothot: { nome: 'Pot HotSborr', pt: 100, battleColor: 'yellow', label: 'PotHot', count: 1 },
+        c_br_influen: { nome: 'Influensborrella', pt: 50, battleColor: 'yellow', label: 'Influen', count: 1 },
+        c_br_frocettini: { nome: 'FRR FRR FROCETTINI', pt: 70, battleColor: 'pink', label: 'Frocettini', count: 1 },
+        c_br_popp: { nome: 'POPP SkibidiPOPP', pt: 65, battleColor: 'pink', label: 'POPP', count: 1 },
+        c_br_papero: { nome: 'PaperoSborratico', pt: 125, battleColor: 'pink', label: 'Papero', count: 1 },
+        c_br_budinaccio: { nome: 'Budinaccio dello spaccio', pt: 120, battleColor: 'blue', label: 'Budina', count: 1 },
+        c_br_giraffa: { nome: 'Giraffa Celeste', pt: 75, battleColor: 'blue', label: 'Giraffa', count: 1 },
+        c_br_bobrini: { nome: 'Bobrini cactus merdini', pt: 90, battleColor: 'blue', label: 'Bobrini', count: 1 },
+        c_br_centralucci: { nome: 'Centralucci Sborralucci', pt: 55, battleColor: 'blue', label: 'Central', count: 1 },
+        c_br_baccala: { nome: "BACCALA' MAGGIOSBORR", pt: 75, battleColor: 'white', label: 'Baccalà', count: 1 }
+    };
+
+    const BRAINROT_BATTLE_COLOR_LABEL = {
+        yellow: 'Giallo',
+        white: 'Bianco',
+        pink: 'Rosa',
+        blue: 'Blu'
     };
 
     let instanceCounter = 0;
@@ -111,6 +132,30 @@
             }
         });
 
+        Object.entries(BRAINROT_DEFS).forEach(([defId, def]) => {
+            const qty = parseInt(cardQuantities[defId], 10);
+            if (Number.isNaN(qty) || qty <= 0) return;
+            const total = Math.min(qty, def.count || 1);
+            for (let i = 0; i < total; i += 1) {
+                cards.push(makeCard(defId, 'black', 'brainrot', 'brainrot', def.label, {
+                    brainrotId: defId,
+                    brainrotName: def.nome,
+                    pt: def.pt,
+                    battleColor: def.battleColor
+                }));
+            }
+        });
+
+        const legacyQty = parseInt(cardQuantities.c_brainrot, 10);
+        if (!Number.isNaN(legacyQty) && legacyQty > 0) {
+            cards.push(makeCard('c_br_influen', 'black', 'brainrot', 'brainrot', 'Influen', {
+                brainrotId: 'c_br_influen',
+                brainrotName: BRAINROT_DEFS.c_br_influen.nome,
+                pt: 50,
+                battleColor: 'yellow'
+            }));
+        }
+
         return shuffle(cards);
     }
 
@@ -123,14 +168,23 @@
         return a;
     }
 
-    function cardDisplayName(card) {
-        if (!card) return '—';
-        const label = card.righelloLabel || card.label;
-        if (card.kind === 'number') return `${COLOR_LABEL[card.color] || card.color} ${label}`;
-        return `${label} (${COLOR_LABEL[card.color] || card.color})`;
+    function isBrainrotCard(card) {
+        return card?.kind === 'brainrot' || card?.value === 'brainrot';
     }
 
-    function colorStyle(card) {
+    function colorStyle(card, opts = {}) {
+        if (opts.battleColor && card?.battleColor) {
+            const battleMap = {
+                yellow: 'bg-yellow-500 text-slate-900 border-amber-300',
+                white: 'bg-slate-100 text-slate-900 border-slate-400',
+                pink: 'bg-pink-500 border-pink-300',
+                blue: 'bg-blue-600 border-blue-400'
+            };
+            return battleMap[card.battleColor] || 'bg-purple-700 border-purple-400';
+        }
+        if (isBrainrotCard(card)) {
+            return 'bg-purple-900 border-purple-400';
+        }
         const map = {
             red: 'bg-red-600',
             yellow: 'bg-yellow-500 text-slate-900',
@@ -142,13 +196,28 @@
         return map[card?.color] || 'bg-slate-700';
     }
 
+    function cardDisplayName(card) {
+        if (!card) return '—';
+        if (isBrainrotCard(card)) {
+            const name = card.brainrotName || card.label;
+            const pt = card.pt != null ? ` ${card.pt}PT` : '';
+            return `${name}${pt}`;
+        }
+        const label = card.righelloLabel || card.label;
+        if (card.kind === 'number') return `${COLOR_LABEL[card.color] || card.color} ${label}`;
+        return `${label} (${COLOR_LABEL[card.color] || card.color})`;
+    }
+
     global.GameDeck = {
         COLORS,
         COLOR_LABEL,
+        BRAINROT_DEFS,
+        BRAINROT_BATTLE_COLOR_LABEL,
         buildFromQuantities,
         shuffle,
         cardDisplayName,
         colorStyle,
+        isBrainrotCard,
         makeCard
     };
 })(window);
