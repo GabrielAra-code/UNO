@@ -491,14 +491,11 @@
         }
     }
 
+    /** Durante accumulo stack nel proprio turno: solo altre +2/+4/+10/+16. */
     function canStackOnOwnTurn(state, playerId, card) {
         if (!state.settings?.stack || !state.stackPassPending) return false;
         if (state.stackSourcePlayerId !== playerId) return false;
-        if (!isStackDrawValue(card?.value)) return false;
-        const top = state.topCard;
-        if (!top) return true;
-        if (isStackDrawValue(top.value)) return true;
-        return topMatches(card, state);
+        return isStackDrawValue(card?.value);
     }
 
     function openDrawStackWindow(state, defenderId, sourcePlayerId) {
@@ -988,8 +985,7 @@
             return canPlayMariGreen(state, pid, card);
         }
         if (state.stackPassPending && state.stackSourcePlayerId === pid && !isDrawStackWindow(state)) {
-            if (canStackOnOwnTurn(state, pid, card)) return true;
-            return topMatches(card, state);
+            return canStackOnOwnTurn(state, pid, card);
         }
         if (state.drawStack > 0 && pending?.type !== 'drawStackWindow' && !state.stackPassPending) {
             if (!state.settings.stack) return false;

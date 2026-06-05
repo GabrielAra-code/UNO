@@ -141,12 +141,15 @@
     function launchTutorialStep(step) {
         const cfg = getTutorialStep(step);
         if (step > getTutorialProgress()) return;
+        const hasStackCards = cfg.packs.some(p =>
+            p === 'c_piu2' || p === 'c_piu4' || p === 'c_piu10' || p === 'c_piu16'
+        );
         window.location.href = buildPreviewUrl({
             mode: 'tutorial',
             step: String(cfg.step),
             bots: '1',
             diff: 'easy',
-            stack: '0',
+            stack: hasStackCards ? '1' : '0',
             brainrot: cfg.packs.some(p => p.startsWith('c_br')) ? '1' : '0'
         });
     }

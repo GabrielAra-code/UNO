@@ -1472,7 +1472,7 @@
         if (gameState.stackPassPending && gameState.stackSourcePlayerId === myPlayerId
             && (gameState.drawStack || 0) > 0) {
             el.classList.remove('hidden');
-            el.textContent = `Stack +${gameState.drawStack} in sospeso — puoi giocare altre +carte o Fine turno`;
+            el.textContent = `Stack +${gameState.drawStack} in sospeso — solo altre +carte, poi Fine turno`;
             el.classList.add('animate-pulse');
             return;
         }
@@ -1718,6 +1718,7 @@
             result.state.version = newVersion;
             prevGameState = snapshotState;
             gameState = result.state;
+            reactToStateChanges(snapshotState, result.state);
             if (!snapshotState?.pendingAction && result.state.pendingAction) {
                 /* pending opened */
             } else if (snapshotState?.pendingAction && !result.state.pendingAction) {
