@@ -375,7 +375,12 @@
             await commitAction(() => resolvePendingWindowAction(cur, { force: true }), { quiet: true });
             clearCounterTimers();
             hideCounterOverlay();
-            clearPlaySelection();
+            const pa = gameState?.pendingAction;
+            if (pa?.type === 'brainrotDiscard' && pa.winnerId === myPlayerId) {
+                ensureBrainrotDiscardUi();
+            } else {
+                clearPlaySelection();
+            }
         }, delay);
     }
 
@@ -1193,7 +1198,8 @@
             const playableBrainrot = brainrotBattle && Engine.canPlayBrainrotResponse(gameState, myPlayerId)
                 && Engine.isBrainrotCard(card);
             const playableStack = drawStackWin && Engine.canPlayDrawStackResponse(gameState, myPlayerId, card);
-            const playableBrainrotDiscard = brainrotDiscardMine && Engine.canBrainrotDiscardCard(gameState, myPlayerId, card);
+            const playableBrainrotDiscard = brainrotDiscardMine
+                && Engine.isDiscardableNumberCard?.(card);
             const ladderInteractive = playSelection?.mode === 'ladder' && card.kind === 'number';
             const playable = playableTurn || playableCounter || playableMari || playableBrainrot
                 || playableStack || playableBrainrotDiscard || ladderInteractive;
@@ -1351,6 +1357,7 @@
     }
 
     function onToggleBrainrotDiscard(instanceId) {
+        ensureBrainrotDiscardUi();
         if (!playSelection || playSelection.mode !== 'brainrotDiscard') return;
         const card = myHand().find(c => c.instanceId === instanceId);
         if (!card || !Engine.canBrainrotDiscardCard(gameState, myPlayerId, card)) {
@@ -1713,15 +1720,21 @@
             if (rouletteSpin?.at != null && rouletteSpin.at !== lastRouletteAnimatedAt) {
                 animateBulletRouletteSpin(rouletteSpin);
             }
-            const keepBrainrotSel = snapshotState?.pendingAction?.type === 'brainrotDiscard'
-                && result.state.pendingAction?.type === 'brainrotDiscard'
-                && result.state.pendingAction?.winnerId === myPlayerId
-                && playSelection?.mode === 'brainrotDiscard';
+            const discardMine = result.state.pendingAction?.type === 'brainrotDiscard'
+                && result.state.pendingAction?.winnerId === myPlayerId;
+            const keepBrainrotSel = discardMine && playSelection?.mode === 'brainrotDiscard'
+                && (
+                    snapshotState?.pendingAction?.type === 'brainrotDiscard'
+                    || snapshotState?.pendingAction?.type === 'brainrotBattle'
+                );
             if (!keepBrainrotSel) {
                 clearPlaySelection();
             }
             renderAll();
             handlePending(result.state);
+            if (discardMine && (!playSelection || playSelection.mode !== 'brainrotDiscard')) {
+                ensureBrainrotDiscardUi();
+            }
             if (IS_PREVIEW) {
                 await global.GamePreview?.runBotLoop?.();
             }
@@ -1746,6 +1759,7 @@
         if (!pending || pending.type !== 'brainrotBattle') return;
         if (!Engine.brainrotBattleCanClose?.(gameState)) return;
         if (brainrotBattleCloseInFlight || saveInFlight) return;
+        if (counterResolveTimer && counterWindowKey === pendingWindowKey(pending)) return;
         brainrotBattleCloseInFlight = true;
         void commitAction(() => Engine.finishBrainrotBattleIfReady(gameState), { quiet: true })
             .finally(() => { brainrotBattleCloseInFlight = false; });
