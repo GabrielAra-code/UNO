@@ -21,7 +21,7 @@
         plan: '⬛ Carte Nere',
         mari: '🟢 Eventi',
         heart: '🟢 Eventi',
-        gift: '🔴 Eventi',
+        nazism: '🔴 Eventi',
         communism: '🔴 Eventi',
         vaff: '🟡 Eventi',
         waves: '🔵 Eventi',

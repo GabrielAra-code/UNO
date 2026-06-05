@@ -465,33 +465,10 @@
     letter-spacing: 0.06em;
 }
 
-.uno-game #pending-banner {
-    text-align: center;
-    font-size: 0.58rem;
-    font-weight: 900;
-    text-transform: uppercase;
-    letter-spacing: 0.05em;
-    color: #fde68a;
-    padding: 0.2rem 0.75rem;
-    min-height: 1.1rem;
-}
-
-.uno-game #pending-banner:empty { display: none; }
-
+.uno-game #pending-banner,
 .uno-game #stack-alert {
-    text-align: center;
-    font-size: 0.6rem;
-    font-weight: 900;
-    color: #fecaca;
-    padding: 0.3rem 0.75rem;
-    margin: 0 auto 0.15rem;
-    border-radius: 999px;
-    border: 2px solid #f87171;
-    background: rgba(69, 10, 10, 0.75);
-    max-width: 92vw;
+    display: none !important;
 }
-
-.uno-game #stack-alert.hidden { display: none; }
 
 /* Player dock */
 .uno-game .player-stage {
@@ -612,11 +589,8 @@
 
 .uno-game .hand-fan-wrap {
     width: 100%;
-    overflow-x: auto;
-    overflow-y: visible;
-    -webkit-overflow-scrolling: touch;
-    touch-action: pan-x;
-    padding: 0.35rem 0.25rem 0;
+    overflow: hidden;
+    padding: 0.5rem 0.25rem 0;
     display: flex;
     justify-content: center;
 }
@@ -626,6 +600,9 @@
     align-items: flex-end;
     justify-content: center;
     min-height: 7.75rem;
+    width: max-content;
+    max-width: none;
+    margin-inline: auto;
     padding: 0.25rem 0.5rem 0;
     transform-origin: bottom center;
 }
@@ -634,6 +611,7 @@
     flex: 0 0 auto;
     transform-origin: bottom center;
     transition: transform 0.15s ease;
+    isolation: isolate;
 }
 
 .uno-game #my-hand:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
@@ -649,14 +627,32 @@
 }
 
 .uno-game #my-hand.hand-fan-scroll {
-    justify-content: flex-start;
-    width: max-content;
-    min-width: 100%;
+    justify-content: center;
 }
 
 .uno-game #my-hand .gc-card-hand {
     transform-origin: bottom center;
     margin-left: 0;
+    backface-visibility: hidden;
+    -webkit-backface-visibility: hidden;
+}
+
+.uno-game #my-hand .gc-card-disabled,
+.uno-game #my-hand .gc-card-hand:disabled {
+    opacity: 1 !important;
+    cursor: not-allowed;
+    filter: brightness(0.55) saturate(0.72);
+}
+
+.uno-game #my-hand .gc-card-disabled::after,
+.uno-game #my-hand .gc-card-hand:disabled::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(0, 0, 0, 0.42);
+    pointer-events: none;
+    z-index: 4;
 }
 
 .uno-game .btn-fine-turno {
@@ -702,19 +698,120 @@
     50% { transform: scale(1.05); filter: brightness(1.12); }
 }
 
-.uno-game #game-log-mini {
-    position: absolute;
-    bottom: calc(var(--player-dock-h) + 0.15rem);
-    left: 0.5rem;
-    right: 0.5rem;
-    max-height: 2rem;
-    overflow-y: auto;
-    font-size: 0.52rem;
-    font-family: monospace;
-    color: #64748b;
+.uno-game {
+    --log-panel-w: 15vw;
+    --log-toggle-w: 1.65rem;
+}
+
+.uno-game .log-panel-wrap {
+    position: fixed;
+    top: 2.65rem;
+    right: 0;
+    bottom: var(--player-dock-h);
+    z-index: 32;
+    display: flex;
+    flex-direction: row;
+    align-items: stretch;
+    width: calc(var(--log-panel-w) + var(--log-toggle-w));
+    min-width: calc(3.5rem + var(--log-toggle-w));
+    max-width: calc(11rem + var(--log-toggle-w));
+    transform: translateX(calc(100% - var(--log-toggle-w)));
+    transition: transform 0.38s cubic-bezier(0.22, 1, 0.36, 1);
+    filter: drop-shadow(-6px 0 18px rgba(0, 0, 0, 0.4));
+}
+
+.uno-game .log-panel-wrap.is-open {
+    transform: translateX(0);
+}
+
+.uno-game .game-log-panel {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    background: rgba(10, 8, 12, 0.97);
+    border: 2px solid rgba(251, 191, 36, 0.4);
+    border-left: none;
+    border-radius: 0;
+}
+
+.uno-game .game-log-panel-head {
+    flex-shrink: 0;
+    padding: 0.45rem 0.35rem 0.35rem;
+    font-size: 0.5rem;
+    font-weight: 900;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
     text-align: center;
-    z-index: 3;
+    color: #fde68a;
+    border-bottom: 1px solid rgba(251, 191, 36, 0.2);
+}
+
+.uno-game .game-log-panel-body {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.35rem 0.3rem 0.5rem;
+    -webkit-overflow-scrolling: touch;
+}
+
+.uno-game .game-log-panel-body .log-line {
+    margin: 0 0 0.35rem;
+    padding: 0.28rem 0.22rem;
+    font-size: 0.48rem;
+    line-height: 1.35;
+    font-family: ui-monospace, monospace;
+    color: #64748b;
+    word-break: break-word;
+    border-radius: 0.35rem;
+}
+
+.uno-game .game-log-panel-body .log-line--recent {
+    color: #cbd5e1;
+    background: rgba(30, 41, 59, 0.55);
+}
+
+.uno-game .game-log-panel-body .log-line:last-child {
+    color: #fde68a;
+    font-weight: 700;
+}
+
+.uno-game .log-panel-toggle {
+    flex-shrink: 0;
+    align-self: center;
+    width: var(--log-toggle-w);
+    height: 3.25rem;
+    margin: 0;
+    padding: 0;
+    border: 2px solid rgba(251, 191, 36, 0.45);
+    border-right: none;
+    border-radius: 0.55rem 0 0 0.55rem;
+    background: linear-gradient(180deg, #1e293b, #0f172a);
+    color: #fde68a;
+    font-size: 1rem;
+    font-weight: 900;
+    line-height: 1;
+    cursor: pointer;
+    transition: background 0.15s ease;
+}
+
+.uno-game .log-panel-toggle:hover {
+    background: linear-gradient(180deg, #334155, #1e293b);
+}
+
+.uno-game .log-toggle-arrow {
+    display: block;
     pointer-events: none;
+}
+
+.uno-game .btn-uno-mini.uno-said,
+.uno-game .btn-uno-mini.uno-said:disabled {
+    background: linear-gradient(180deg, #86efac, #16a34a);
+    color: #052e16;
+    box-shadow: 0 4px 0 #14532d;
+    opacity: 1;
+    cursor: default;
 }
 
 .uno-game #game-toast {
@@ -870,6 +967,48 @@
     font-size: 0.875rem;
     color: #94a3b8;
     margin-bottom: 1rem;
+}
+
+.uno-game .modal-card-pick-list {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 0.45rem;
+    max-height: min(52vh, 22rem);
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 0.25rem 0.15rem 0.35rem;
+    -webkit-overflow-scrolling: touch;
+}
+
+.uno-game .modal-card-pick-empty {
+    width: 100%;
+    text-align: center;
+    font-size: 0.8rem;
+    color: #94a3b8;
+    padding: 0.75rem 0.5rem;
+}
+
+.uno-game .modal-card-pick-btn {
+    appearance: none;
+    -webkit-appearance: none;
+    border: none;
+    padding: 0;
+    margin: 0;
+    background: transparent;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: transform 0.12s ease;
+}
+
+.uno-game .modal-card-pick-btn:hover {
+    transform: translateY(-3px) scale(1.04);
+}
+
+.uno-game .gc-card-modal-pick {
+    width: 3.65rem;
+    height: 5.25rem;
+    pointer-events: none;
 }
 
 .uno-game .end-overlay {

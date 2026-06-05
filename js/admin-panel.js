@@ -351,11 +351,18 @@ async function openAdminLobbyDetail(lobbyId) {
 async function adminDeleteLobby() {
     assertAdmin();
     if (!selectedLobbyId) return;
-    if (!confirm('Eliminare questa lobby? Tutti i giocatori verranno espulsi.')) return;
+    const confirmed = await ctx.showConfirmAnnouncePopup?.(
+        'Eliminare questa lobby?',
+        'Tutti i giocatori verranno espulsi.'
+    );
+    if (!confirmed) return;
 
     const lobbyId = normalizeLobbyId(selectedLobbyId);
     const lobbyRef = ctx.doc(adminDb(), 'lobbies', lobbyId);
     const gameRef = ctx.doc(adminDb(), 'games', lobbyId);
+
+    ctx.closeModal();
+    ctx.showLoadingOverlay?.('Eliminazione lobby in corso');
 
     try {
         const snap = await ctx.getDoc(lobbyRef);
@@ -364,7 +371,7 @@ async function adminDeleteLobby() {
             removeLobbyFromLocalStorage(lobbyId);
             selectedLobbyId = null;
             renderAdminLobbies();
-            ctx.closeModal();
+            ctx.hideLoadingOverlay?.(false);
             if (window.LobbyNotice?.showLobbyNotFound) {
                 window.LobbyNotice.showLobbyNotFound({
                     message: 'La lobby era già stata eliminata. Lista aggiornata.',
@@ -398,11 +405,12 @@ async function adminDeleteLobby() {
         removeLobbyFromLocalStorage(lobbyId);
         renderAdminLobbies();
 
+        ctx.hideLoadingOverlay?.(false);
         ctx.playSynth?.('bloop');
-        ctx.closeModal();
-        alert('Lobby eliminata.');
+        ctx.showSuccessAnnouncePopup?.('Lobby eliminata con successo');
     } catch (error) {
         console.error('adminDeleteLobby:', error);
+        ctx.hideLoadingOverlay?.(false);
         alert('Errore eliminazione lobby: ' + error.message);
     }
 }
@@ -724,7 +732,7 @@ async function adminPublishAnnuncio() {
     const fontSize = document.getElementById('admin-ann-size')?.value || 'md';
 
     if (!title || !content) {
-        alert('Titolo e contenuto sono obbligatori.');
+        ctx.showWarningAnnouncePopup?.('Titolo e contenuto sono obbligatori.');
         return;
     }
 

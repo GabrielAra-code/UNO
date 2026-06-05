@@ -4,6 +4,7 @@
     const FS = global.GameFirestore;
     const Sounds = global.GameSounds;
     const CardUI = global.GameCardUI;
+    const IS_PREVIEW = !!global.__UNO_PREVIEW__;
 
     let lobbyId = null;
     let myPlayerId = null;
@@ -354,12 +355,13 @@
             label = pending.defenderId === myPlayerId
                 ? `Rispondi stack ${stackLabel} (${pending.drawStack}) — 5s`
                 : `Stack ${stackLabel} su ${def} (${pending.drawStack}) — 5s`;
-            canAct = Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
+            canAct = pending.sourcePlayerId !== myPlayerId
+                && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
         } else if (pending.type === 'brainrotDiscard') {
             label = `Scarta fino a ${pending.maxDiscard} carte numero (5s)`;
             canAct = pending.winnerId === myPlayerId;
         }
-        if (banner) banner.textContent = label;
+        if (banner) banner.textContent = '';
         updateTimerRing(5, true);
         if (btn) {
             const showContrast = canAct
@@ -393,7 +395,15 @@
         const r = 48;
         const sliceRad = (Math.PI * 2) / n;
 
+        const escXml = (s) => String(s)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+        const labelSize = n > 6 ? 3.2 : n > 4 ? 3.8 : 4.5;
+
         let paths = '';
+        let labels = '';
         for (let i = 0; i < n; i += 1) {
             const a0 = -Math.PI / 2 + sliceRad * i;
             const a1 = -Math.PI / 2 + sliceRad * (i + 1);
@@ -404,6 +414,14 @@
             const large = sliceRad > Math.PI ? 1 : 0;
             const fill = colors[i % colors.length];
             paths += `<path d="M ${cx} ${cy} L ${x0.toFixed(2)} ${y0.toFixed(2)} A ${r} ${r} 0 ${large} 1 ${x1.toFixed(2)} ${y1.toFixed(2)} Z" fill="${fill}" stroke="#0f172a" stroke-width="0.35"/>`;
+
+            const midRad = -Math.PI / 2 + sliceRad * (i + 0.5);
+            const tx = cx + Math.cos(midRad) * 30;
+            const ty = cy + Math.sin(midRad) * 30;
+            const midDeg = (midRad * 180) / Math.PI + 90;
+            const seg = segments[i] || {};
+            const name = escXml((seg.nickname || seg.id || '?').slice(0, 10));
+            labels += `<text x="${tx.toFixed(2)}" y="${ty.toFixed(2)}" fill="#fff" font-size="${labelSize}" font-weight="700" text-anchor="middle" dominant-baseline="middle" transform="rotate(${midDeg.toFixed(1)} ${tx.toFixed(2)} ${ty.toFixed(2)})" style="paint-order:stroke" stroke="#0f172a" stroke-width="0.35">${name}</text>`;
         }
 
         wheel.style.background = 'transparent';
@@ -412,23 +430,8 @@
             <svg class="roulette-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
                 <circle cx="50" cy="50" r="49" fill="#1e293b"/>
                 ${paths}
+                ${labels}
             </svg>`;
-
-        segments.forEach((seg, i) => {
-            const midRad = -Math.PI / 2 + sliceRad * (i + 0.5);
-            const radiusPct = 34;
-            const x = 50 + Math.cos(midRad) * radiusPct;
-            const y = 50 + Math.sin(midRad) * radiusPct;
-            const midDeg = (midRad * 180) / Math.PI;
-
-            const label = document.createElement('div');
-            label.className = 'roulette-slice-label';
-            label.textContent = seg.nickname || seg.id;
-            label.style.left = `${x}%`;
-            label.style.top = `${y}%`;
-            label.style.transform = `translate(-50%, -50%) rotate(${midDeg + 90}deg)`;
-            wheel.appendChild(label);
-        });
 
         const hub = document.createElement('div');
         hub.className = 'roulette-hub';
@@ -472,6 +475,7 @@
     }
 
     function animateBulletRouletteSpin(lr) {
+        if (!lr?.at) return;
         lastRouletteAnimatedAt = lr.at;
         const overlay = $('bullet-roulette-overlay');
         const wheel = $('roulette-wheel');
@@ -635,7 +639,8 @@
             if (pending?.type === 'counterWindow') {
                 canAct = pending.sourcePlayerId !== myPlayerId && !!firstCounterCard();
             } else if (pending?.type === 'drawStackWindow') {
-                canAct = Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
+                canAct = pending.sourcePlayerId !== myPlayerId
+                    && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
             } else if (pending?.type === 'brainrotBattle') {
                 canAct = Engine.canPlayBrainrotResponse(gameState, myPlayerId);
             } else if (pending?.type === 'brainrotDiscard') {
@@ -647,26 +652,95 @@
         }
     }
 
+    function defaultHandOverlapPx(handEl, cardW) {
+        if (handEl.classList.contains('hand-size-crowded')) return cardW * 0.73;
+        if (handEl.classList.contains('hand-size-many')) return cardW * 0.62;
+        return cardW * 0.35;
+    }
+
+    function applySlotOverlap(slots, overlapPx) {
+        slots.forEach((slot, i) => {
+            slot.style.marginLeft = i > 0 ? `-${Math.round(overlapPx)}px` : '';
+        });
+    }
+
+    function isMobileHandLayout() {
+        return window.matchMedia('(max-width: 768px)').matches;
+    }
+
+    function centerHandInWrap(wrap) {
+        if (!wrap) return;
+        const overflow = wrap.scrollWidth - wrap.clientWidth;
+        wrap.scrollLeft = overflow > 0 ? overflow / 2 : 0;
+    }
+
+    function setHandScrollState(handEl, wrap, needsScroll) {
+        handEl.classList.toggle('hand-fan-scroll', needsScroll);
+        if (isMobileHandLayout()) {
+            wrap?.classList.toggle('hand-fan-wrap--scroll', needsScroll);
+        } else {
+            wrap?.classList.remove('hand-fan-wrap--scroll');
+        }
+    }
+
+    function fitHandToWrap(handEl, slots) {
+        const wrap = handEl?.closest('.hand-fan-wrap');
+        if (!wrap || slots.length < 2) return;
+
+        const cardEl = slots[0].querySelector('.gc-card-hand');
+        const cardW = cardEl?.offsetWidth || 80;
+        let overlap = defaultHandOverlapPx(handEl, cardW);
+
+        if (isMobileHandLayout()) {
+            applySlotOverlap(slots, overlap);
+            const needsScroll = handEl.scrollWidth > wrap.clientWidth - 4;
+            setHandScrollState(handEl, wrap, needsScroll);
+            if (needsScroll) {
+                centerHandInWrap(wrap);
+            } else {
+                wrap.scrollLeft = 0;
+            }
+            return;
+        }
+
+        const maxOverlap = cardW * 0.9;
+        applySlotOverlap(slots, overlap);
+        let guard = 0;
+        while (handEl.scrollWidth > wrap.clientWidth - 4 && overlap < maxOverlap && guard < 48) {
+            overlap += 2;
+            applySlotOverlap(slots, overlap);
+            guard += 1;
+        }
+
+        const needsScroll = handEl.scrollWidth > wrap.clientWidth - 4;
+        setHandScrollState(handEl, wrap, needsScroll);
+        centerHandInWrap(wrap);
+    }
+
     function applyHandFan(handEl) {
         if (!handEl) return;
         const slots = [...handEl.querySelectorAll('.hand-card-slot')];
         const n = slots.length;
-        const useScroll = n > 16;
-        handEl.classList.toggle('hand-fan-scroll', useScroll);
+        const wrap = handEl.closest('.hand-fan-wrap');
+        handEl.classList.remove('hand-fan-scroll');
+        wrap?.classList.remove('hand-fan-wrap--scroll');
         if (n <= 1) {
             slots.forEach(slot => {
                 slot.style.transform = '';
                 slot.style.zIndex = '';
+                slot.style.marginLeft = '';
             });
+            wrap && (wrap.scrollLeft = 0);
             return;
         }
-        const maxSpread = Math.min(useScroll ? 72 : 56, 8 + n * (useScroll ? 2.2 : 2.8));
+        const maxSpread = Math.min(n > 16 ? 72 : 56, 8 + n * (n > 16 ? 2.2 : 2.8));
         slots.forEach((slot, i) => {
             const rot = -maxSpread / 2 + (maxSpread * i) / (n - 1);
             const lift = Math.abs(rot) * 0.12;
             slot.style.transform = `rotate(${rot}deg) translateY(${-lift}px)`;
             slot.style.zIndex = String(i + 1);
         });
+        requestAnimationFrame(() => fitHandToWrap(handEl, slots));
     }
 
     function renderDrawPile() {
@@ -833,12 +907,8 @@
         }
         const stackEl = $('stack-alert');
         if (stackEl) {
-            if (gameState?.drawStack > 0) {
-                stackEl.classList.remove('hidden');
-                stackEl.textContent = `Stack +${gameState.drawStack} — rispondi o pesca`;
-            } else {
-                stackEl.classList.add('hidden');
-            }
+            stackEl.classList.add('hidden');
+            stackEl.textContent = '';
         }
     }
 
@@ -903,10 +973,16 @@
         hand.forEach(card => {
             const btn = document.createElement('button');
             const playableMari = mariMyTurn && Engine.canPlayMariGreen(gameState, myPlayerId, card);
-            const playableTurn = canPlay
-                && Engine.canPlayCardThisTurn(gameState, myPlayerId, card)
+            const myTurnPlay = canPlay
                 && Engine.isMyTurn(gameState, myPlayerId)
                 && !mariActive && !brainrotBattle && !drawStackWin && !brainrotDiscard;
+            const multiBatchSize = myTurnPlay && Engine.allowsMultiDuplicatePlay?.(card)
+                ? Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId).length
+                : 0;
+            const playableTurn = myTurnPlay && (
+                Engine.canPlayCardThisTurn(gameState, myPlayerId, card)
+                || multiBatchSize > 1
+            );
             const playableCounter = canCounter && Engine.canPlayCounter(gameState, myPlayerId, card);
             const playableBrainrot = brainrotBattle && Engine.canPlayBrainrotResponse(gameState, myPlayerId)
                 && Engine.isBrainrotCard(card);
@@ -985,10 +1061,6 @@
         });
         requestAnimationFrame(() => {
             applyHandFan(handEl);
-            const wrap = handEl?.closest('.hand-fan-wrap');
-            if (handEl.classList.contains('hand-fan-scroll') && wrap && wrap.scrollWidth > wrap.clientWidth) {
-                wrap.scrollLeft = wrap.scrollWidth - wrap.clientWidth;
-            }
             syncHandDockHeight();
         });
     }
@@ -1083,7 +1155,8 @@
             el.textContent = pending.defenderId === myPlayerId
                 ? `Devi rispondere allo stack +${pending.drawStack}!`
                 : `Stack +${pending.drawStack} su ${def}`;
-            el.classList.toggle('animate-pulse', Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true }));
+            el.classList.toggle('animate-pulse', pending.sourcePlayerId !== myPlayerId
+                && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true }));
             return;
         }
         if (pending?.type === 'brainrotDiscard') {
@@ -1109,10 +1182,40 @@
         el.classList.toggle('animate-pulse', cur === myPlayerId);
     }
 
+    let logPanelOpen = false;
+
+    function escapeLogHtml(text) {
+        return String(text)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+    }
+
+    function setLogPanelOpen(open) {
+        logPanelOpen = !!open;
+        const wrap = $('log-panel-wrap');
+        const toggle = $('btn-log-toggle');
+        const arrow = toggle?.querySelector('.log-toggle-arrow');
+        wrap?.classList.toggle('is-open', logPanelOpen);
+        wrap?.setAttribute('aria-hidden', logPanelOpen ? 'false' : 'true');
+        toggle?.setAttribute('aria-expanded', logPanelOpen ? 'true' : 'false');
+        toggle?.setAttribute('title', logPanelOpen ? 'Chiudi log partita' : 'Apri log partita');
+        if (arrow) arrow.textContent = logPanelOpen ? '▸' : '◂';
+    }
+
     function renderLog() {
-        const log = $('game-log-mini');
-        if (!log || !gameState?.log) return;
-        log.innerHTML = gameState.log.slice(-6).map(e => `<p class="log-line">${e.msg}</p>`).join('');
+        const scroll = $('game-log-scroll');
+        if (!scroll || !gameState?.log) return;
+        const entries = gameState.log;
+        const recentFrom = Math.max(0, entries.length - 5);
+        scroll.innerHTML = entries.map((e, i) => {
+            const recent = i >= recentFrom ? ' log-line--recent' : '';
+            return `<p class="log-line${recent}">${escapeLogHtml(e.msg)}</p>`;
+        }).join('');
+        requestAnimationFrame(() => {
+            scroll.scrollTop = scroll.scrollHeight;
+        });
     }
 
     function renderEndTurnButton() {
@@ -1128,11 +1231,14 @@
         if (!btn || !gameState) return;
         const count = myHand().length;
         const p = gameState.players?.[myPlayerId];
-        const mustCall = count === 1 && p?.unoRequired && !p?.saidUno;
+        const said = !!p?.saidUno;
+        const mustCall = count === 1 && p?.unoRequired && !said;
         btn.classList.toggle('uno-flash', mustCall);
-        btn.disabled = count !== 1;
+        btn.classList.toggle('uno-said', count === 1 && said);
+        btn.disabled = count !== 1 || said;
+        btn.textContent = said ? 'UNO ✓' : 'UNO!';
         btn.title = count === 1
-            ? (p?.saidUno ? 'UNO! già detto' : 'Premi prima di giocare l\'ultima carta!')
+            ? (said ? 'UNO! già detto' : 'Premi prima di giocare l\'ultima carta!')
             : 'Disponibile con 1 carta';
     }
 
@@ -1146,8 +1252,15 @@
             ? 'Hai vinto!'
             : `${gameState.winnerName || '—'} vince!`;
         $('end-duration').textContent = `Durata partita: ${formatDuration(gameState.durationMs)}`;
-        grantWinRewards();
+        if (!IS_PREVIEW) {
+            grantWinRewards();
+        }
         if (returnTimer) clearTimeout(returnTimer);
+        if (IS_PREVIEW) {
+            const hint = document.querySelector('.end-overlay-hint');
+            if (hint) hint.textContent = 'Usa «Nuova partita» nella barra in alto o ricarica la pagina.';
+            return;
+        }
         returnTimer = setTimeout(async () => {
             try {
                 await FS.returnLobbyToWaiting(lobbyId);
@@ -1227,12 +1340,19 @@
 
         saveInFlight = true;
         try {
-            console.log('[FIREBASE SAVE]', {
-                lobbyId,
-                expectedVersion: baseVersion,
-                pendingType: result.state.pendingAction?.type || null,
-                drawStack: result.state.drawStack
-            });
+            if (IS_PREVIEW) {
+                console.log('[PREVIEW SAVE]', {
+                    expectedVersion: baseVersion,
+                    pendingType: result.state.pendingAction?.type || null
+                });
+            } else {
+                console.log('[FIREBASE SAVE]', {
+                    lobbyId,
+                    expectedVersion: baseVersion,
+                    pendingType: result.state.pendingAction?.type || null,
+                    drawStack: result.state.drawStack
+                });
+            }
             const newVersion = await FS.persistState(lobbyId, result.state, baseVersion);
             result.state.version = newVersion;
             prevGameState = snapshotState;
@@ -1246,8 +1366,9 @@
                 });
             }
             if (!opts.quiet) playResultSound(result);
-            if (result.state.lastRoulette?.at !== lastRouletteAnimatedAt) {
-                animateBulletRouletteSpin(result.state.lastRoulette);
+            const rouletteSpin = result.state?.lastRoulette;
+            if (rouletteSpin?.at != null && rouletteSpin.at !== lastRouletteAnimatedAt) {
+                animateBulletRouletteSpin(rouletteSpin);
             }
             const keepBrainrotSel = snapshotState?.pendingAction?.type === 'brainrotDiscard'
                 && result.state.pendingAction?.type === 'brainrotDiscard'
@@ -1258,8 +1379,11 @@
             }
             renderAll();
             handlePending(result.state);
+            if (IS_PREVIEW) {
+                await global.GamePreview?.runBotLoop?.();
+            }
         } catch (err) {
-            console.error('[FIREBASE ERROR]', err);
+            console.error(IS_PREVIEW ? '[PREVIEW ERROR]' : '[FIREBASE ERROR]', err);
             console.error('Salvataggio mossa fallito:', err);
             playSound('error');
             if (err instanceof FS.SaveConflictError && err.serverState) {
@@ -1352,7 +1476,7 @@
             showTargetModal(instanceId, 'heart');
             return;
         }
-        if (['death', 'swap', 'gift', 'communism', 'blobby'].includes(card.value)) {
+        if (['death', 'swap', 'nazism', 'communism'].includes(card.value)) {
             showTargetModal(instanceId, card.value);
             return;
         }
@@ -1397,12 +1521,81 @@
             showTargetModal(ids[0], 'heart');
             return;
         }
-        if (['death', 'swap', 'gift', 'communism', 'blobby'].includes(card.value)) {
+        if (['death', 'swap', 'nazism', 'communism'].includes(card.value)) {
             showTargetModal(ids[0], card.value);
             return;
         }
 
         await playCardsImmediate(ids);
+    }
+
+    function showCardPickModal({ title, description, cards, onPick }) {
+        const modal = $('game-modal');
+        const content = $('modal-content');
+        $('modal-title').textContent = title;
+        $('modal-description').textContent = description;
+        content.innerHTML = '';
+
+        const list = document.createElement('div');
+        list.className = 'modal-card-pick-list no-scrollbar';
+
+        if (!cards.length) {
+            const empty = document.createElement('p');
+            empty.className = 'modal-card-pick-empty';
+            empty.textContent = 'Nessuna carta disponibile.';
+            list.appendChild(empty);
+        } else {
+            cards.forEach(card => {
+                const btn = document.createElement('button');
+                btn.type = 'button';
+                btn.className = 'modal-card-pick-btn';
+                if (CardUI) {
+                    CardUI.applyCardFace(btn, card, {
+                        baseClass: 'gc-card gc-card-modal-pick',
+                        extraClass: ''
+                    });
+                } else {
+                    btn.textContent = cardLabel(card);
+                }
+                btn.onclick = async () => {
+                    hideGameModal();
+                    playSound('click');
+                    await onPick(card);
+                };
+                list.appendChild(btn);
+            });
+        }
+
+        content.appendChild(list);
+        revealGameModal();
+    }
+
+    function showNazismGiveModal(playedCardId, targetId) {
+        const targetName = gameState?.players?.[targetId]?.nickname || '—';
+        const cards = myHand().filter(c => c.instanceId !== playedCardId);
+        showCardPickModal({
+            title: 'Nazismo — Carta da cedere',
+            description: `Scegli una carta dalla tua mano da dare a ${targetName}.`,
+            cards,
+            onPick: card => playCardsImmediate([playedCardId], {
+                targetId,
+                giftCardId: card.instanceId
+            })
+        });
+    }
+
+    function showCommunismStealModal(playedCardId, targetId) {
+        const targetName = gameState?.players?.[targetId]?.nickname || '—';
+        const cards = [...(gameState.hands[targetId] || [])];
+        showCardPickModal({
+            title: 'Comunismo — Carta da rubare',
+            description: `Scegli una carta da prendere da ${targetName}.`,
+            cards,
+            onPick: card => playCardsImmediate([playedCardId], {
+                targetId,
+                stolenCardId: card.instanceId
+            })
+        });
     }
 
     function showColorModal(pendingCardIdOrIds) {
@@ -1436,10 +1629,22 @@
         const modal = $('game-modal');
         const content = $('modal-content');
         const isHeart = effect === 'heart';
-        $('modal-title').textContent = isHeart ? 'Cuore — Rianima' : 'Scegli bersaglio';
+        const isNazism = effect === 'nazism';
+        const isCommunism = effect === 'communism';
+        $('modal-title').textContent = isHeart
+            ? 'Cuore — Rianima'
+            : isNazism
+                ? 'Nazismo — Bersaglio'
+                : isCommunism
+                    ? 'Comunismo — Bersaglio'
+                    : 'Scegli bersaglio';
         $('modal-description').textContent = isHeart
             ? 'Scegli un giocatore eliminato da riportare in partita'
-            : 'Seleziona un giocatore';
+            : isNazism
+                ? 'A chi vuoi cedere una carta?'
+                : isCommunism
+                    ? 'Da quale avversario vuoi rubare una carta?'
+                    : 'Seleziona un giocatore';
         content.innerHTML = '';
 
         const targets = [];
@@ -1480,6 +1685,14 @@
             b.onclick = async () => {
                 hideGameModal();
                 playSound('click');
+                if (pendingCardId && effect === 'nazism') {
+                    showNazismGiveModal(pendingCardId, id);
+                    return;
+                }
+                if (pendingCardId && effect === 'communism') {
+                    showCommunismStealModal(pendingCardId, id);
+                    return;
+                }
                 if (pendingCardId) {
                     await commitAction(() => Engine.playCards(gameState, myPlayerId, [pendingCardId], { targetId: id }));
                 } else {
@@ -1492,7 +1705,20 @@
     }
 
     function wireControls() {
-        const onResizeHandDock = () => syncHandDockHeight();
+        let handReflowTimer;
+        const reflowHandLayout = () => {
+            const handEl = $('my-hand');
+            if (handEl?.querySelector('.hand-card-slot')) {
+                applyHandFan(handEl);
+            } else {
+                syncHandDockHeight();
+            }
+        };
+        const onResizeHandDock = () => {
+            syncHandDockHeight();
+            clearTimeout(handReflowTimer);
+            handReflowTimer = setTimeout(reflowHandLayout, 120);
+        };
         window.addEventListener('resize', onResizeHandDock);
         window.addEventListener('orientationchange', () => setTimeout(onResizeHandDock, 150));
 
@@ -1507,7 +1733,13 @@
         $('deck-draw')?.addEventListener('click', onDrawClick);
         $('btn-pesca')?.addEventListener('click', onDrawClick);
         $('btn-uno')?.addEventListener('click', async () => {
+            const p = gameState?.players?.[myPlayerId];
+            if (myHand().length !== 1 || p?.saidUno) return;
             await commitAction(() => Engine.declareUno(gameState, myPlayerId));
+        });
+        $('btn-log-toggle')?.addEventListener('click', () => {
+            playSound('click');
+            setLogPanelOpen(!logPanelOpen);
         });
         $('btn-end-turn')?.addEventListener('click', async () => {
             if (!Engine.canEndTurn(gameState, myPlayerId)) {
@@ -1573,6 +1805,10 @@
         });
         $('btn-leave')?.addEventListener('click', async () => {
             if (!confirm('Uscire dalla partita?')) return;
+            if (IS_PREVIEW) {
+                window.location.href = 'Menu_principale.html';
+                return;
+            }
             await leaveGameToWaiting();
         });
     }
@@ -1640,7 +1876,41 @@
         window.location.href = `waiting_room.html?stanzaId=${encodeURIComponent(lobbyId)}`;
     }
 
+    function applyIncomingState(pub, prev) {
+        reactToStateChanges(prev, pub);
+        prevGameState = prev;
+        gameState = pub;
+        if (IS_PREVIEW) {
+            global.__previewCurrentState__ = pub;
+        }
+        renderAll();
+        handlePending(pub);
+        if (pub.pendingAction?.type === 'bulletRoulette' && !pub.pendingAction.spun) {
+            showBulletRouletteWaiting(pub.pendingAction);
+        }
+        hideBulletRouletteIfIdle();
+        if (IS_PREVIEW) {
+            queueMicrotask(() => global.GamePreview?.runBotLoop?.());
+        }
+    }
+
     async function init() {
+        if (IS_PREVIEW) {
+            lobbyId = 'preview-local';
+            myPlayerId = global.GamePreview?.getHumanId?.() || 'preview-human';
+            wireControls();
+            Sounds?.bindDataSoundListeners?.();
+            const ok = await FS.waitForFirebase();
+            if (!ok) {
+                alert('Preview non pronta. Ricarica la pagina.');
+                return;
+            }
+            await global.GamePreview?.start?.((state, prev) => {
+                applyIncomingState(state, prev);
+            });
+            return;
+        }
+
         const params = new URLSearchParams(window.location.search);
         lobbyId = params.get('stanzaId');
         if (!lobbyId) {
@@ -1683,15 +1953,7 @@
             if (!saveInFlight && incomingVersion < localVersion) {
                 return;
             }
-            reactToStateChanges(gameState, pub);
-            prevGameState = gameState;
-            gameState = pub;
-            renderAll();
-            handlePending(pub);
-            if (pub.pendingAction?.type === 'bulletRoulette' && !pub.pendingAction.spun) {
-                showBulletRouletteWaiting(pub.pendingAction);
-            }
-            hideBulletRouletteIfIdle();
+            applyIncomingState(pub, gameState);
         });
     }
 

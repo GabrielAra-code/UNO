@@ -30,7 +30,7 @@
         c_onde: { value: 'waves', kind: 'special', label: 'Onde', colors: ['blue'], count: 2 },
         c_cuore: { value: 'heart', kind: 'special', label: 'Cuore', colors: ['green'], count: 2 },
         c_comunismo: { value: 'communism', kind: 'special', label: 'Comun.', colors: ['red'], count: 1 },
-        c_nazismo: { value: 'gift', kind: 'special', label: 'Cedi', colors: ['red'], count: 1 },
+        c_nazismo: { value: 'nazism', kind: 'special', label: 'Naz.', colors: ['red'], count: 1 },
         c_proiettile: { value: 'bullet', kind: 'special', label: '🔫', colors: ['black'], count: 6 },
         c_quagruppo: { value: 'halfdraw', kind: 'special', label: 'Gruppo', colors: ['black'], count: 1 },
         c_messa: { value: 'reshuffle', kind: 'special', label: 'Messa', colors: ['black'], count: 1 },

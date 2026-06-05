@@ -471,6 +471,47 @@ html {
         --player-dock-h: var(--game-hand-dock);
     }
 
+    .uno-game .hand-fan-zone {
+        min-width: 0;
+        width: 100%;
+        overflow: hidden;
+    }
+
+    .uno-game .hand-fan-wrap {
+        width: 100%;
+        max-width: 100%;
+        overflow-x: hidden;
+        overflow-y: hidden;
+        display: flex;
+        justify-content: center;
+        padding: 0.35rem 0 0;
+    }
+
+    .uno-game .hand-fan-wrap.hand-fan-wrap--scroll {
+        overflow-x: auto !important;
+        overflow-y: hidden !important;
+        -webkit-overflow-scrolling: touch;
+        overscroll-behavior-x: contain;
+        touch-action: pan-x;
+        scroll-behavior: smooth;
+        justify-content: flex-start;
+        padding-inline: 0.35rem;
+        scrollbar-width: none;
+    }
+
+    .uno-game .hand-fan-wrap.hand-fan-wrap--scroll::-webkit-scrollbar {
+        display: none;
+    }
+
+    .uno-game .hand-fan-wrap.hand-fan-wrap--scroll #my-hand {
+        justify-content: flex-start;
+        margin-inline: 0;
+    }
+
+    .uno-game .hand-fan-wrap.hand-fan-wrap--scroll .gc-card-hand {
+        touch-action: pan-x;
+    }
+
     .uno-game .hand-scroll-wrap {
         width: 100%;
         max-width: 100%;
@@ -497,12 +538,16 @@ html {
         padding-top: 0.5rem;
         padding-bottom: 8px;
         gap: 0.45rem;
-        touch-action: pan-x;
         overflow: visible !important;
         width: max-content;
-        min-width: 100%;
+        flex-shrink: 0;
+        margin-inline: auto;
         visibility: visible !important;
         opacity: 1 !important;
+    }
+
+    .uno-game #my-hand.hand-fan-scroll {
+        justify-content: flex-start;
     }
 
     .uno-game #my-hand .gc-card-hand {
@@ -540,15 +585,15 @@ html {
     }
 
     .uno-game #my-hand:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
-        margin-left: -1.65rem !important;
+        margin-left: -1.65rem;
     }
 
     .uno-game #my-hand.hand-size-many:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
-        margin-left: -1.9rem !important;
+        margin-left: -1.9rem;
     }
 
     .uno-game #my-hand.hand-size-crowded:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
-        margin-left: -2.15rem !important;
+        margin-left: -2.15rem;
     }
 
     .uno-game .gc-card-pile {
@@ -584,10 +629,14 @@ html {
         font-size: 0.7rem !important;
     }
 
-    .uno-game #game-log-mini {
-        max-height: 1.75rem;
-        font-size: 9px;
-        flex-shrink: 0;
+    .uno-game .log-panel-toggle {
+        width: 2rem;
+        height: 3.5rem;
+        min-height: var(--touch-min);
+    }
+
+    .uno-game .game-log-panel-body .log-line {
+        font-size: 0.55rem;
     }
 
     .uno-game #game-modal > div {
@@ -704,11 +753,6 @@ html {
         grid-row: 1;
     }
 
-    .uno-game #game-log-mini {
-        grid-column: 1;
-        grid-row: 2;
-        max-height: 1.75rem;
-    }
 
     .uno-game .hand-dock {
         position: fixed;

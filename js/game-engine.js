@@ -409,6 +409,7 @@
         if (!pending || pending.type !== 'drawStackWindow') return false;
         if (state.players[playerId]?.eliminated) return false;
         if (pending.responses?.[playerId]) return false;
+        if (playerId === pending.sourcePlayerId) return false;
 
         const card = cardOrProbe?.probe ? null : cardOrProbe;
         if (cardOrProbe?.probe) {
@@ -435,6 +436,9 @@
         }
         if (pending.responses?.[playerId]) {
             return { ok: false, error: 'Hai già risposto allo stack.' };
+        }
+        if (playerId === pending.sourcePlayerId) {
+            return { ok: false, error: 'Chi ha giocato lo stack non può contrastare.' };
         }
 
         const card = removeFromHand(s.hands, playerId, instanceId);
@@ -806,11 +810,12 @@
     }
 
     function canDraw(state, playerId) {
-        if (state.status !== 'playing' || currentPlayerId(state) !== playerId) return false;
+        if (state.status !== 'playing') return false;
         const pending = state.pendingAction;
         if (pending?.type === 'mariGreen') {
             return pending.currentId === playerId;
         }
+        if (currentPlayerId(state) !== playerId) return false;
         if (pending?.type === 'counterWindow' || pending?.type === 'bulletRoulette') return false;
         if (isBrainrotBattle(state) || isBrainrotDiscardPhase(state) || isDrawStackWindow(state)) return false;
         if (state.pendingColor) return false;
@@ -1090,6 +1095,12 @@
         return false;
     }
 
+    function groupsMultiColorByValue(card) {
+        if (!card) return false;
+        if (card.kind === 'number') return true;
+        return card.kind === 'action' && ['skip', 'reverse', 'draw2'].includes(card.value);
+    }
+
     function getDuplicateBatch(state, playerId, instanceId) {
         const hand = state.hands[playerId] || [];
         const card = hand.find(c => c.instanceId === instanceId);
@@ -1099,11 +1110,19 @@
         if (state.turnFlags.played) return [card];
 
         const key = cardMultiPlayKey(card);
-        const batch = hand.filter(c =>
+        const candidates = hand.filter(c =>
             cardMultiPlayKey(c) === key
             && allowsMultiDuplicatePlay(c)
-            && canPlayCard(state, c, playerId)
         );
+
+        if (groupsMultiColorByValue(card)) {
+            const playable = candidates.filter(c => canPlayCard(state, c, playerId));
+            if (!playable.length) return [card];
+            const rest = candidates.filter(c => !playable.some(p => p.instanceId === c.instanceId));
+            return [...playable, ...rest];
+        }
+
+        const batch = candidates.filter(c => canPlayCard(state, c, playerId));
         return batch.length ? batch : [card];
     }
 
@@ -1163,11 +1182,15 @@
         syncTurnFlags(state);
         if (state.turnFlags.played) return false;
         const key = cardMultiPlayKey(cards[0]);
-        return cards.every(c =>
+        const allMatch = cards.every(c =>
             cardMultiPlayKey(c) === key
             && allowsMultiDuplicatePlay(c)
-            && canPlayCard(state, c, playerId)
         );
+        if (!allMatch) return false;
+        if (groupsMultiColorByValue(cards[0])) {
+            return cards.some(c => canPlayCard(state, c, playerId));
+        }
+        return cards.every(c => canPlayCard(state, c, playerId));
     }
 
     function canPlaySameNumberBatch(state, playerId, cards) {
@@ -1397,6 +1420,14 @@
             return { ok: false, error: 'Carta non in mano.' };
         }
 
+        if (cards.length > 1 && groupsMultiColorByValue(cards[0])) {
+            const playable = cards.filter(c => canPlayCard(s, c, playerId));
+            const rest = cards.filter(c => !playable.some(p => p.instanceId === c.instanceId));
+            if (playable.length) {
+                cards.splice(0, cards.length, ...playable, ...rest);
+            }
+        }
+
         const first = cards[0];
         if (!canPlayCardThisTurn(s, playerId, first)) {
             return { ok: false, error: 'Carta non giocabile.' };
@@ -1417,7 +1448,7 @@
 
         const needsSinglePlay = cards.some(c =>
             ['wild', 'wild4'].includes(c.value)
-            || ['death', 'swap', 'gift', 'heart', 'communism', 'blobby', 'bullet', 'mari', 'brainrot'].includes(c.value)
+            || ['death', 'swap', 'nazism', 'heart', 'communism', 'blobby', 'bullet', 'mari', 'brainrot'].includes(c.value)
         );
         if (cards.length > 1 && needsSinglePlay) {
             return { ok: false, error: 'Una sola carta di questo tipo per volta.' };
@@ -1478,7 +1509,7 @@
         if (s.status === 'finished') {
             return { ok: true, state: s, outcome: 'win' };
         }
-        if (['counterWindow', 'brainrotBattle', 'drawStackWindow', 'brainrotDiscard'].includes(s.pendingAction?.type)) {
+        if (['counterWindow', 'brainrotBattle', 'drawStackWindow', 'brainrotDiscard', 'mariGreen', 'bulletRoulette'].includes(s.pendingAction?.type)) {
             return { ok: true, state: s, defer: true };
         }
         const outcome = checkWinOrUnoPenalty(s, playerId);
@@ -1576,8 +1607,7 @@
                 return { ok: true, defer: true };
             }
             case 'blobby': {
-                const target = options.targetId || nextPlayerId(state);
-                openCounterWindow(state, playerId, card, { targetId: target });
+                openCounterWindow(state, playerId, card);
                 return { ok: true, defer: true };
             }
             case 'swap': {
@@ -1659,27 +1689,45 @@
                 }
                 addLog(state, 'Donna di Mazze: catene ed effetti globali annullati.');
                 return { ok: true };
-            case 'gift': {
+            case 'nazism': {
                 const target = options.targetId;
-                if (!target) {
-                    state.pendingAction = { type: 'chooseTarget', playerId, effect: 'gift', cardInstanceId: card.instanceId };
-                    return { ok: true };
+                const giftCardId = options.giftCardId;
+                if (!target || !giftCardId) {
+                    return { ok: false, error: 'Scegli un giocatore e una carta da cedere.' };
                 }
-                const idx = state.hands[playerId].findIndex(c => c.instanceId === options.giftCardId);
-                if (idx !== -1) {
-                    const gifted = state.hands[playerId].splice(idx, 1)[0];
-                    state.hands[target].push(gifted);
-                    syncHandCounts(state);
+                const hand = state.hands[playerId] || [];
+                const idx = hand.findIndex(c => c.instanceId === giftCardId);
+                if (idx === -1) {
+                    return { ok: false, error: 'La carta scelta non è nella tua mano.' };
                 }
+                const [gifted] = hand.splice(idx, 1);
+                if (!state.hands[target]) state.hands[target] = [];
+                state.hands[target].push(gifted);
+                syncHandCounts(state);
+                addLog(
+                    state,
+                    `${state.players[playerId]?.nickname} cede ${Deck.cardDisplayName(gifted)} a ${state.players[target]?.nickname}.`
+                );
                 return { ok: true };
             }
             case 'communism': {
-                const target = options.targetId || nextPlayerId(state);
-                const stolen = (state.hands[target] || []).slice(0, 2);
-                state.hands[playerId].push(...stolen);
-                state.hands[target] = state.hands[target].slice(2);
+                const target = options.targetId;
+                const stolenId = options.stolenCardId;
+                if (!target || !stolenId) {
+                    return { ok: false, error: 'Scegli un giocatore e una carta da rubare.' };
+                }
+                const targetHand = state.hands[target] || [];
+                const idx = targetHand.findIndex(c => c.instanceId === stolenId);
+                if (idx === -1) {
+                    return { ok: false, error: 'Carta non trovata nella mano del bersaglio.' };
+                }
+                const [stolen] = targetHand.splice(idx, 1);
+                state.hands[playerId].push(stolen);
                 syncHandCounts(state);
-                addLog(state, 'Comunismo: carte rubate.');
+                addLog(
+                    state,
+                    `${state.players[playerId]?.nickname} ruba ${Deck.cardDisplayName(stolen)} a ${state.players[target]?.nickname}.`
+                );
                 return { ok: true };
             }
             case 'heart': {
@@ -1858,8 +1906,6 @@
         s.pendingAction = null;
         if (pending.effect === 'swap') {
             resolveCardEffect(s, playerId, { value: 'swap' }, { targetId });
-        } else if (pending.effect === 'gift') {
-            resolveCardEffect(s, playerId, { value: 'gift' }, { targetId, giftCardId: pending.cardInstanceId });
         } else if (pending.effect === 'heart') {
             const effect = resolveCardEffect(s, playerId, { value: 'heart' }, { targetId });
             if (!effect.ok) return effect;
@@ -1879,6 +1925,9 @@
             return { ok: false, error: 'Puoi dire UNO! solo con 1 carta in mano.' };
         }
         const p = s.players[playerId];
+        if (p?.saidUno) {
+            return { ok: false, error: 'Hai già detto UNO!' };
+        }
         if (p) {
             p.saidUno = true;
             p.unoRequired = false;
