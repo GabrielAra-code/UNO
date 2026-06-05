@@ -1,6 +1,6 @@
 /** Catalogo carte per script classici (compatibile con file://) */
 window.databaseCarte = [
-    { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: "2 per numero", effetto: "Nessuno. Giocabili solo se l'ultimo numero coincide o su carte speciali incolori.", cat: "⚪ Incolore" },
+    { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: "2 per numero", effetto: "Nessuno. Giocabili se coincide numero o colore con la carta in tavola, oppure su carte speciali incolori.", cat: "⚪ Incolore" },
     { id: "c_piu2", nome: "Classico: +2", quantita: "2 per colore", effetto: "Il bersaglio pesca 2 carte e salta il turno corrente.", cat: "🟥🟨🟩🟦 Classico" },
     { id: "c_rev", nome: "Classico: Reverse", quantita: "2 per colore", effetto: "Inverte istantaneamente la direzione dei turni di gioco.", cat: "🟥🟨🟩🟦 Classico" },
     { id: "c_bloc", nome: "Classico: Blocco", quantita: "2 per colore", effetto: "Salto del turno immediato per il giocatore successivo.", cat: "🟥🟨🟩🟦 Classico" },

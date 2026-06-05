@@ -433,6 +433,47 @@
         state.drawStackType = null;
     }
 
+    /** Applica penalità stack e avanza il turno (salta chi ha pescato). */
+    function resolveStackPenaltyAndAdvance(state, defenderId, amount, options = {}) {
+        if (amount > 0 && defenderId && state.players[defenderId]) {
+            const n = applyDrawToPlayer(state, defenderId, amount);
+            if (options.hadMirror) {
+                addLog(state, `Specchio: ${state.players[defenderId]?.nickname} pesca ${n} (stack risolto).`);
+            } else {
+                addLog(state, `${state.players[defenderId]?.nickname} pesca ${n} (stack risolto).`);
+            }
+            state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+        }
+        clearStackPassState(state);
+        state.pendingAction = null;
+        const steps = Math.max(1, state.turnAdvanceSteps || 0);
+        state.turnAdvanceSteps = 0;
+        if (state.status === 'playing') {
+            nextTurn(state, steps);
+        }
+    }
+
+    /** Senza modalità stack: +2/+4 si risolvono subito dopo la giocata (niente Fine turno / 5s). */
+    function tryAutoResolveStackPass(state) {
+        if (state.settings?.stack) return false;
+        if (!state.stackPassPending || state.drawStack <= 0) return false;
+        if (state.pendingColor) return false;
+        const blocking = state.pendingAction?.type;
+        if (blocking && blocking !== 'bulletRoulette') return false;
+
+        const defender = state.stackDefenderId || nextPlayerId(state);
+        const amount = state.drawStack;
+        clearStackPassState(state);
+        if (amount > 0) {
+            const n = applyDrawToPlayer(state, defender, amount);
+            addLog(state, `${state.players[defender]?.nickname} pesca ${n} (penalità).`);
+        }
+        if (state.status === 'playing') {
+            nextTurn(state, 2);
+        }
+        return true;
+    }
+
     /** Accumula +2/+4/+10/+16 in attesa di Fine turno (non apre subito la finestra 5s). */
     function addToStackPass(state, playerId, amount, stackType) {
         const defender = nextPlayerId(state);
@@ -462,6 +503,10 @@
 
     function openDrawStackWindow(state, defenderId, sourcePlayerId) {
         if (state.drawStack <= 0) return;
+        if (!state.settings?.stack) {
+            resolveStackPenaltyAndAdvance(state, defenderId, state.drawStack);
+            return;
+        }
         state.stackPassPending = false;
         state.stackDefenderId = null;
         state.stackSourcePlayerId = null;
@@ -619,20 +664,10 @@
             responses: Object.keys(responses).length
         });
 
-        s.pendingAction = null;
-        s.drawStack = 0;
-        s.drawStackType = null;
-
         if (amount > 0) {
             console.log(`[DRAWING ${amount} CARDS]`, defenderId);
-            const n = applyDrawToPlayer(s, defenderId, amount);
-            if (hadMirror) {
-                addLog(s, `Specchio: ${s.players[defenderId]?.nickname} pesca ${n} (stack risolto).`);
-            } else {
-                addLog(s, `${s.players[defenderId]?.nickname} pesca ${n} (stack risolto).`);
-            }
-            s.turnAdvanceSteps = (s.turnAdvanceSteps || 0) + 1;
         }
+        resolveStackPenaltyAndAdvance(s, defenderId, amount, { hadMirror });
 
         syncHandCounts(s);
         return { ok: true, state: s };
@@ -853,11 +888,15 @@
         return false;
     }
 
-    /** Gioco singolo di una numerica (stesso numero o mazzo incolore/speciale). */
+    /** Gioco singolo di una numerica (stesso numero, stesso colore attivo, o mazzo incolore/speciale). */
     function numberCardMatchesTop(state, card) {
         const top = state.topCard;
         if (!top || card?.kind !== 'number') return false;
         if (String(card.value) === String(top.value)) return true;
+        const effectiveColor = effectiveTopColor(state);
+        if (effectiveColor && isValidPlayColor(card.color) && card.color === effectiveColor) {
+            return true;
+        }
         if (isIncolorSpecialTop(top)) return true;
         return false;
     }
@@ -1821,13 +1860,24 @@
 
     function applyBulletHit(state, hitId) {
         const p = state.players[hitId];
-        if (!p || p.eliminated) return;
+        if (!p || p.eliminated) return { hit: false, shieldBlocked: false };
+
+        if (hasShield(state, hitId)) {
+            const shield = takeShieldFromHand(state, hitId);
+            if (shield) {
+                state.discardPile.push(shield);
+                addLog(state, `🛡️ ${p.nickname} usa Scudo e annulla il colpo del Proiettile!`);
+                return { hit: false, shieldBlocked: true };
+            }
+        }
+
         p.pistolHp -= 1;
         addLog(state, `Proiettile colpisce ${p.nickname}! (${p.pistolHp} HP)`);
         if (p.pistolHp <= 0) {
             eliminatePlayer(state, hitId);
             addLog(state, `${p.nickname} eliminato.`);
         }
+        return { hit: true, shieldBlocked: false };
     }
 
     function spinBulletRoulette(state, playerId) {
@@ -1843,14 +1893,15 @@
             return { ok: false, error: 'Roulette già girata.' };
         }
         pending.spun = true;
+        const hitResult = applyBulletHit(s, pending.hitId);
         s.lastRoulette = {
             hitId: pending.hitId,
             spinDeg: pending.spinDeg,
             segments: pending.segments,
             shooterId: pending.shooterId,
+            shieldBlocked: !!hitResult.shieldBlocked,
             at: Date.now()
         };
-        applyBulletHit(s, pending.hitId);
         s.pendingAction = null;
         return { ok: true, state: s };
     }
@@ -2029,6 +2080,11 @@
         if (outcome === 'penalty') {
             syncHandCounts(s);
             return { ok: true, state: s, outcome: 'penalty' };
+        }
+
+        if (tryAutoResolveStackPass(s)) {
+            syncHandCounts(s);
+            return { ok: true, state: s, cardsPlayed: cards.length };
         }
 
         syncHandCounts(s);
@@ -2372,6 +2428,7 @@
         if (s.topCard?.value === 'wild4' && !s.stackPassPending) {
             addToStackPass(s, playerId, 4, 'wild4');
         }
+        tryAutoResolveStackPass(s);
         return { ok: true, state: s };
     }
 

@@ -599,8 +599,12 @@
 
         anim.onfinish = () => {
             wheel.style.transform = `rotate(${lr.spinDeg}deg)`;
-            if (result) result.textContent = `💥 Colpito: ${hitName}!`;
-            playSound('shot');
+            if (result) {
+                result.textContent = lr.shieldBlocked
+                    ? `🛡️ ${hitName} si para con lo Scudo!`
+                    : `💥 Colpito: ${hitName}!`;
+            }
+            playSound(lr.shieldBlocked ? 'click' : 'shot');
             clearTimeout(rouletteHideTimer);
             rouletteHideTimer = setTimeout(() => {
                 overlay.classList.remove('active');
@@ -1519,8 +1523,15 @@
         const btn = $('btn-end-turn');
         if (!btn || !gameState) return;
         const can = Engine.canEndTurn(gameState, myPlayerId);
+        const stackWaiting = can
+            && gameState.stackPassPending
+            && gameState.stackSourcePlayerId === myPlayerId
+            && (gameState.drawStack || 0) > 0;
         btn.disabled = !can;
-        btn.title = can ? 'Termina il tuo turno' : 'Non puoi terminare il turno ora';
+        btn.title = stackWaiting
+            ? `Passa lo stack +${gameState.drawStack} — premi Fine turno`
+            : (can ? 'Termina il tuo turno' : 'Non puoi terminare il turno ora');
+        btn.classList.toggle('animate-pulse', stackWaiting);
     }
 
     function renderUnoButton() {
