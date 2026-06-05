@@ -23,6 +23,9 @@
 
     const LOBBY_CLOSED_BY_ADMIN_MESSAGE = 'Questa lobby è stata chiusa da un amministratore.';
 
+    /** Versione mostrata di default nei nuovi annunci. */
+    const GAME_VERSION = '1.0.0';
+
     const XP_PER_LEVEL = 100;
     const MAX_LEVEL = 500;
 
@@ -67,6 +70,7 @@
         isAdminUser,
         BAN_DURATION_OPTIONS,
         LOBBY_CLOSED_BY_ADMIN_MESSAGE,
+        GAME_VERSION,
         XP_PER_LEVEL,
         MAX_LEVEL,
         calcolaLivelloDaXp,

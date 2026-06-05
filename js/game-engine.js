@@ -287,14 +287,15 @@
         addLog(state, `${state.players[winnerId]?.nickname} vince Brainrot (${colorLabel}): scarta fino a ${maxDiscard} carte (solo numeri).`);
     }
 
-    function resolveBrainrotBattle(state, playerId) {
+    function resolveBrainrotBattle(state, playerId, options = {}) {
         const s = clone(state);
         const pending = s.pendingAction;
         if (!pending || pending.type !== 'brainrotBattle') {
             return { ok: false, error: 'Nessuna battaglia Brainrot attiva.' };
         }
-        const expired = Date.now() >= pending.resolvesAt;
-        if (!expired && playerId !== pending.initiatorId) {
+        const graceMs = options.force ? 150 : 0;
+        const expired = Date.now() >= pending.resolvesAt - graceMs;
+        if (!expired && !options.force && playerId !== pending.initiatorId) {
             return { ok: false, error: 'Attendi la fine del countdown Brainrot.' };
         }
 
@@ -338,7 +339,7 @@
         return true;
     }
 
-    function resolveBrainrotDiscard(state, playerId, instanceIds = []) {
+    function resolveBrainrotDiscard(state, playerId, instanceIds = [], options = {}) {
         const s = clone(state);
         const pending = s.pendingAction;
         if (!pending || pending.type !== 'brainrotDiscard') {
@@ -347,9 +348,10 @@
         if (playerId !== pending.winnerId) {
             return { ok: false, error: 'Solo il vincitore può scartare.' };
         }
-        const expired = Date.now() >= pending.resolvesAt;
+        const graceMs = options.force ? 150 : 0;
+        const expired = Date.now() >= pending.resolvesAt - graceMs;
         const ids = Array.isArray(instanceIds) ? instanceIds : [];
-        if (!expired && ids.length === 0 && playerId === pending.winnerId) {
+        if (!options.force && !expired && ids.length === 0) {
             return { ok: false, error: 'Seleziona carte da scartare o attendi il countdown.' };
         }
 
@@ -1027,6 +1029,55 @@
         return `spec:${card.defId || ''}:${card.value}:${variant}`;
     }
 
+    /** Raggruppamento multi-gioco: stesso valore anche con colori diversi (numeri e +2/salta/inverti). */
+    function cardMultiPlayKey(card) {
+        if (!card) return '';
+        if (card.kind === 'number') {
+            return `numVal:${card.value}`;
+        }
+        if (card.kind === 'action' && ['skip', 'reverse', 'draw2'].includes(card.value)) {
+            return `actVal:${card.value}`;
+        }
+        return cardDuplicateKey(card);
+    }
+
+    function isSixSevenValue(card) {
+        if (!card || card.kind !== 'number') return false;
+        const n = Number(card.value);
+        return n === 6 || n === 7;
+    }
+
+    function getSixSevenBatch(state, playerId, instanceId) {
+        const hand = state.hands[playerId] || [];
+        const card = hand.find(c => c.instanceId === instanceId);
+        if (!isSixSevenValue(card)) return card ? [card] : [];
+        if (currentPlayerId(state) !== playerId) return [card];
+        syncTurnFlags(state);
+        if (state.turnFlags.played) return [card];
+
+        const sixes = hand.filter(c => Number(c.value) === 6 && canPlayCard(state, c, playerId));
+        const sevens = hand.filter(c => Number(c.value) === 7 && canPlayCard(state, c, playerId));
+        if (!sixes.length || !sevens.length) return [card];
+
+        return [...sixes, ...sevens];
+    }
+
+    function isValidSixSeven(cards) {
+        if (!cards?.length || cards.length < 2) return false;
+        const has6 = cards.some(c => Number(c.value) === 6);
+        const has7 = cards.some(c => Number(c.value) === 7);
+        if (!has6 || !has7) return false;
+        return cards.every(c => c.kind === 'number' && (Number(c.value) === 6 || Number(c.value) === 7));
+    }
+
+    function canPlaySixSevenBatch(state, playerId, cards) {
+        if (!isValidSixSeven(cards)) return false;
+        if (currentPlayerId(state) !== playerId) return false;
+        syncTurnFlags(state);
+        if (state.turnFlags.played) return false;
+        return cards.every(c => canPlayCard(state, c, playerId));
+    }
+
     function allowsMultiDuplicatePlay(card) {
         if (!card) return false;
         if (card.kind === 'number') return true;
@@ -1047,9 +1098,9 @@
         syncTurnFlags(state);
         if (state.turnFlags.played) return [card];
 
-        const key = cardDuplicateKey(card);
+        const key = cardMultiPlayKey(card);
         const batch = hand.filter(c =>
-            cardDuplicateKey(c) === key
+            cardMultiPlayKey(c) === key
             && allowsMultiDuplicatePlay(c)
             && canPlayCard(state, c, playerId)
         );
@@ -1111,9 +1162,9 @@
         if (currentPlayerId(state) !== playerId) return false;
         syncTurnFlags(state);
         if (state.turnFlags.played) return false;
-        const key = cardDuplicateKey(cards[0]);
+        const key = cardMultiPlayKey(cards[0]);
         return cards.every(c =>
-            cardDuplicateKey(c) === key
+            cardMultiPlayKey(c) === key
             && allowsMultiDuplicatePlay(c)
             && canPlayCard(state, c, playerId)
         );
@@ -1127,6 +1178,9 @@
     function isValidPlayGroup(state, playerId, cards) {
         if (!cards?.length) return false;
         if (cards.length === 1) return canPlayCardThisTurn(state, playerId, cards[0]);
+        if (isValidSixSeven(cards)) {
+            return canPlaySixSevenBatch(state, playerId, cards);
+        }
         if (isValidLadder(cards)) {
             const sorted = [...cards].sort((a, b) => numberRank(a) - numberRank(b));
             return numberRank(sorted[0]) === 0 && canPlayCard(state, sorted[0]);
@@ -1350,9 +1404,11 @@
 
         if (cards.length > 1) {
             if (!isValidPlayGroup(s, playerId, cards)) {
-                return { ok: false, error: 'Puoi giocare insieme solo copie uguali o una scala 0→1→2…' };
+                return { ok: false, error: 'Puoi giocare insieme copie uguali, scala 0→1→2… o SixSeven (6+7).' };
             }
             if (isValidLadder(cards)) {
+                cards.sort((a, b) => numberRank(a) - numberRank(b));
+            } else if (isValidSixSeven(cards)) {
                 cards.sort((a, b) => numberRank(a) - numberRank(b));
             } else if (!canPlayDuplicateBatch(s, playerId, cards)) {
                 return { ok: false, error: 'Queste carte non possono essere giocate insieme.' };
@@ -1400,7 +1456,8 @@
 
         let effect = { ok: true };
         const isLadder = cards.length > 1 && isValidLadder(cards);
-        const isDuplicateBatch = cards.length > 1 && canPlayDuplicateBatch(s, playerId, cards) && !isLadder;
+        const isSixSeven = cards.length > 1 && isValidSixSeven(cards);
+        const isDuplicateBatch = cards.length > 1 && canPlayDuplicateBatch(s, playerId, cards) && !isLadder && !isSixSeven;
         if (isDuplicateBatch) {
             for (let i = 0; i < cards.length; i += 1) {
                 effect = resolveCardEffect(s, playerId, cards[i], options);
@@ -1886,11 +1943,15 @@
         hasPlayableCardThisTurn,
         cardStackKey,
         cardDuplicateKey,
+        cardMultiPlayKey,
         allowsMultiDuplicatePlay,
         getDuplicateBatch,
         canPlayDuplicateBatch,
         getMatchingPlayableCards,
         getSameNumberBatch,
+        getSixSevenBatch,
+        isValidSixSeven,
+        canPlaySixSevenBatch,
         getLadderPlay,
         playMariGreenCard,
         canPlayMariGreen,

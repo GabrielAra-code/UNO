@@ -40,6 +40,24 @@
         .btn-slate { background-color: #475569; color: #ffffff; box-shadow: 0 8px 0 #1e293b; }
         .btn-emerald { background-color: #10b981; color: #ffffff; box-shadow: 0 8px 0 #047857; }
 
+        .success-check-icon,
+        .confirm-announce-icon {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            width: 100%;
+        }
+
+        .success-check-icon svg,
+        .confirm-announce-icon svg {
+            animation: success-pop 0.35s ease-out;
+        }
+
+        @keyframes success-pop {
+            0% { transform: scale(0.55); opacity: 0; }
+            100% { transform: scale(1); opacity: 1; }
+        }
+
         .btn-chunky:hover {
             filter: brightness(1.1);
             transform: translateY(-2px);
@@ -269,9 +287,33 @@
         }
 
         #modal-stats.stats-modal-index-view {
-            max-width: 34.2rem;
-            min-height: 26.6rem;
-            padding: 1.425rem !important;
+            max-width: 30.5rem;
+            max-height: min(88vh, 34rem);
+            padding: 1.1rem !important;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #modal-stats.stats-modal-index-view #stats-pages-viewport {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #modal-stats.stats-modal-index-view #sub-panel-classifica {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+        }
+
+        #modal-stats.stats-modal-index-view #index-nav-stage {
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 0.5rem;
         }
 
         #modal-stats.stats-modal-index-view .flex.gap-3.mb-4 {
@@ -298,8 +340,10 @@
             display: grid;
             grid-template-columns: repeat(3, minmax(0, 1fr));
             grid-template-rows: repeat(2, minmax(0, 1fr));
-            gap: 0.57rem;
-            min-height: 11.875rem;
+            gap: 0.45rem;
+            flex: 1;
+            min-height: 0;
+            max-height: 9.1rem;
         }
 
         .index-card-slot {
@@ -484,9 +528,80 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 0.475rem;
-            margin-top: 0.2375rem;
+            gap: 0.4rem;
+            margin-top: 0.15rem;
+            flex-shrink: 0;
+            padding-top: 0.15rem;
         }
+
+        /* Updates / Annunci */
+        .updates-card {
+            background: rgba(0, 0, 0, 0.45);
+            border: 2px solid rgba(30, 41, 59, 0.95);
+            border-radius: 1rem;
+            padding: 0.85rem 1rem;
+        }
+
+        .updates-card + .updates-card { margin-top: 0.65rem; }
+
+        .updates-card-header {
+            display: flex;
+            flex-wrap: wrap;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 0.35rem 0.75rem;
+            margin-bottom: 0.45rem;
+        }
+
+        .updates-card-title {
+            font-size: 0.9rem;
+            font-weight: 900;
+            color: #fde68a;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        .updates-card-meta {
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.58rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #64748b;
+        }
+
+        .updates-card-version {
+            color: #22d3ee;
+            background: rgba(8, 51, 68, 0.55);
+            border: 1px solid rgba(34, 211, 238, 0.35);
+            padding: 0.1rem 0.35rem;
+            border-radius: 0.35rem;
+        }
+
+        .updates-card-body {
+            color: #cbd5e1;
+            line-height: 1.45;
+            white-space: normal;
+            word-break: break-word;
+        }
+
+        .updates-body-bold { font-weight: 900; }
+        .updates-body-normal { font-weight: 600; }
+        .updates-text-sm { font-size: 0.68rem; }
+        .updates-text-md { font-size: 0.78rem; }
+        .updates-text-lg { font-size: 0.92rem; }
+
+        .updates-empty {
+            text-align: center;
+            padding: 2rem 1rem;
+            color: #64748b;
+            font-size: 0.78rem;
+            font-weight: 700;
+        }
+
+        .updates-empty p { margin-top: 0.5rem; }
 
         .index-page-btn {
             flex: 1;
@@ -522,13 +637,18 @@
     <script src="js/carte-data.js"></script>
     <script src="js/carte-catalog.js"></script>
     <script src="js/lobby-list.js"></script>
+    <script src="js/announcements.js"></script>
     <script src="js/admin-panel.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
         import { getFirestore, doc, getDoc, setDoc, updateDoc, deleteDoc, addDoc, runTransaction, collection, query, orderBy, limit, getDocs, onSnapshot } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const { initAdminPanel, updateAdminButtonVisibility, closeAdminPanel } = window.AdminPanel;
+        const AdminPanelApi = window.AdminPanel;
+        if (!AdminPanelApi) {
+            console.error('AdminPanel non caricato — verifica js/admin-panel.js');
+        }
+        const { initAdminPanel, updateAdminButtonVisibility, closeAdminPanel } = AdminPanelApi || {};
         const { fetchBanForUser, formatBanMessage } = window.BanService;
 
         const firebaseConfig = {
@@ -562,6 +682,30 @@
         window.orderBy = orderBy;
         window.limit = limit;
         window.getDocs = getDocs;
+
+        let unsubAnnunci = null;
+        window.__annunciCache = [];
+
+        window.refreshUpdatesModal = function() {
+            const el = document.getElementById('updates-list');
+            if (el && window.AnnouncementsUI) {
+                window.AnnouncementsUI.renderAnnouncementsList(window.__annunciCache, el);
+            }
+        };
+
+        function startAnnouncementsFeed() {
+            if (unsubAnnunci) return;
+            const q = query(collection(db, 'annunci'), orderBy('createdAt', 'desc'));
+            unsubAnnunci = onSnapshot(q, snapshot => {
+                window.__annunciCache = snapshot.docs.map(docSnap => ({
+                    id: docSnap.id,
+                    ...docSnap.data()
+                }));
+                window.refreshUpdatesModal();
+            }, err => console.error('Errore annunci:', err));
+        }
+
+        startAnnouncementsFeed();
 
         window.rinfrescaDatiProfiloUtente = async function() {
             try {
@@ -645,6 +789,7 @@
             }
 
             window.currentUserUid = user.uid;
+            updateAdminButtonVisibility?.();
 
             try {
                 const banStatus = await fetchBanForUser(db, doc, getDoc, user.uid);
@@ -656,13 +801,15 @@
                 }
 
                 await window.rinfrescaDatiProfiloUtente();
-                updateAdminButtonVisibility();
+                updateAdminButtonVisibility?.();
 
-                initAdminPanel({
+                initAdminPanel?.({
                     db,
                     auth,
                     doc,
                     collection,
+                    query,
+                    orderBy,
                     getDoc,
                     getDocs,
                     setDoc,
@@ -673,7 +820,9 @@
                     openModal: (id) => window.openModal(id),
                     closeModal: () => window.closeModal(false),
                     playSynth: (type) => window.playSynth?.(type),
-                    entraInLobbyForzato: (id) => window.entraInLobbyForzato(id)
+                    entraInLobbyForzato: (id) => window.entraInLobbyForzato(id),
+                    showSuccessAnnouncePopup: (message) => window.showSuccessAnnouncePopup?.(message),
+                    showConfirmAnnouncePopup: (message) => window.showConfirmAnnouncePopup?.(message)
                 });
             } catch (error) {
                 console.error('Errore avvio sessione:', error);
@@ -684,9 +833,9 @@
             }
         });
 
-        window.__closeAdminPanelListeners = closeAdminPanel;
+        window.__closeAdminPanelListeners = closeAdminPanel || (() => {});
         window.chiudiAdminPanel = function() {
-            closeAdminPanel();
+            closeAdminPanel?.();
             window.closeModal(false);
         };
     </script>
@@ -733,6 +882,10 @@
                     <span class="text-2xl">📋</span>
                     <span class="text-lg font-black">Regole del Gioco</span>
                 </button>
+                <button onclick="openModal('modal-updates')" class="col-span-2 btn-chunky btn-emerald p-4 flex items-center justify-center gap-3 cursor-pointer" data-sound="bloop">
+                    <span class="text-2xl">📢</span>
+                    <span class="text-lg font-black">Updates</span>
+                </button>
             </div>
         </main>
     </div>
@@ -753,6 +906,68 @@
 
         <div class="mt-5 flex justify-center">
             <div class="w-10 h-10 border-4 border-slate-700 border-t-amber-400 rounded-full animate-spin"></div>
+        </div>
+    </div>
+
+</div>
+
+<div id="modal-success-announce"
+     class="hidden fixed inset-0 z-[10000] flex items-center justify-center bg-black/75 backdrop-blur-sm">
+
+    <div class="game-panel-dark p-8 rounded-3xl text-center max-w-md w-full shadow-2xl">
+        <div class="success-check-icon mx-auto mb-4" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-16 h-16">
+                <circle cx="32" cy="32" r="30" fill="#10b981" stroke="#047857" stroke-width="4"/>
+                <path d="M18 33 L28 43 L48 21" stroke="#ffffff" stroke-width="6" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </div>
+
+        <h2 id="modal-success-announce-title" class="text-2xl font-black text-emerald-400 uppercase tracking-wider">
+            Annuncio pubblicato con successo
+        </h2>
+
+        <button id="modal-success-announce-close"
+                type="button"
+                class="btn-chunky btn-emerald w-full py-3.5 text-sm font-black rounded-full uppercase tracking-[0.1em] mt-6"
+                data-sound="bloop">
+            Chiudi
+        </button>
+    </div>
+
+</div>
+
+<div id="modal-confirm-announce"
+     class="hidden fixed inset-0 z-[10000] flex items-center justify-center bg-black/75 backdrop-blur-sm">
+
+    <div class="game-panel-dark p-8 rounded-3xl text-center max-w-md w-full shadow-2xl">
+        <div class="confirm-announce-icon mb-4" aria-hidden="true">
+            <svg viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg" class="w-16 h-16">
+                <circle cx="32" cy="32" r="30" fill="#ef4444" stroke="#b91c1c" stroke-width="4"/>
+                <path d="M22 22 L42 42 M42 22 L22 42" stroke="#ffffff" stroke-width="6" stroke-linecap="round"/>
+            </svg>
+        </div>
+
+        <h2 id="modal-confirm-announce-title" class="text-2xl font-black text-red-400 uppercase tracking-wider">
+            Eliminare questo annuncio?
+        </h2>
+
+        <p class="text-slate-400 font-bold mt-3">
+            L'operazione non può essere annullata.
+        </p>
+
+        <div class="flex gap-3 mt-6">
+            <button id="modal-confirm-announce-cancel"
+                    type="button"
+                    class="btn-chunky btn-slate flex-1 py-3.5 text-sm font-black rounded-full uppercase tracking-[0.1em]"
+                    data-sound="click">
+                Annulla
+            </button>
+            <button id="modal-confirm-announce-confirm"
+                    type="button"
+                    class="btn-chunky btn-red flex-1 py-3.5 text-sm font-black rounded-full uppercase tracking-[0.1em]"
+                    data-sound="pop">
+                Elimina
+            </button>
         </div>
     </div>
 
@@ -783,6 +998,7 @@
             </div>
 
             <button id="btn-admin-panel" type="button" class="hidden btn-chunky btn-red w-full py-3.5 text-sm cursor-pointer" data-sound="error">Admin Panel</button>
+            <p id="admin-uid-hint" class="hidden text-[9px] text-slate-600 font-mono text-center break-all"></p>
             <button class="btn-chunky btn-red w-full py-3.5 text-sm cursor-pointer" onclick="openModal('modal-logout')" data-sound="error">Disconnetti Account</button>
         </div>
 
@@ -920,11 +1136,12 @@
             <button type="button" onclick="window.chiudiAdminPanel()" class="modal-close-outside w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
             <div class="modal-content modal-frame scrollable game-panel-dark w-full p-6 rounded-3xl">
             <h2 class="text-2xl font-black text-center text-red-500 tracking-wide mb-4">🛡️ ADMIN PANEL</h2>
-            <div class="flex gap-2 mb-4">
-                <button type="button" data-admin-tab="lobbies" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-red-600 text-white">Lobby Aperte</button>
-                <button type="button" data-admin-tab="gives" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-slate-800 text-slate-400">Gives</button>
-                <button type="button" data-admin-tab="ban" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-slate-800 text-slate-400">Ban</button>
-                <button type="button" data-admin-tab="security" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-slate-800 text-slate-400">Sicurezza</button>
+            <div class="flex flex-wrap gap-2 mb-4">
+                <button type="button" data-admin-tab="lobbies" class="flex-1 min-w-[5.5rem] py-2 text-[10px] font-black rounded-xl uppercase bg-red-600 text-white">Lobby</button>
+                <button type="button" data-admin-tab="gives" class="flex-1 min-w-[5.5rem] py-2 text-[10px] font-black rounded-xl uppercase bg-slate-800 text-slate-400">Gives</button>
+                <button type="button" data-admin-tab="ban" class="flex-1 min-w-[5.5rem] py-2 text-[10px] font-black rounded-xl uppercase bg-slate-800 text-slate-400">Ban</button>
+                <button type="button" data-admin-tab="security" class="flex-1 min-w-[5.5rem] py-2 text-[10px] font-black rounded-xl uppercase bg-slate-800 text-slate-400">Sicurezza</button>
+                <button type="button" data-admin-tab="annunci" class="flex-1 min-w-[5.5rem] py-2 text-[10px] font-black rounded-xl uppercase bg-slate-800 text-slate-400">Annunci</button>
             </div>
             <div id="admin-pages-viewport" class="admin-pages-viewport">
             <div id="admin-section-lobbies" class="space-y-3">
@@ -943,6 +1160,31 @@
             <div id="admin-section-security" class="hidden space-y-3">
                 <input id="admin-security-search" type="text" placeholder="Cerca eventi (UID, tipo, nickname)..." class="room-input w-full rounded-2xl px-4 py-3 text-sm font-black outline-none focus:border-cyan-500" />
                 <div id="admin-security-list" class="space-y-2 max-h-[50vh] overflow-y-auto custom-scroll pr-1"></div>
+            </div>
+            <div id="admin-section-annunci" class="hidden space-y-3">
+                <div class="bg-black/45 border border-amber-900/40 rounded-2xl p-3 space-y-2">
+                    <div class="text-xs font-black text-amber-400 uppercase tracking-wider">Nuovo annuncio</div>
+                    <input id="admin-ann-title" type="text" maxlength="120" placeholder="Titolo annuncio" class="room-input w-full rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-amber-500" />
+                    <input id="admin-ann-version" type="text" maxlength="24" placeholder="Versione gioco (es. 1.0.0)" class="room-input w-full rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-amber-500" />
+                    <textarea id="admin-ann-content" rows="4" maxlength="4000" placeholder="Contenuto dell'annuncio…" class="room-input w-full rounded-xl px-3 py-2 text-sm font-black outline-none focus:border-amber-500 resize-y min-h-[5rem]"></textarea>
+                    <div class="flex flex-wrap items-center gap-3 text-[10px] font-bold text-slate-400 uppercase">
+                        <label class="flex items-center gap-2 cursor-pointer">
+                            <input id="admin-ann-bold" type="checkbox" class="accent-amber-500 w-4 h-4" />
+                            Grassetto
+                        </label>
+                        <label class="flex items-center gap-2">
+                            Dimensione
+                            <select id="admin-ann-size" class="room-input rounded-lg px-2 py-1 text-[10px] font-black normal-case">
+                                <option value="sm">Piccolo</option>
+                                <option value="md" selected>Medio</option>
+                                <option value="lg">Grande</option>
+                            </select>
+                        </label>
+                    </div>
+                    <button type="button" id="admin-btn-publish-ann" class="btn-chunky btn-yellow w-full py-2.5 text-xs" data-sound="bloop">Pubblica annuncio</button>
+                </div>
+                <div class="text-[10px] font-black text-slate-500 uppercase tracking-wider">Annunci pubblicati</div>
+                <div id="admin-annunci-list" class="space-y-2 max-h-[38vh] overflow-y-auto custom-scroll pr-1"></div>
             </div>
             </div>
             </div>
@@ -1014,6 +1256,19 @@
             <p class="text-xs text-slate-400 font-bold mb-4">Le stanze private sono marcate con 🔒 e richiedono password.</p>
             <input id="public-lobbies-search" type="text" placeholder="Cerca tramite codice stanza..." class="room-input w-full rounded-3xl px-4 py-3 mb-4 text-sm font-black outline-none focus:border-cyan-500 focus:ring-2 focus:ring-cyan-500/20" oninput="renderListaLobby()" />
             <div id="public-lobbies-list" class="space-y-2 max-h-[68vh] overflow-y-auto custom-scroll pr-1"></div>
+        </div>
+
+        <!-- 7b. POPUP UPDATES / ANNUNCI -->
+        <div id="modal-updates" class="modal-content hidden game-panel-dark w-full max-w-2xl p-6 rounded-3xl relative">
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-2xl font-black text-cyan-400 mb-3 tracking-wide text-center uppercase drop-shadow-[0_2px_0_rgba(0,0,0,1)]">📢 Updates</h2>
+            <p class="text-[10px] text-slate-500 font-bold text-center uppercase tracking-wider mb-3">Annunci ufficiali • aggiornamento in tempo reale</p>
+            <div id="updates-list" class="overflow-y-auto custom-scroll max-h-[62vh] pr-1 space-y-2" aria-live="polite">
+                <div class="updates-empty">
+                    <span class="text-3xl">⏳</span>
+                    <p>Caricamento annunci…</p>
+                </div>
+            </div>
         </div>
 
         <!-- 7. POPUP REGOLAMENTO -->
@@ -1201,6 +1456,9 @@
                 if (search) search.value = '';
                 renderListaLobby();
             }
+            if (id === 'modal-updates') {
+                window.refreshUpdatesModal?.();
+            }
         }
 
         window.openModal = function openModal(id) {
@@ -1295,6 +1553,87 @@
             if (UI) UI.withLock(restore);
             else restore();
         }
+
+        function successAnnounceElements() {
+            const modal = document.getElementById('modal-success-announce');
+            return { modal, panel: modal?.querySelector(':scope > div') };
+        }
+
+        function showSuccessAnnouncePopup(message) {
+            const UI = window.UITransitions;
+            const titolo = document.getElementById('modal-success-announce-title');
+            if (titolo && message) titolo.innerText = message;
+
+            const { modal, panel } = successAnnounceElements();
+            if (UI && modal) UI.openOverlayModal(modal, panel);
+            else modal?.classList.remove('hidden');
+        }
+
+        function hideSuccessAnnouncePopup() {
+            const UI = window.UITransitions;
+            const { modal, panel } = successAnnounceElements();
+            const close = async () => {
+                if (UI && modal) await UI.closeOverlayModal(modal, panel);
+                else modal?.classList.add('hidden');
+            };
+            if (UI) UI.withLock(close);
+            else close();
+        }
+
+        window.showSuccessAnnouncePopup = showSuccessAnnouncePopup;
+        window.hideSuccessAnnouncePopup = hideSuccessAnnouncePopup;
+
+        document.getElementById('modal-success-announce-close')?.addEventListener('click', () => {
+            window.playSynth?.('bloop');
+            hideSuccessAnnouncePopup();
+        });
+
+        let confirmAnnounceResolve = null;
+
+        function confirmAnnounceElements() {
+            const modal = document.getElementById('modal-confirm-announce');
+            return { modal, panel: modal?.querySelector(':scope > div') };
+        }
+
+        function showConfirmAnnouncePopup(message) {
+            const UI = window.UITransitions;
+            const titolo = document.getElementById('modal-confirm-announce-title');
+            if (titolo && message) titolo.innerText = message;
+
+            return new Promise((resolve) => {
+                confirmAnnounceResolve = resolve;
+                const { modal, panel } = confirmAnnounceElements();
+                if (UI && modal) UI.openOverlayModal(modal, panel);
+                else modal?.classList.remove('hidden');
+            });
+        }
+
+        function hideConfirmAnnouncePopup(confirmed) {
+            const UI = window.UITransitions;
+            const { modal, panel } = confirmAnnounceElements();
+            const close = async () => {
+                if (UI && modal) await UI.closeOverlayModal(modal, panel);
+                else modal?.classList.add('hidden');
+                if (confirmAnnounceResolve) {
+                    confirmAnnounceResolve(!!confirmed);
+                    confirmAnnounceResolve = null;
+                }
+            };
+            if (UI) UI.withLock(close);
+            else close();
+        }
+
+        window.showConfirmAnnouncePopup = showConfirmAnnouncePopup;
+
+        document.getElementById('modal-confirm-announce-cancel')?.addEventListener('click', () => {
+            window.playSynth?.('click');
+            hideConfirmAnnouncePopup(false);
+        });
+
+        document.getElementById('modal-confirm-announce-confirm')?.addEventListener('click', () => {
+            window.playSynth?.('pop');
+            hideConfirmAnnouncePopup(true);
+        });
 
         window.switchStatsTab = function(tab, options = {}) {
             const { animate = true } = options;

@@ -187,21 +187,44 @@
     function pendingWindowResolverId(pending) {
         const order = gameState?.turnOrder || [];
         if (!order.length) return myPlayerId;
-        const preferred = pending?.sourcePlayerId || pending?.initiatorId;
-        if (preferred && order.includes(preferred)) return preferred;
-        return order[0];
+        let preferred = null;
+        switch (pending?.type) {
+            case 'brainrotDiscard':
+                preferred = pending.winnerId;
+                break;
+            case 'drawStackWindow':
+                preferred = pending.defenderId;
+                break;
+            case 'brainrotBattle':
+                preferred = pending.initiatorId;
+                break;
+            case 'counterWindow':
+                preferred = pending.sourcePlayerId;
+                break;
+            default:
+                break;
+        }
+        const fallbacks = [
+            preferred,
+            pending?.winnerId,
+            pending?.defenderId,
+            pending?.initiatorId,
+            pending?.sourcePlayerId
+        ].filter((id, idx, arr) => id && order.includes(id) && arr.indexOf(id) === idx);
+        return fallbacks[0] || order[0];
     }
 
     function resolvePendingWindowAction(pending, options = {}) {
+        const resolverId = pendingWindowResolverId(pending);
         switch (pending.type) {
             case 'counterWindow':
-                return Engine.resolveCounterWindow(gameState, myPlayerId, options);
+                return Engine.resolveCounterWindow(gameState, resolverId, options);
             case 'brainrotBattle':
-                return Engine.resolveBrainrotBattle(gameState, myPlayerId, options);
+                return Engine.resolveBrainrotBattle(gameState, resolverId, options);
             case 'drawStackWindow':
-                return Engine.resolveDrawStackWindow(gameState, myPlayerId, options);
+                return Engine.resolveDrawStackWindow(gameState, resolverId, options);
             case 'brainrotDiscard':
-                return Engine.resolveBrainrotDiscard(gameState, pending.winnerId, []);
+                return Engine.resolveBrainrotDiscard(gameState, pending.winnerId, [], { force: true, ...options });
             default:
                 return { ok: false, error: 'Finestra sconosciuta.' };
         }
@@ -264,7 +287,7 @@
 
             if (cur.type === 'brainrotDiscard' && cur.winnerId === myPlayerId && playSelection?.mode === 'brainrotDiscard') {
                 const ids = playSelection.ids || [];
-                await commitAction(() => Engine.resolveBrainrotDiscard(gameState, myPlayerId, ids), { quiet: true });
+                await commitAction(() => Engine.resolveBrainrotDiscard(gameState, myPlayerId, ids, { force: true }), { quiet: true });
             } else {
                 await commitAction(() => resolvePendingWindowAction(cur, { force: true }), { quiet: true });
             }
@@ -311,17 +334,26 @@
         let canAct = false;
         let label = 'Attesa risposte…';
         if (pending.type === 'counterWindow') {
-            const effectName = pending.cardValue === 'death' ? 'Death Note' : pending.cardValue === 'blobby' ? 'Blobby' : 'effetto';
-            label = `Contrasto ${effectName} — Righello/Scudo (5s)`;
+            const effectName = pending.cardValue === 'death' ? 'Death Note'
+                : pending.cardValue === 'blobby' ? 'Blobby'
+                    : pending.cardValue || 'effetto';
+            const src = gameState?.players?.[pending.sourcePlayerId]?.nickname || '—';
+            label = pending.sourcePlayerId === myPlayerId
+                ? `Attesa contrasti a ${effectName} (5s)`
+                : `Contrasto ${effectName} — ${src} (5s)`;
             canAct = pending.sourcePlayerId !== myPlayerId && !!firstCounterCard();
         } else if (pending.type === 'brainrotBattle') {
-            label = 'Brainrot Battle — gioca un Brainrot (5s)';
+            const init = gameState?.players?.[pending.initiatorId]?.nickname || '—';
+            label = `Brainrot Battle — ${init} (5s)`;
             canAct = Engine.canPlayBrainrotResponse(gameState, myPlayerId);
         } else if (pending.type === 'drawStackWindow') {
             const stackLabel = pending.drawStackType === 'draw10' ? '+10'
                 : pending.drawStackType === 'draw16' ? '+16'
                     : pending.drawStackType === 'wild4' ? '+4' : '+2';
-            label = `Stack ${stackLabel} (${pending.drawStack} carte) — 5s`;
+            const def = gameState?.players?.[pending.defenderId]?.nickname || '—';
+            label = pending.defenderId === myPlayerId
+                ? `Rispondi stack ${stackLabel} (${pending.drawStack}) — 5s`
+                : `Stack ${stackLabel} su ${def} (${pending.drawStack}) — 5s`;
             canAct = Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
         } else if (pending.type === 'brainrotDiscard') {
             label = `Scarta fino a ${pending.maxDiscard} carte numero (5s)`;
@@ -619,15 +651,16 @@
         if (!handEl) return;
         const slots = [...handEl.querySelectorAll('.hand-card-slot')];
         const n = slots.length;
-        handEl.classList.toggle('hand-fan-scroll', n > 12);
-        if (n <= 1 || n > 12) {
+        const useScroll = n > 16;
+        handEl.classList.toggle('hand-fan-scroll', useScroll);
+        if (n <= 1) {
             slots.forEach(slot => {
                 slot.style.transform = '';
                 slot.style.zIndex = '';
             });
             return;
         }
-        const maxSpread = Math.min(48, 10 + n * 2.4);
+        const maxSpread = Math.min(useScroll ? 72 : 56, 8 + n * (useScroll ? 2.2 : 2.8));
         slots.forEach((slot, i) => {
             const rot = -maxSpread / 2 + (maxSpread * i) / (n - 1);
             const lift = Math.abs(rot) * 0.12;
@@ -683,13 +716,28 @@
             if (playSelection.altLadder?.length > 1) {
                 $('btn-play-ladder-alt')?.classList.remove('hidden');
             }
+        } else if (playSelection.mode === 'brainrotDiscard') {
+            if (label) {
+                label.textContent = `Scarto Brainrot: ${playSelection.ids.length}/${playSelection.maxDiscard} (solo numeri)`;
+            }
+            if (btn) {
+                btn.textContent = playSelection.ids.length ? `Scarta ${playSelection.ids.length}` : 'Passa';
+            }
+        } else if (playSelection.mode === 'sixseven') {
+            if (label) {
+                label.textContent = `SixSeven: 6+7 (${playSelection.cards.length} carte)`;
+            }
+            if (btn) btn.textContent = 'Gioca 6+7';
         }
     }
 
     function duplicateSelectionLabel(card) {
         if (!card) return '—';
         if (card.kind === 'number') {
-            return `${card.value} (stesso numero)`;
+            return `${card.value} (stesso numero, colori diversi)`;
+        }
+        if (card.kind === 'action' && ['skip', 'reverse', 'draw2'].includes(card.value)) {
+            return `${cardLabel(card)} (stesso tipo, colori diversi)`;
         }
         return `${cardLabel(card)} ×${Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId).length || 1}`;
     }
@@ -962,16 +1010,18 @@
 
     function startBrainrotDiscardSelection(maxDiscard) {
         playSelection = { mode: 'brainrotDiscard', ids: [], maxDiscard };
-        const bar = $('play-selection-bar');
-        if (bar) bar.classList.remove('hidden');
-        updateBrainrotDiscardLabel();
+        updatePlaySelectionBar();
+        renderHand();
     }
 
-    function updateBrainrotDiscardLabel() {
-        const label = $('play-selection-label');
-        if (label && playSelection?.mode === 'brainrotDiscard') {
-            label.textContent = `Scarto Brainrot: ${playSelection.ids.length}/${playSelection.maxDiscard} (solo numeri)`;
-        }
+    function startSixSevenSelection(cards) {
+        playSelection = {
+            mode: 'sixseven',
+            ids: cards.map(c => c.instanceId),
+            cards
+        };
+        updatePlaySelectionBar();
+        renderHand();
     }
 
     function onToggleBrainrotDiscard(instanceId) {
@@ -982,7 +1032,7 @@
         } else if (playSelection.ids.length < playSelection.maxDiscard) {
             playSelection.ids.push(instanceId);
         }
-        updateBrainrotDiscardLabel();
+        updatePlaySelectionBar();
         renderHand();
     }
 
@@ -1199,7 +1249,13 @@
             if (result.state.lastRoulette?.at !== lastRouletteAnimatedAt) {
                 animateBulletRouletteSpin(result.state.lastRoulette);
             }
-            clearPlaySelection();
+            const keepBrainrotSel = snapshotState?.pendingAction?.type === 'brainrotDiscard'
+                && result.state.pendingAction?.type === 'brainrotDiscard'
+                && result.state.pendingAction?.winnerId === myPlayerId
+                && playSelection?.mode === 'brainrotDiscard';
+            if (!keepBrainrotSel) {
+                clearPlaySelection();
+            }
             renderAll();
             handlePending(result.state);
         } catch (err) {
@@ -1257,6 +1313,13 @@
             return;
         }
 
+        const sixSeven = Engine.getSixSevenBatch(gameState, myPlayerId, instanceId);
+        const hasSixSeven = sixSeven.length > 1 && Engine.isValidSixSeven(sixSeven);
+        if (hasSixSeven) {
+            startSixSevenSelection(sixSeven);
+            return;
+        }
+
         const batch = Engine.getDuplicateBatch(gameState, myPlayerId, instanceId);
         const ladder = Engine.getLadderPlay(gameState, myPlayerId, instanceId);
         const hasLadder = ladder.length > 1 && Engine.isValidLadder(ladder);
@@ -1299,6 +1362,14 @@
 
     async function confirmLadderPlay() {
         if (!playSelection || playSelection.mode !== 'ladder') return;
+        const ids = [...playSelection.ids];
+        clearPlaySelection();
+        playSound('cards');
+        await playCardsImmediate(ids);
+    }
+
+    async function confirmSixSevenPlay() {
+        if (!playSelection || playSelection.mode !== 'sixseven') return;
         const ids = [...playSelection.ids];
         clearPlaySelection();
         playSound('cards');
@@ -1448,6 +1519,7 @@
         });
         $('btn-confirm-play')?.addEventListener('click', () => {
             if (playSelection?.mode === 'brainrotDiscard') confirmBrainrotDiscard();
+            else if (playSelection?.mode === 'sixseven') confirmSixSevenPlay();
             else if (playSelection?.mode === 'duplicate') confirmDuplicatePlay();
             else confirmLadderPlay();
         });

@@ -1,4 +1,4 @@
-(function () {
+(function (global) {
 const databaseCarte = window.databaseCarte || [];
 const {
     isAdminUid,
@@ -15,10 +15,12 @@ let unsubLobbies = null;
 let unsubUsers = null;
 let unsubBans = null;
 let unsubSecurity = null;
+let unsubAnnunci = null;
 let cacheLobbies = [];
 let cacheUsers = [];
 let cacheBans = [];
 let cacheSecurityEvents = [];
+let cacheAnnunci = [];
 let selectedLobbyId = null;
 let selectedGiveUserId = null;
 let selectedBanUserId = null;
@@ -35,7 +37,8 @@ function escapeHtml(value) {
 }
 
 function assertAdmin() {
-    if (!isAdminUid(ctx?.auth?.currentUser?.uid)) {
+    const uid = ctx?.auth?.currentUser?.uid || global.currentUserUid;
+    if (!isAdminUid(uid)) {
         throw new Error('Accesso amministratore negato.');
     }
 }
@@ -46,13 +49,23 @@ function adminDb() {
 }
 
 function isCurrentUserAdmin() {
-    return isAdminUid(ctx?.auth?.currentUser?.uid);
+    const uid = ctx?.auth?.currentUser?.uid || global.currentUserUid;
+    return isAdminUid(uid);
 }
 
 function updateAdminButtonVisibility() {
     const btn = document.getElementById('btn-admin-panel');
     if (!btn) return;
-    btn.classList.toggle('hidden', !isCurrentUserAdmin());
+    const isAdmin = isCurrentUserAdmin();
+    btn.classList.toggle('hidden', !isAdmin);
+    const hint = document.getElementById('admin-uid-hint');
+    if (hint) {
+        const uid = ctx?.auth?.currentUser?.uid || global.currentUserUid || '';
+        hint.textContent = isAdmin
+            ? ''
+            : (uid ? `UID account: ${uid}` : '');
+        hint.classList.toggle('hidden', isAdmin || !uid);
+    }
 }
 
 function getAdminProfile() {
@@ -262,7 +275,7 @@ function switchAdminTab(tab, options = {}) {
         if (!toEl) return;
 
         if (!animate || !fromEl || fromEl === toEl || adminTabCorrente === null) {
-            ['lobbies', 'gives', 'ban', 'security'].forEach(name => {
+            ['lobbies', 'gives', 'ban', 'security', 'annunci'].forEach(name => {
                 document.getElementById(adminSectionId(name))?.classList.toggle('hidden', name !== tab);
             });
         } else if (UI) {
@@ -638,6 +651,23 @@ function startRealtimeListeners() {
             .sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
         renderAdminSecurityEvents();
     });
+
+    if (typeof ctx.query === 'function' && typeof ctx.orderBy === 'function') {
+        unsubAnnunci = ctx.onSnapshot(
+            ctx.query(ctx.collection(adminDb(), 'annunci'), ctx.orderBy('createdAt', 'desc')),
+            snapshot => {
+                cacheAnnunci = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+                renderAdminAnnunci();
+            },
+            err => {
+                console.error('[ADMIN] annunci listener:', err);
+                cacheAnnunci = [];
+                renderAdminAnnunci();
+            }
+        );
+    } else {
+        console.warn('[ADMIN] query/orderBy non disponibili — tab Annunci senza sync live.');
+    }
 }
 
 function formatRemaining(expiresAt) {
@@ -646,6 +676,93 @@ function formatRemaining(expiresAt) {
     const h = Math.floor(diff / 3600000);
     const m = Math.floor((diff % 3600000) / 60000);
     return h >= 24 ? `${Math.floor(h / 24)}g ${h % 24}h` : `${h}h ${m}m`;
+}
+
+function renderAdminAnnunci() {
+    const container = document.getElementById('admin-annunci-list');
+    if (!container) return;
+
+    if (!cacheAnnunci.length) {
+        container.innerHTML = `<div class="text-center text-slate-500 text-sm font-bold p-4">Nessun annuncio pubblicato</div>`;
+        return;
+    }
+
+    const UI = global.AnnouncementsUI;
+    container.innerHTML = cacheAnnunci.map(ann => `
+        <div class="bg-black/40 border border-amber-900/35 rounded-2xl p-3">
+            <div class="flex items-start justify-between gap-2">
+                <div class="min-w-0 flex-1">
+                    <div class="font-black text-amber-300 text-sm truncate">${escapeHtml(ann.title || '—')}</div>
+                    <div class="text-[10px] text-slate-500 font-bold uppercase mt-1">
+                        v${escapeHtml(ann.gameVersion || UI?.defaultGameVersion?.() || '1.0.0')}
+                        • ${escapeHtml(UI?.formatDate?.(ann.createdAt) || '—')}
+                        • ${ann.bold ? 'Grassetto' : 'Normale'}
+                        • ${escapeHtml(ann.fontSize || 'md')}
+                    </div>
+                    <p class="text-[11px] text-slate-400 mt-2 line-clamp-3 whitespace-pre-wrap">${escapeHtml(ann.content || '')}</p>
+                </div>
+                <button type="button" data-admin-delete-ann="${escapeHtml(ann.id)}"
+                    class="btn-chunky btn-red px-3 py-1.5 text-[10px] shrink-0" data-sound="error">Elimina</button>
+            </div>
+        </div>
+    `).join('');
+
+    container.querySelectorAll('[data-admin-delete-ann]').forEach(btn => {
+        btn.addEventListener('click', () => adminDeleteAnnuncio(btn.getAttribute('data-admin-delete-ann')));
+    });
+}
+
+async function adminPublishAnnuncio() {
+    assertAdmin();
+    const title = document.getElementById('admin-ann-title')?.value?.trim();
+    const content = document.getElementById('admin-ann-content')?.value?.trim();
+    const gameVersion = document.getElementById('admin-ann-version')?.value?.trim()
+        || global.AnnouncementsUI?.defaultGameVersion?.()
+        || global.AdminConfig?.GAME_VERSION
+        || '1.0.0';
+    const bold = !!document.getElementById('admin-ann-bold')?.checked;
+    const fontSize = document.getElementById('admin-ann-size')?.value || 'md';
+
+    if (!title || !content) {
+        alert('Titolo e contenuto sono obbligatori.');
+        return;
+    }
+
+    try {
+        await ctx.addDoc(ctx.collection(adminDb(), 'annunci'), {
+            title,
+            content,
+            gameVersion,
+            bold,
+            fontSize: ['sm', 'md', 'lg'].includes(fontSize) ? fontSize : 'md',
+            createdAt: new Date().toISOString(),
+            authorUid: ctx.auth.currentUser.uid
+        });
+        document.getElementById('admin-ann-title').value = '';
+        document.getElementById('admin-ann-content').value = '';
+        document.getElementById('admin-ann-bold').checked = false;
+        document.getElementById('admin-ann-size').value = 'md';
+        ctx.playSynth?.('bloop');
+        ctx.showSuccessAnnouncePopup?.('Annuncio pubblicato con successo');
+    } catch (error) {
+        alert('Errore pubblicazione: ' + error.message);
+    }
+}
+
+async function adminDeleteAnnuncio(annuncioId) {
+    assertAdmin();
+    if (!annuncioId) return;
+
+    const confirmed = await ctx.showConfirmAnnouncePopup?.('Eliminare questo annuncio?');
+    if (!confirmed) return;
+
+    try {
+        await ctx.deleteDoc(ctx.doc(adminDb(), 'annunci', annuncioId));
+        ctx.playSynth?.('pop');
+        ctx.showSuccessAnnouncePopup?.('Annuncio eliminato con successo');
+    } catch (error) {
+        alert('Errore eliminazione: ' + error.message);
+    }
 }
 
 function renderAdminSecurityEvents() {
@@ -683,7 +800,8 @@ function stopRealtimeListeners() {
     unsubUsers?.();
     unsubBans?.();
     unsubSecurity?.();
-    unsubLobbies = unsubUsers = unsubBans = unsubSecurity = null;
+    unsubAnnunci?.();
+    unsubLobbies = unsubUsers = unsubBans = unsubSecurity = unsubAnnunci = null;
 }
 
 function openAdminPanel() {
@@ -691,9 +809,30 @@ function openAdminPanel() {
         alert('Accesso negato.');
         return;
     }
+    if (!ctx?.openModal) {
+        alert('Pannello admin non inizializzato. Ricarica la pagina.');
+        return;
+    }
+    const versionInput = document.getElementById('admin-ann-version');
+    if (versionInput && !versionInput.value) {
+        versionInput.placeholder = global.AnnouncementsUI?.defaultGameVersion?.()
+            || global.AdminConfig?.GAME_VERSION
+            || '1.0.0';
+    }
     switchAdminTab('lobbies', { animate: false });
-    startRealtimeListeners();
-    ctx.openModal('modal-admin-panel');
+    try {
+        ctx.openModal('modal-admin-panel');
+    } catch (err) {
+        console.error('[ADMIN] openModal:', err);
+        alert('Impossibile aprire il pannello admin.');
+        return;
+    }
+    try {
+        startRealtimeListeners();
+    } catch (err) {
+        console.error('[ADMIN] listeners:', err);
+        alert('Pannello aperto, ma alcuni dati live non si sono caricati. Controlla la console.');
+    }
 }
 
 function closeAdminPanel() {
@@ -710,7 +849,10 @@ function initAdminPanel(context) {
     adminInitialized = true;
 
     document.getElementById('btn-admin-panel')?.addEventListener('click', () => {
-        if (!isCurrentUserAdmin()) return;
+        if (!isCurrentUserAdmin()) {
+            alert('Accesso negato.');
+            return;
+        }
         openAdminPanel();
     });
 
@@ -743,12 +885,13 @@ function initAdminPanel(context) {
 
     document.getElementById('admin-btn-confirm-ban')?.addEventListener('click', adminExecuteBan);
     document.getElementById('admin-btn-unban')?.addEventListener('click', adminUnban);
+    document.getElementById('admin-btn-publish-ann')?.addEventListener('click', adminPublishAnnuncio);
 }
 
-window.AdminPanel = {
+global.AdminPanel = {
     initAdminPanel,
     updateAdminButtonVisibility,
     closeAdminPanel,
     isCurrentUserAdmin
 };
-})();
+})(window);
