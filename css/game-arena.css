@@ -5,8 +5,19 @@
     --arena-bg-2: #12080c;
     --arena-glow: #f97316;
     --arena-gold: #facc15;
-    --player-dock-h: clamp(148px, 34vh, 220px);
+    --player-dock-h: clamp(160px, 36vh, 240px);
 }
+
+.uno-game.game-root {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    height: 100vh;
+    height: 100dvh;
+    overflow: hidden;
+}
+
+.uno-game .hidden { display: none !important; }
 
 .uno-game body,
 .uno-game.game-root {
@@ -329,10 +340,14 @@
 
 .uno-game .center-piles {
     position: relative;
-    z-index: 2;
+    z-index: 5;
     display: flex;
     align-items: center;
     gap: 1.1rem;
+}
+
+.uno-game .dir-ring {
+    z-index: 1;
 }
 
 /* Action rail */
@@ -567,11 +582,13 @@
 
 .uno-game .hand-fan-zone {
     min-width: 0;
+    min-height: 8.5rem;
     display: flex;
     flex-direction: column;
     align-items: center;
     justify-content: flex-end;
     padding-bottom: 0.15rem;
+    overflow: visible;
 }
 
 .uno-game #play-selection-bar {
@@ -599,7 +616,7 @@
     overflow-y: visible;
     -webkit-overflow-scrolling: touch;
     touch-action: pan-x;
-    padding: 0.25rem 0.15rem 0;
+    padding: 0.35rem 0.25rem 0;
     display: flex;
     justify-content: center;
 }
@@ -608,9 +625,27 @@
     display: flex;
     align-items: flex-end;
     justify-content: center;
-    min-height: 7.5rem;
+    min-height: 7.75rem;
     padding: 0.25rem 0.5rem 0;
     transform-origin: bottom center;
+}
+
+.uno-game .hand-card-slot {
+    flex: 0 0 auto;
+    transform-origin: bottom center;
+    transition: transform 0.15s ease;
+}
+
+.uno-game #my-hand:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
+    margin-left: -1.85rem;
+}
+
+.uno-game #my-hand.hand-size-many:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
+    margin-left: -2.1rem;
+}
+
+.uno-game #my-hand.hand-size-crowded:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
+    margin-left: -2.45rem;
 }
 
 .uno-game #my-hand.hand-fan-scroll {
@@ -622,10 +657,6 @@
 .uno-game #my-hand .gc-card-hand {
     transform-origin: bottom center;
     margin-left: 0;
-}
-
-.uno-game #my-hand:not(.hand-fan-scroll) .gc-card-hand + .gc-card-hand {
-    margin-left: -2rem;
 }
 
 .uno-game .btn-fine-turno {
@@ -719,10 +750,167 @@
 .uno-game #my-hand.hand-size-many .gc-card-hand { width: 4rem; height: 5.85rem; }
 .uno-game #my-hand.hand-size-crowded .gc-card-hand { width: 3.35rem; height: 4.9rem; }
 
-.uno-game .gc-card-hand:hover:not(.gc-card-disabled) {
+.uno-game .hand-card-slot:hover .gc-card-hand:not(.gc-card-disabled) {
     z-index: 20 !important;
 }
 
 .uno-game .gc-card-selected {
     z-index: 25 !important;
+}
+
+/* Carte: reset button + colori espliciti (evita testo flottante senza sfondo) */
+.uno-game .gc-card {
+    position: relative;
+    box-sizing: border-box;
+    flex-shrink: 0;
+}
+
+.uno-game button.gc-card {
+    appearance: none;
+    -webkit-appearance: none;
+    font: inherit;
+    margin: 0;
+    padding: 0;
+    border-style: solid;
+    background-color: #334155;
+    background-image: none;
+}
+
+.uno-game button.gc-card.gc-card-red,
+.uno-game .gc-card.gc-card-red { background: #dc2626 !important; color: #fff; }
+
+.uno-game button.gc-card.gc-card-yellow,
+.uno-game .gc-card.gc-card-yellow { background: #eab308 !important; color: #0f172a; }
+
+.uno-game button.gc-card.gc-card-green,
+.uno-game .gc-card.gc-card-green { background: #16a34a !important; color: #fff; }
+
+.uno-game button.gc-card.gc-card-blue,
+.uno-game .gc-card.gc-card-blue { background: #2563eb !important; color: #fff; }
+
+.uno-game button.gc-card.gc-card-black,
+.uno-game .gc-card.gc-card-black {
+    background: linear-gradient(145deg, #1f2937 0%, #020617 100%) !important;
+    color: #f8fafc;
+}
+
+.uno-game button.gc-card.gc-card-wild,
+.uno-game .gc-card.gc-card-wild {
+    background: linear-gradient(145deg, #64748b 0%, #334155 100%) !important;
+    color: #fff;
+}
+
+.uno-game button.gc-card.gc-card-brainrot,
+.uno-game .gc-card.gc-card-brainrot {
+    background: linear-gradient(160deg, #312e81, #1e1b4b) !important;
+    color: #e0e7ff;
+}
+
+.uno-game button.gc-card.gc-card-battle-yellow,
+.uno-game .gc-card.gc-card-battle-yellow { background: #eab308 !important; color: #0f172a; }
+
+.uno-game button.gc-card.gc-card-battle-white,
+.uno-game .gc-card.gc-card-battle-white { background: #f1f5f9 !important; color: #0f172a; }
+
+.uno-game button.gc-card.gc-card-battle-pink,
+.uno-game .gc-card.gc-card-battle-pink { background: #ec4899 !important; color: #fff; }
+
+.uno-game button.gc-card.gc-card-battle-blue,
+.uno-game .gc-card.gc-card-battle-blue { background: #2563eb !important; color: #fff; }
+
+.uno-game button.gc-card.gc-card-draw-back,
+.uno-game .gc-card.gc-card-draw-back {
+    background: linear-gradient(145deg, #b91c1c 0%, #7f1d1d 55%, #450a0a 100%) !important;
+    color: #fef3c7;
+}
+
+.uno-game .gc-card-pile .gc-card-center {
+    font-size: 1.35rem;
+    max-width: 92%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.uno-game .gc-card-pile .gc-card-sub {
+    font-size: 0.38rem;
+}
+
+/* Modali / overlay */
+.uno-game .game-modal {
+    position: fixed;
+    inset: 0;
+    z-index: 50;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1rem;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(4px);
+}
+
+.uno-game .game-modal-panel {
+    width: 100%;
+    max-width: 24rem;
+    background: #0f172a;
+    border: 2px solid #f59e0b;
+    border-radius: 1rem;
+    padding: 1.5rem;
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+}
+
+.uno-game .game-modal-title {
+    font-size: 1.25rem;
+    font-weight: 900;
+    color: #f59e0b;
+    text-transform: uppercase;
+    margin-bottom: 0.25rem;
+}
+
+.uno-game .game-modal-desc {
+    font-size: 0.875rem;
+    color: #94a3b8;
+    margin-bottom: 1rem;
+}
+
+.uno-game .end-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+    background: rgba(0, 0, 0, 0.85);
+}
+
+.uno-game .end-overlay-panel { text-align: center; max-width: 28rem; }
+
+.uno-game .end-overlay-title {
+    font-size: 2.25rem;
+    font-weight: 900;
+    color: #fbbf24;
+    margin-bottom: 0.75rem;
+}
+
+.uno-game .end-overlay-duration {
+    font-size: 1.125rem;
+    color: #cbd5e1;
+    font-family: monospace;
+    margin-bottom: 0.5rem;
+}
+
+.uno-game .end-overlay-rewards {
+    font-size: 0.875rem;
+    color: #34d399;
+    font-weight: 700;
+    margin-bottom: 1rem;
+}
+
+.uno-game .end-overlay-hint { font-size: 0.875rem; color: #64748b; }
+
+.uno-game .roulette-spin-btn {
+    width: 100%;
+    padding: 0.75rem;
+    margin-top: 0.75rem;
+    font-size: 0.875rem;
 }

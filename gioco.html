@@ -8,7 +8,6 @@
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/mobile.css">
     <link rel="stylesheet" href="css/game-arena.css">
-    <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
@@ -60,7 +59,7 @@
             height: 5.35rem;
         }
 
-        .gc-card-hand:hover:not(.gc-card-disabled):not(:disabled) {
+        .hand-card-slot:hover .gc-card-hand:not(.gc-card-disabled):not(:disabled) {
             transform: translateY(-10px) scale(1.05);
             box-shadow: 0 10px 0 rgba(0, 0, 0, 0.32), 0 16px 28px rgba(0, 0, 0, 0.38);
             z-index: 5;
@@ -362,7 +361,7 @@
         window.deleteDoc = deleteDoc;
     </script>
 </head>
-<body class="uno-page uno-game game-root w-full h-screen flex flex-col overflow-hidden select-none">
+<body class="uno-page uno-game game-root select-none">
 
     <header class="game-topbar">
         <div class="game-logo">
@@ -452,10 +451,10 @@
             <div class="hand-fan-zone">
                 <div id="play-selection-bar" class="hidden">
                     <span id="play-selection-label">—</span>
-                    <button type="button" id="btn-play-all-dup" class="hidden btn-chunky btn-cyan text-[10px] px-2 py-1" data-sound="click">Tutte</button>
-                    <button type="button" id="btn-play-ladder-alt" class="hidden btn-chunky btn-purple text-[10px] px-2 py-1" data-sound="click">Scala</button>
-                    <button type="button" id="btn-confirm-play" class="btn-chunky btn-emerald text-[10px] px-2 py-1" data-sound="bloop">Gioca</button>
-                    <button type="button" id="btn-cancel-play" class="btn-chunky btn-slate text-[10px] px-2 py-1" data-sound="pop">Annulla</button>
+                    <button type="button" id="btn-play-all-dup" class="hidden btn-chunky btn-cyan play-sel-btn" data-sound="click">Tutte</button>
+                    <button type="button" id="btn-play-ladder-alt" class="hidden btn-chunky btn-purple play-sel-btn" data-sound="click">Scala</button>
+                    <button type="button" id="btn-confirm-play" class="btn-chunky btn-emerald play-sel-btn" data-sound="bloop">Gioca</button>
+                    <button type="button" id="btn-cancel-play" class="btn-chunky btn-slate play-sel-btn" data-sound="pop">Annulla</button>
                 </div>
                 <div class="hand-fan-wrap no-scrollbar">
                     <div id="my-hand" class="hand-size-normal"></div>
@@ -473,10 +472,10 @@
 
     <div id="game-toast" class="hidden"></div>
 
-    <div id="game-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-        <div class="bg-slate-900 border-2 border-amber-500 w-full max-w-sm rounded-2xl p-6 shadow-2xl">
-            <h2 id="modal-title" class="text-xl font-black text-amber-500 uppercase mb-1">—</h2>
-            <p id="modal-description" class="text-sm text-slate-400 mb-4"></p>
+    <div id="game-modal" class="game-modal hidden">
+        <div class="game-modal-panel">
+            <h2 id="modal-title" class="game-modal-title">—</h2>
+            <p id="modal-description" class="game-modal-desc"></p>
             <div id="modal-content"></div>
         </div>
     </div>
@@ -489,17 +488,17 @@
                 <div id="roulette-wheel" class="roulette-wheel"></div>
             </div>
             <p id="roulette-hint" class="text-[11px] text-slate-400 mt-2 font-bold"></p>
-            <button type="button" id="roulette-spin-btn" class="btn-chunky btn-red w-full py-3 mt-3 text-sm" disabled data-sound="bloop">Gira la ruota</button>
+            <button type="button" id="roulette-spin-btn" class="btn-chunky btn-red roulette-spin-btn" disabled data-sound="bloop">Gira la ruota</button>
             <p id="roulette-result" class="roulette-result"></p>
         </div>
     </div>
 
-    <div id="end-overlay" class="hidden fixed inset-0 z-[70] bg-black/85 flex items-center justify-center p-6">
-        <div class="text-center max-w-md">
-            <h2 id="end-title" class="text-4xl font-black text-amber-400 mb-3">—</h2>
-            <p id="end-duration" class="text-lg text-slate-300 font-mono mb-2">—</p>
-            <p id="end-rewards" class="text-sm text-emerald-400 font-bold mb-4"></p>
-            <p class="text-sm text-slate-500">Ritorno alla sala d'attesa tra pochi secondi…</p>
+    <div id="end-overlay" class="end-overlay hidden">
+        <div class="end-overlay-panel">
+            <h2 id="end-title" class="end-overlay-title">—</h2>
+            <p id="end-duration" class="end-overlay-duration">—</p>
+            <p id="end-rewards" class="end-overlay-rewards"></p>
+            <p class="end-overlay-hint">Ritorno alla sala d'attesa tra pochi secondi…</p>
         </div>
     </div>
 

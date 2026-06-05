@@ -104,10 +104,11 @@
             };
         }
 
-        const label = card.label || String(card.value || '—');
+        let label = card.label || String(card.value || '—');
+        if (label.length > 8) label = `${label.slice(0, 7)}…`;
         const subtitle = SPECIAL_CAT[card.value] || (card.color === 'wild' ? '🃏 Jolly' : '⬛ Speciale');
         if (card.planPart) {
-            return { mode: 'classic', label: `${label} ${card.planPart}`, subtitle };
+            return { mode: 'classic', label: `${label} ${card.planPart}`.trim(), subtitle };
         }
         return { mode: 'classic', label, subtitle };
     }

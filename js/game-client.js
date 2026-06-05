@@ -579,7 +579,8 @@
 
         dossier?.classList.toggle('my-turn', myTurn);
         if (nameEl) nameEl.textContent = me?.nickname || 'Tu';
-        if (metaEl) metaEl.textContent = `${count} 🃏`;
+        const handLen = myHand().length;
+        if (metaEl) metaEl.textContent = `${handLen > 0 ? handLen : count} 🃏`;
         if (avEl) {
             avEl.innerHTML = '';
             if (AvatarUI) AvatarUI.mountAvatar(avEl, me?.avatar);
@@ -616,22 +617,22 @@
 
     function applyHandFan(handEl) {
         if (!handEl) return;
-        const cards = [...handEl.querySelectorAll('.gc-card-hand')];
-        const n = cards.length;
+        const slots = [...handEl.querySelectorAll('.hand-card-slot')];
+        const n = slots.length;
         handEl.classList.toggle('hand-fan-scroll', n > 12);
         if (n <= 1 || n > 12) {
-            cards.forEach(card => {
-                card.style.transform = '';
-                card.style.zIndex = '';
+            slots.forEach(slot => {
+                slot.style.transform = '';
+                slot.style.zIndex = '';
             });
             return;
         }
-        const maxSpread = Math.min(52, 12 + n * 2.6);
-        cards.forEach((card, i) => {
+        const maxSpread = Math.min(48, 10 + n * 2.4);
+        slots.forEach((slot, i) => {
             const rot = -maxSpread / 2 + (maxSpread * i) / (n - 1);
-            const lift = Math.abs(rot) * 0.14;
-            card.style.transform = `rotate(${rot}deg) translateY(${-lift}px)`;
-            card.style.zIndex = String(i + 1);
+            const lift = Math.abs(rot) * 0.12;
+            slot.style.transform = `rotate(${rot}deg) translateY(${-lift}px)`;
+            slot.style.zIndex = String(i + 1);
         });
     }
 
@@ -794,10 +795,6 @@
     }
 
     function syncHandDockHeight() {
-        if (window.innerWidth > 768) {
-            document.documentElement.style.removeProperty('--game-hand-dock');
-            return;
-        }
         const section = document.querySelector('.uno-game .player-stage');
         if (!section) return;
         const h = Math.ceil(section.getBoundingClientRect().height);
@@ -872,14 +869,17 @@
             const showBattleColor = (brainrotBattle || brainrotDiscard) && card.battleColor;
             const dupKey = Engine.cardDuplicateKey(card);
             const dupSize = duplicateCounts[dupKey] || 0;
-            const playableDupSize = playableTurn
+            const canDupPlay = Engine.allowsMultiDuplicatePlay?.(card);
+            const playableDupSize = playableTurn && canDupPlay
                 ? Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId).length
                 : 0;
-            const showDupBadge = playableTurn && playableDupSize > 1 && !playSelection;
+            const dupHintSize = playableTurn && canDupPlay ? dupSize : 0;
+            const showDupBadge = playableTurn && canDupPlay && playableDupSize > 1 && !playSelection;
             const dupCountSelected = duplicateKey === dupKey ? selIds.size : 0;
             const showSelBadge = duplicateKey === dupKey && dupCountSelected > 0;
-            const effectiveDupSize = playableDupSize > 1 ? playableDupSize : dupSize;
+            const effectiveDupSize = playableDupSize > 1 ? playableDupSize : dupHintSize;
             const lbl = cardLabel(card);
+            const fmtDup = n => (n > 9 ? '9+' : String(n));
 
             const extra = [
                 playable ? '' : 'gc-card-disabled',
@@ -891,9 +891,9 @@
             ].filter(Boolean).join(' ');
 
             const dupBadge = showDupBadge
-                ? `<span class="gc-dup-badge">×${playableDupSize}</span>`
-                : (playableTurn && dupSize > 1 && !playSelection
-                    ? `<span class="gc-dup-badge" style="opacity:0.65">×${dupSize}</span>`
+                ? `<span class="gc-dup-badge">×${fmtDup(playableDupSize)}</span>`
+                : (dupHintSize > 1 && !playSelection
+                    ? `<span class="gc-dup-badge" style="opacity:0.65">×${fmtDup(dupHintSize)}</span>`
                     : '');
             const selBadge = showSelBadge
                 ? `<span class="gc-dup-sel">${dupCountSelected}/${effectiveDupSize}</span>`
@@ -930,7 +930,10 @@
             } else if ((playableTurn || playableMari) && !playSelection) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
             }
-            handEl.appendChild(btn);
+            const slot = document.createElement('div');
+            slot.className = 'hand-card-slot';
+            slot.appendChild(btn);
+            handEl.appendChild(slot);
         });
         requestAnimationFrame(() => {
             applyHandFan(handEl);

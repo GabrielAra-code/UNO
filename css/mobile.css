@@ -31,7 +31,7 @@ html {
     .uno-page .option-pill,
     .uno-page .room-checkbox-button,
     .uno-page input[type="submit"],
-    .uno-page .hand-card {
+    .uno-page .gc-card-hand {
         touch-action: manipulation;
     }
 
@@ -539,16 +539,16 @@ html {
         height: 3.85rem;
     }
 
-    .uno-game #my-hand .gc-card-hand + .gc-card-hand {
-        margin-left: -1.85rem !important;
+    .uno-game #my-hand:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
+        margin-left: -1.65rem !important;
     }
 
-    .uno-game #my-hand.hand-size-many .gc-card-hand + .gc-card-hand {
-        margin-left: -2.1rem !important;
+    .uno-game #my-hand.hand-size-many:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
+        margin-left: -1.9rem !important;
     }
 
-    .uno-game #my-hand.hand-size-crowded .gc-card-hand + .gc-card-hand {
-        margin-left: -2.4rem !important;
+    .uno-game #my-hand.hand-size-crowded:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {
+        margin-left: -2.15rem !important;
     }
 
     .uno-game .gc-card-pile {
@@ -649,7 +649,7 @@ html {
         --game-hand-dock: clamp(132px, 36vh, 220px);
     }
 
-    .uno-game #my-hand .hand-card {
+    .uno-game #my-hand .gc-card-hand {
         width: 3.15rem !important;
         height: 4.75rem !important;
         min-width: 3.15rem;
