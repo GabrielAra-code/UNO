@@ -574,14 +574,10 @@ html {
         white-space: nowrap;
     }
 
-    .uno-game #my-hand.hand-size-many .gc-card-hand {
-        width: 3rem;
-        height: 4.45rem;
-    }
-
+    .uno-game #my-hand.hand-size-many .gc-card-hand,
     .uno-game #my-hand.hand-size-crowded .gc-card-hand {
-        width: 2.55rem;
-        height: 3.85rem;
+        width: 3.65rem;
+        height: 5.35rem;
     }
 
     .uno-game #my-hand:not(.hand-fan-scroll) .hand-card-slot + .hand-card-slot {

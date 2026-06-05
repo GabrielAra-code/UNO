@@ -20,6 +20,7 @@
     let counterTickTimer = null;
     let counterWindowKey = null;
     let playSelection = null;
+    let cardPickFlow = null;
     let saveInFlight = false;
     let commitChain = Promise.resolve();
     const AvatarUI = global.AvatarUI;
@@ -43,20 +44,47 @@
         return { modal, panel: modal?.querySelector(':scope > div') };
     }
 
-    function revealGameModal() {
-        const { modal, panel } = gameModalElements();
-        if (!modal) return;
-        const UI = global.UITransitions;
-        if (UI) UI.openOverlayModal(modal, panel);
-        else modal.classList.remove('hidden');
+    function isGameModalOpen() {
+        const modal = $('game-modal');
+        return !!modal && !modal.classList.contains('hidden');
     }
 
-    function hideGameModal() {
-        const { modal, panel } = gameModalElements();
-        if (!modal) return;
+    function withGameModalLock(fn) {
         const UI = global.UITransitions;
-        if (UI) UI.closeOverlayModal(modal, panel);
-        else modal.classList.add('hidden');
+        if (UI) return UI.withLock(fn);
+        return fn();
+    }
+
+    async function revealGameModal() {
+        await withGameModalLock(async () => {
+            const { modal, panel } = gameModalElements();
+            if (!modal || !modal.classList.contains('hidden')) return;
+            const UI = global.UITransitions;
+            if (UI) await UI.openOverlayModal(modal, panel);
+            else modal.classList.remove('hidden');
+        });
+    }
+
+    async function hideGameModal() {
+        await withGameModalLock(async () => {
+            const { modal, panel } = gameModalElements();
+            if (!modal || modal.classList.contains('hidden')) return;
+            const UI = global.UITransitions;
+            if (UI) await UI.closeOverlayModal(modal, panel);
+            else modal.classList.add('hidden');
+            cardPickFlow = null;
+        });
+    }
+
+    function replaceGameModalContent({ title, description, buildContent }) {
+        $('modal-title').textContent = title;
+        $('modal-description').textContent = description;
+        const content = $('modal-content');
+        content.innerHTML = '';
+        buildContent(content);
+        if (!isGameModalOpen()) {
+            revealGameModal();
+        }
     }
 
     function formatDuration(ms) {
@@ -653,9 +681,15 @@
     }
 
     function defaultHandOverlapPx(handEl, cardW) {
-        if (handEl.classList.contains('hand-size-crowded')) return cardW * 0.73;
-        if (handEl.classList.contains('hand-size-many')) return cardW * 0.62;
+        if (handEl.classList.contains('hand-size-crowded')) return cardW * 0.5;
+        if (handEl.classList.contains('hand-size-many')) return cardW * 0.42;
         return cardW * 0.35;
+    }
+
+    function handFanSpreadDeg(n) {
+        if (n <= 1) return 0;
+        if (n >= 12) return Math.min(16, 4 + n * 0.22);
+        return Math.min(n > 16 ? 72 : 56, 8 + n * (n > 16 ? 2.2 : 2.8));
     }
 
     function applySlotOverlap(slots, overlapPx) {
@@ -676,11 +710,8 @@
 
     function setHandScrollState(handEl, wrap, needsScroll) {
         handEl.classList.toggle('hand-fan-scroll', needsScroll);
-        if (isMobileHandLayout()) {
-            wrap?.classList.toggle('hand-fan-wrap--scroll', needsScroll);
-        } else {
-            wrap?.classList.remove('hand-fan-wrap--scroll');
-        }
+        wrap?.classList.toggle('hand-fan-wrap--scroll', needsScroll);
+        wrap?.classList.toggle('no-scrollbar', !needsScroll);
     }
 
     function fitHandToWrap(handEl, slots) {
@@ -703,10 +734,10 @@
             return;
         }
 
-        const maxOverlap = cardW * 0.9;
+        const maxOverlap = cardW * 0.52;
         applySlotOverlap(slots, overlap);
         let guard = 0;
-        while (handEl.scrollWidth > wrap.clientWidth - 4 && overlap < maxOverlap && guard < 48) {
+        while (handEl.scrollWidth > wrap.clientWidth - 4 && overlap < maxOverlap && guard < 24) {
             overlap += 2;
             applySlotOverlap(slots, overlap);
             guard += 1;
@@ -714,7 +745,11 @@
 
         const needsScroll = handEl.scrollWidth > wrap.clientWidth - 4;
         setHandScrollState(handEl, wrap, needsScroll);
-        centerHandInWrap(wrap);
+        if (needsScroll) {
+            centerHandInWrap(wrap);
+        } else {
+            wrap.scrollLeft = 0;
+        }
     }
 
     function applyHandFan(handEl) {
@@ -724,6 +759,7 @@
         const wrap = handEl.closest('.hand-fan-wrap');
         handEl.classList.remove('hand-fan-scroll');
         wrap?.classList.remove('hand-fan-wrap--scroll');
+        wrap?.classList.add('no-scrollbar');
         if (n <= 1) {
             slots.forEach(slot => {
                 slot.style.transform = '';
@@ -733,7 +769,7 @@
             wrap && (wrap.scrollLeft = 0);
             return;
         }
-        const maxSpread = Math.min(n > 16 ? 72 : 56, 8 + n * (n > 16 ? 2.2 : 2.8));
+        const maxSpread = handFanSpreadDeg(n);
         slots.forEach((slot, i) => {
             const rot = -maxSpread / 2 + (maxSpread * i) / (n - 1);
             const lift = Math.abs(rot) * 0.12;
@@ -1405,11 +1441,12 @@
         if (state.pendingAction?.type === 'brainrotDiscard' && state.pendingAction.winnerId === myPlayerId) {
             startBrainrotDiscardSelection(state.pendingAction.maxDiscard);
         }
+        if (cardPickFlow) return;
         if (state.pendingAction?.type === 'chooseColor' && state.pendingAction.playerId === myPlayerId) {
-            showColorModal(null);
+            if (!isGameModalOpen()) showColorModal(null);
         }
         if (state.pendingAction?.type === 'chooseTarget' && state.pendingAction.playerId === myPlayerId) {
-            showTargetModal(null, state.pendingAction.effect);
+            if (!isGameModalOpen()) showTargetModal(null, state.pendingAction.effect);
         }
         if (state.pendingAction?.type === 'bulletRoulette' && !state.pendingAction.spun) {
             showBulletRouletteWaiting(state.pendingAction);
@@ -1529,45 +1566,47 @@
         await playCardsImmediate(ids);
     }
 
-    function showCardPickModal({ title, description, cards, onPick }) {
-        const modal = $('game-modal');
-        const content = $('modal-content');
-        $('modal-title').textContent = title;
-        $('modal-description').textContent = description;
-        content.innerHTML = '';
+    function showCardPickModal({ title, description, cards, onPick, flowKey }) {
+        if (flowKey) cardPickFlow = flowKey;
 
-        const list = document.createElement('div');
-        list.className = 'modal-card-pick-list no-scrollbar';
+        replaceGameModalContent({
+            title,
+            description,
+            buildContent: (content) => {
+                const list = document.createElement('div');
+                list.className = 'modal-card-pick-list no-scrollbar';
 
-        if (!cards.length) {
-            const empty = document.createElement('p');
-            empty.className = 'modal-card-pick-empty';
-            empty.textContent = 'Nessuna carta disponibile.';
-            list.appendChild(empty);
-        } else {
-            cards.forEach(card => {
-                const btn = document.createElement('button');
-                btn.type = 'button';
-                btn.className = 'modal-card-pick-btn';
-                if (CardUI) {
-                    CardUI.applyCardFace(btn, card, {
-                        baseClass: 'gc-card gc-card-modal-pick',
-                        extraClass: ''
-                    });
+                if (!cards.length) {
+                    const empty = document.createElement('p');
+                    empty.className = 'modal-card-pick-empty';
+                    empty.textContent = 'Nessuna carta disponibile.';
+                    list.appendChild(empty);
                 } else {
-                    btn.textContent = cardLabel(card);
+                    cards.forEach(card => {
+                        const btn = document.createElement('button');
+                        btn.type = 'button';
+                        btn.className = 'modal-card-pick-btn';
+                        if (CardUI) {
+                            CardUI.applyCardFace(btn, card, {
+                                baseClass: 'gc-card gc-card-modal-pick',
+                                extraClass: ''
+                            });
+                        } else {
+                            btn.textContent = cardLabel(card);
+                        }
+                        btn.onclick = async () => {
+                            playSound('click');
+                            cardPickFlow = null;
+                            await hideGameModal();
+                            await onPick(card);
+                        };
+                        list.appendChild(btn);
+                    });
                 }
-                btn.onclick = async () => {
-                    hideGameModal();
-                    playSound('click');
-                    await onPick(card);
-                };
-                list.appendChild(btn);
-            });
-        }
 
-        content.appendChild(list);
-        revealGameModal();
+                content.appendChild(list);
+            }
+        });
     }
 
     function showNazismGiveModal(playedCardId, targetId) {
@@ -1577,6 +1616,7 @@
             title: 'Nazismo — Carta da cedere',
             description: `Scegli una carta dalla tua mano da dare a ${targetName}.`,
             cards,
+            flowKey: `nazism:${playedCardId}:${targetId}`,
             onPick: card => playCardsImmediate([playedCardId], {
                 targetId,
                 giftCardId: card.instanceId
@@ -1591,6 +1631,7 @@
             title: 'Comunismo — Carta da rubare',
             description: `Scegli una carta da prendere da ${targetName}.`,
             cards,
+            flowKey: `communism:${playedCardId}:${targetId}`,
             onPick: card => playCardsImmediate([playedCardId], {
                 targetId,
                 stolenCardId: card.instanceId
@@ -1683,7 +1724,6 @@
             if (isHeart) b.classList.add('modal-target-revive');
             b.textContent = isHeart ? `${nickname} (eliminato)` : nickname;
             b.onclick = async () => {
-                hideGameModal();
                 playSound('click');
                 if (pendingCardId && effect === 'nazism') {
                     showNazismGiveModal(pendingCardId, id);
@@ -1693,6 +1733,7 @@
                     showCommunismStealModal(pendingCardId, id);
                     return;
                 }
+                await hideGameModal();
                 if (pendingCardId) {
                     await commitAction(() => Engine.playCards(gameState, myPlayerId, [pendingCardId], { targetId: id }));
                 } else {

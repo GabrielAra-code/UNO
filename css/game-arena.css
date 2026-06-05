@@ -595,6 +595,32 @@
     justify-content: center;
 }
 
+.uno-game .hand-fan-wrap.hand-fan-wrap--scroll {
+    overflow-x: auto;
+    overflow-y: hidden;
+    justify-content: flex-start;
+    scroll-behavior: smooth;
+    overscroll-behavior-x: contain;
+    max-width: 100%;
+    padding-inline: 0.5rem;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(148, 163, 184, 0.45) transparent;
+}
+
+.uno-game .hand-fan-wrap.hand-fan-wrap--scroll::-webkit-scrollbar {
+    height: 6px;
+}
+
+.uno-game .hand-fan-wrap.hand-fan-wrap--scroll::-webkit-scrollbar-thumb {
+    background: rgba(148, 163, 184, 0.45);
+    border-radius: 999px;
+}
+
+.uno-game .hand-fan-wrap.hand-fan-wrap--scroll #my-hand {
+    justify-content: flex-start;
+    margin-inline: 0;
+}
+
 .uno-game #my-hand {
     display: flex;
     align-items: flex-end;
@@ -844,8 +870,8 @@
     height: 7rem;
 }
 
-.uno-game #my-hand.hand-size-many .gc-card-hand { width: 4rem; height: 5.85rem; }
-.uno-game #my-hand.hand-size-crowded .gc-card-hand { width: 3.35rem; height: 4.9rem; }
+.uno-game #my-hand.hand-size-many .gc-card-hand,
+.uno-game #my-hand.hand-size-crowded .gc-card-hand { width: 4.35rem; height: 6.25rem; }
 
 .uno-game .hand-card-slot:hover .gc-card-hand:not(.gc-card-disabled) {
     z-index: 20 !important;
