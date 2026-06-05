@@ -329,13 +329,12 @@ html {
         padding: 6px 8px;
     }
 
-    .uno-game .game-main-column {
-        flex: 1;
-        min-height: 0;
-        display: flex;
-        flex-direction: column;
+    .uno-game .game-arena {
         padding-bottom: var(--game-hand-dock);
-        box-sizing: border-box;
+    }
+
+    .uno-game .arena-viewport {
+        max-height: calc(100dvh - var(--game-hand-dock) - 3.5rem);
     }
 
     .uno-game .game-header {
@@ -468,28 +467,8 @@ html {
         flex-shrink: 0;
     }
 
-    .uno-game .hand-section {
-        position: fixed;
-        left: 0;
-        right: 0;
-        bottom: 0;
-        width: 100%;
-        max-width: 100vw;
-        padding: 8px 6px max(10px, var(--safe-bottom)) !important;
-        flex-shrink: 0;
-        max-height: var(--game-hand-dock);
-        min-height: 132px;
-        z-index: 45;
-        background: rgba(2, 6, 23, 0.97);
-        border-top: 2px solid #334155;
-        box-shadow: 0 -8px 32px rgba(0, 0, 0, 0.55);
-        box-sizing: border-box;
-        overflow-x: hidden;
-        overflow-y: visible;
-    }
-
-    .uno-game .hand-section > .max-w-5xl:first-child {
-        margin-bottom: 4px !important;
+    .uno-game .player-stage {
+        --player-dock-h: var(--game-hand-dock);
     }
 
     .uno-game .hand-scroll-wrap {
@@ -526,7 +505,7 @@ html {
         opacity: 1 !important;
     }
 
-    .uno-game #my-hand .hand-card {
+    .uno-game #my-hand .gc-card-hand {
         width: 3.65rem !important;
         height: 5.35rem !important;
         min-width: 3.65rem;
@@ -538,7 +517,7 @@ html {
         box-sizing: border-box;
     }
 
-    .uno-game #my-hand .hand-card-selected {
+    .uno-game #my-hand .gc-card-selected {
         transform: translateY(-8px) scale(1.04);
     }
 
@@ -550,32 +529,46 @@ html {
         white-space: nowrap;
     }
 
-    .uno-game #my-hand.hand-size-many .hand-card {
+    .uno-game #my-hand.hand-size-many .gc-card-hand {
         width: 3rem;
         height: 4.45rem;
     }
 
-    .uno-game #my-hand.hand-size-crowded .hand-card {
+    .uno-game #my-hand.hand-size-crowded .gc-card-hand {
         width: 2.55rem;
         height: 3.85rem;
     }
 
-    .uno-game .hand-label {
-        font-size: 0.78rem;
-        line-height: 1.1;
-        padding: 0 2px;
-        text-align: center;
-        word-break: break-word;
+    .uno-game #my-hand .gc-card-hand + .gc-card-hand {
+        margin-left: -1.85rem !important;
     }
 
-    .uno-game #my-hand.hand-size-crowded .hand-label {
-        font-size: 0.62rem;
+    .uno-game #my-hand.hand-size-many .gc-card-hand + .gc-card-hand {
+        margin-left: -2.1rem !important;
     }
 
-    .uno-game .btn-end-turn,
+    .uno-game #my-hand.hand-size-crowded .gc-card-hand + .gc-card-hand {
+        margin-left: -2.4rem !important;
+    }
+
+    .uno-game .gc-card-pile {
+        width: 4.75rem;
+        height: 6.65rem;
+    }
+
+    .uno-game .gc-card-center {
+        font-size: 1.2rem;
+    }
+
+    .uno-game #btn-end-turn,
     .uno-game #btn-uno {
         min-height: var(--touch-min);
         flex-shrink: 0;
+    }
+
+    .uno-game .opp-chip {
+        min-width: 4.75rem;
+        max-width: 6.5rem;
     }
 
     .uno-game #counter-overlay {
@@ -717,22 +710,19 @@ html {
         max-height: 1.75rem;
     }
 
-    .uno-game .hand-section {
+    .uno-game .hand-dock {
         position: fixed;
         left: 0;
         right: 0;
         bottom: 0;
         width: auto;
-        grid-column: auto;
-        grid-row: auto;
         border-top: 2px solid #334155 !important;
-        border-left: none !important;
         padding: 6px !important;
         max-height: var(--game-hand-dock, 180px);
         min-height: 120px;
     }
 
-    .uno-game .game-main-column {
+    .uno-game .game-arena {
         padding-bottom: var(--game-hand-dock, 180px);
     }
 

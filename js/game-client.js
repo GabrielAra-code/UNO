@@ -3,6 +3,7 @@
     const Deck = global.GameDeck;
     const FS = global.GameFirestore;
     const Sounds = global.GameSounds;
+    const CardUI = global.GameCardUI;
 
     let lobbyId = null;
     let myPlayerId = null;
@@ -229,8 +230,7 @@
             }
             const resolvesAt = Number(cur.resolvesAt) || 0;
             const left = Math.max(0, Math.ceil((resolvesAt - Date.now()) / 1000));
-            const el = $('counter-timer');
-            if (el) el.textContent = String(left);
+            updateTimerRing(left, true);
             if (left <= 0) hideCounterOverlayTick();
         };
         tick();
@@ -278,22 +278,35 @@
         schedulePendingWindow(pending);
     }
 
-    function hideCounterOverlayTick() {
+    function updateTimerRing(secondsLeft, visible = true) {
+        const ring = $('timer-ring');
         const el = $('counter-timer');
-        if (el) el.textContent = '0';
+        if (!ring || !el) return;
+        if (!visible) {
+            ring.classList.add('hidden');
+            return;
+        }
+        ring.classList.remove('hidden');
+        const left = Math.max(0, secondsLeft);
+        el.textContent = String(left).padStart(2, '0');
+        ring.style.setProperty('--timer-pct', String((left / 5) * 100));
+    }
+
+    function hideCounterOverlayTick() {
+        updateTimerRing(0, true);
     }
 
     function hideCounterOverlay() {
         $('counter-overlay')?.classList.add('hidden');
-        $('btn-contrast')?.classList.add('hidden');
+        const banner = $('pending-banner');
+        if (banner) banner.textContent = '';
+        updateTimerRing(0, false);
+        renderActionRail();
     }
 
     function renderPendingOverlay(pending) {
-        const overlay = $('counter-overlay');
+        const banner = $('pending-banner');
         const btn = $('btn-contrast');
-        const title = overlay?.querySelector('p');
-        if (!overlay) return;
-        overlay.classList.remove('hidden');
 
         let canAct = false;
         let label = 'Attesa risposte…';
@@ -314,22 +327,15 @@
             label = `Scarta fino a ${pending.maxDiscard} carte numero (5s)`;
             canAct = pending.winnerId === myPlayerId;
         }
-        if (title) title.textContent = label;
+        if (banner) banner.textContent = label;
+        updateTimerRing(5, true);
         if (btn) {
-            const showContrastBtn = pending.type === 'counterWindow' && canAct;
-            btn.classList.toggle('hidden', !showContrastBtn && !(pending.type === 'brainrotDiscard' && pending.winnerId === myPlayerId));
-            btn.disabled = pending.type === 'counterWindow' ? !canAct : false;
-            if (pending.type === 'counterWindow' && canAct) {
-                btn.textContent = 'Gioca Righello / Scudo';
-            }
-            if (pending.type === 'brainrotDiscard' && pending.winnerId === myPlayerId) {
-                btn.classList.remove('hidden');
-                btn.textContent = 'Conferma scarto';
-                btn.disabled = false;
-            } else {
-                btn.textContent = 'Contrasta';
-            }
+            const showContrast = canAct
+                || (pending.type === 'brainrotDiscard' && pending.winnerId === myPlayerId);
+            btn.disabled = !showContrast;
+            btn.classList.toggle('is-active', showContrast);
         }
+        renderActionRail();
     }
 
     function renderCounterOverlay(pending) {
@@ -395,17 +401,6 @@
         const hub = document.createElement('div');
         hub.className = 'roulette-hub';
         wheel.appendChild(hub);
-    }
-
-    function seatRadiusForCount(n) {
-        if (n <= 2) return 'min(34vmin, 150px)';
-        if (n <= 4) return 'min(32vmin, 168px)';
-        return 'min(30vmin, 178px)';
-    }
-
-    function seatAngleForPlayer(indexInOrder, total, myIndex) {
-        const rel = (indexInOrder - myIndex + total) % total;
-        return 90 + (rel * 360) / total;
     }
 
     function showBulletRouletteWaiting(pending) {
@@ -491,95 +486,152 @@
         $('bullet-roulette-overlay')?.classList.remove('active');
     }
 
-    function renderDirection() {
-        const dir = gameState?.direction > 0 ? 'Oraria ↻' : 'Antioraria ↺';
-        const el = $('game-direction');
-        if (el) el.textContent = dir;
-        $('table-direction-ring')?.classList.toggle('dir-ccw', gameState?.direction < 0);
+    const OPP_SLOTS = {
+        2: [{ left: '22%', top: '4%' }, { left: '78%', top: '4%' }],
+        3: [{ left: '16%', top: '3%' }, { left: '50%', top: '0%' }, { left: '84%', top: '3%' }],
+        4: [{ left: '10%', top: '5%' }, { left: '32%', top: '1%' }, { left: '68%', top: '1%' }, { left: '90%', top: '5%' }],
+        5: [{ left: '8%', top: '6%' }, { left: '28%', top: '2%' }, { left: '50%', top: '0%' }, { left: '72%', top: '2%' }, { left: '92%', top: '6%' }]
+    };
+
+    function opponentSlot(index, total) {
+        const key = total <= 2 ? 2 : total <= 3 ? 3 : total <= 4 ? 4 : 5;
+        const slots = OPP_SLOTS[key];
+        return slots[Math.min(index, slots.length - 1)];
     }
 
-    function renderSeats() {
-        const container = $('table-seats');
+    function renderDirection() {
+        const el = $('game-direction');
+        if (el) el.textContent = gameState?.direction > 0 ? '↻' : '↺';
+        $('dir-ring')?.classList.toggle('dir-ccw', (gameState?.direction || 1) < 0);
+    }
+
+    function renderGameMode() {
+        const el = $('game-mode');
+        if (!el || !gameState?.settings) return;
+        const parts = [];
+        if (gameState.settings.stack) parts.push('STACK');
+        if (gameState.settings.brainrot) parts.push('BRAINROT');
+        el.textContent = parts.length ? parts.join(' · ') : 'CLASSICA';
+    }
+
+    function renderOpponentsArena() {
+        const container = $('opponents-arena');
         if (!container || !gameState) return;
         container.innerHTML = '';
         const order = gameState.turnOrder || [];
-        const n = order.length;
-        if (!n) return;
         const current = Engine.currentPlayerId(gameState);
-        const found = order.indexOf(myPlayerId);
-        const myIndex = found >= 0 ? found : 0;
-        const radius = seatRadiusForCount(n);
+        const opponents = order.filter(id => id !== myPlayerId);
 
-        order.forEach((id, i) => {
+        opponents.forEach((id, index) => {
             const p = gameState.players[id] || {};
-            const angle = seatAngleForPlayer(i, n, myIndex);
+            const slot = opponentSlot(index, opponents.length);
             const seat = document.createElement('div');
-            seat.className = 'table-seat';
-            seat.style.setProperty('--angle', `${angle}deg`);
-            seat.style.setProperty('--radius', radius);
-            const isMe = id === myPlayerId;
             const isTurn = id === current && gameState.status === 'playing';
+            seat.className = `opp-seat ${isTurn ? 'opp-turn' : ''} ${p.eliminated ? 'opp-out' : ''}`;
+            seat.style.left = slot.left;
+            seat.style.top = slot.top;
 
-            const inner = document.createElement('div');
-            inner.className = `seat-inner ${isTurn ? 'seat-turn' : ''} ${p.eliminated ? 'seat-out' : ''}`;
+            const fan = document.createElement('div');
+            fan.className = 'opp-mini-fan';
+            for (let i = 0; i < 3; i += 1) {
+                const mc = document.createElement('span');
+                mc.className = 'opp-mini-card';
+                fan.appendChild(mc);
+            }
+
+            const dossier = document.createElement('div');
+            dossier.className = 'opp-dossier';
 
             const av = document.createElement('div');
-            av.className = 'seat-avatar';
+            av.className = 'opp-avatar';
             if (AvatarUI) AvatarUI.mountAvatar(av, p.avatar);
             else av.textContent = p.avatar || '🦊';
 
             const name = document.createElement('div');
-            name.className = 'seat-name';
-            name.textContent = isMe ? 'Tu' : (p.nickname || id);
+            name.className = 'opp-name';
+            name.textContent = p.nickname || id;
 
-            const meta = document.createElement('div');
-            meta.className = 'seat-meta';
-            meta.textContent = `${p.handCount ?? 0} carte${p.eliminated ? ' · OUT' : ''}`;
+            const badges = document.createElement('div');
+            badges.className = 'opp-badges';
+            badges.innerHTML = `
+                <span class="opp-badge opp-badge--star">★ 0</span>
+                <span class="opp-badge opp-badge--cards">${p.handCount ?? 0} 🃏</span>
+            `;
 
-            inner.appendChild(av);
-            inner.appendChild(name);
-            inner.appendChild(meta);
-            if (gameState.settings?.pistolHp) {
-                const hp = document.createElement('div');
-                hp.className = 'seat-hp';
-                hp.textContent = `💥 ${p.pistolHp ?? 0}/${p.maxPistolHp ?? 3}`;
-                inner.appendChild(hp);
-            }
-            seat.appendChild(inner);
+            dossier.appendChild(av);
+            dossier.appendChild(name);
+            dossier.appendChild(badges);
+            seat.appendChild(fan);
+            seat.appendChild(dossier);
             container.appendChild(seat);
         });
     }
 
-    function renderPlayersSidebar() {
-        const list = $('game-players-list');
-        if (!list || !gameState) return;
-        list.innerHTML = '';
-        const order = gameState.turnOrder || [];
-        const current = Engine.currentPlayerId(gameState);
+    function renderMyDossier() {
+        const dossier = $('my-dossier');
+        const nameEl = $('my-player-label');
+        const metaEl = $('my-player-meta');
+        const avEl = $('my-dossier-avatar');
+        if (!gameState) return;
+        const me = gameState.players?.[myPlayerId];
+        const count = me?.handCount ?? myHand().length;
+        const myTurn = Engine.isMyTurn(gameState, myPlayerId) && gameState.status === 'playing';
 
-        order.forEach(id => {
-            const p = gameState.players[id] || {};
-            const row = document.createElement('div');
-            row.className = `sidebar-player ${id === current && gameState.status === 'playing' ? 'sidebar-turn' : ''} ${p.eliminated ? 'opacity-50' : ''}`;
+        dossier?.classList.toggle('my-turn', myTurn);
+        if (nameEl) nameEl.textContent = me?.nickname || 'Tu';
+        if (metaEl) metaEl.textContent = `${count} 🃏`;
+        if (avEl) {
+            avEl.innerHTML = '';
+            if (AvatarUI) AvatarUI.mountAvatar(avEl, me?.avatar);
+            else avEl.textContent = me?.avatar || '🦊';
+        }
+    }
 
-            const av = document.createElement('div');
-            av.className = 'sidebar-player-avatar';
-            if (AvatarUI) AvatarUI.mountAvatar(av, p.avatar);
-            else av.textContent = p.avatar || '🦊';
+    function renderActionRail() {
+        const pesca = $('btn-pesca');
+        const contrast = $('btn-contrast');
+        if (!gameState) return;
 
-            const info = document.createElement('div');
-            const name = document.createElement('div');
-            name.className = 'sidebar-player-name';
-            name.textContent = id === myPlayerId ? 'Tu' : (p.nickname || id);
-            const meta = document.createElement('div');
-            meta.className = 'sidebar-player-meta';
-            meta.textContent = `${p.handCount ?? 0} carte${p.eliminated ? ' · OUT' : ''}`;
-            info.appendChild(name);
-            info.appendChild(meta);
+        if (pesca) {
+            pesca.disabled = !Engine.canDraw(gameState, myPlayerId);
+        }
 
-            row.appendChild(av);
-            row.appendChild(info);
-            list.appendChild(row);
+        if (contrast) {
+            const pending = gameState.pendingAction;
+            let canAct = false;
+            if (pending?.type === 'counterWindow') {
+                canAct = pending.sourcePlayerId !== myPlayerId && !!firstCounterCard();
+            } else if (pending?.type === 'drawStackWindow') {
+                canAct = Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
+            } else if (pending?.type === 'brainrotBattle') {
+                canAct = Engine.canPlayBrainrotResponse(gameState, myPlayerId);
+            } else if (pending?.type === 'brainrotDiscard') {
+                canAct = pending.winnerId === myPlayerId;
+            }
+            const pendingTimed = pending && Engine.isPendingTimedWindow(pending);
+            contrast.disabled = !canAct;
+            contrast.classList.toggle('is-active', canAct && pendingTimed);
+        }
+    }
+
+    function applyHandFan(handEl) {
+        if (!handEl) return;
+        const cards = [...handEl.querySelectorAll('.gc-card-hand')];
+        const n = cards.length;
+        handEl.classList.toggle('hand-fan-scroll', n > 12);
+        if (n <= 1 || n > 12) {
+            cards.forEach(card => {
+                card.style.transform = '';
+                card.style.zIndex = '';
+            });
+            return;
+        }
+        const maxSpread = Math.min(52, 12 + n * 2.6);
+        cards.forEach((card, i) => {
+            const rot = -maxSpread / 2 + (maxSpread * i) / (n - 1);
+            const lift = Math.abs(rot) * 0.14;
+            card.style.transform = `rotate(${rot}deg) translateY(${-lift}px)`;
+            card.style.zIndex = String(i + 1);
         });
     }
 
@@ -588,7 +640,7 @@
         if (!pile || !gameState) return;
         const can = Engine.canDraw(gameState, myPlayerId);
         pile.classList.toggle('pile-draw-disabled', !can);
-        pile.title = can ? 'Pesca' : 'Non puoi pescare ora';
+        pile.title = can ? 'Pesca dal mazzo' : 'Non puoi pescare ora';
     }
 
     function clearPlaySelection() {
@@ -714,26 +766,27 @@
         const discard = $('deck-discard');
         const count = $('draw-count');
         if (count) count.textContent = String(gameState?.drawPile?.length ?? 0);
-        if (discard && top) {
-            const lbl = cardLabel(top);
-            discard.className = `pile-card ${Deck.colorStyle(top)}`;
-            discard.innerHTML = `
-                <span class="pile-corner">${lbl}</span>
-                <span class="pile-center">${lbl}</span>
-                <span class="pile-corner br">${lbl}</span>
-            `;
+        if (discard && top && CardUI) {
+            CardUI.applyCardFace(discard, top, {
+                baseClass: 'gc-card gc-card-pile',
+                extraClass: ''
+            });
+            discard.style.transform = 'rotate(5deg)';
+        } else if (discard) {
+            discard.className = 'gc-card gc-card-pile gc-card-blue';
+            discard.innerHTML = '<span class="gc-card-center">—</span>';
         }
-        const colorHint = $('active-color-hint');
-        if (colorHint && Engine.getDisplayColorInfo) {
+        const colorDot = $('active-color-dot');
+        if (colorDot && Engine.getDisplayColorInfo) {
             const info = Engine.getDisplayColorInfo(gameState);
-            colorHint.textContent = info.label;
-            colorHint.className = `color-hint color-${info.cssColor || 'slate'}`;
+            colorDot.title = info.label;
+            colorDot.className = `color-${info.cssColor || 'slate'}`;
         }
         const stackEl = $('stack-alert');
         if (stackEl) {
             if (gameState?.drawStack > 0) {
                 stackEl.classList.remove('hidden');
-                stackEl.textContent = `Stack +${gameState.drawStack} — gioca +2/+4 o pesca`;
+                stackEl.textContent = `Stack +${gameState.drawStack} — rispondi o pesca`;
             } else {
                 stackEl.classList.add('hidden');
             }
@@ -745,11 +798,12 @@
             document.documentElement.style.removeProperty('--game-hand-dock');
             return;
         }
-        const section = document.querySelector('.uno-game .hand-section');
+        const section = document.querySelector('.uno-game .player-stage');
         if (!section) return;
         const h = Math.ceil(section.getBoundingClientRect().height);
         if (h > 0) {
             document.documentElement.style.setProperty('--game-hand-dock', `${h}px`);
+            document.documentElement.style.setProperty('--player-dock-h', `${h}px`);
         }
     }
 
@@ -827,24 +881,37 @@
             const effectiveDupSize = playableDupSize > 1 ? playableDupSize : dupSize;
             const lbl = cardLabel(card);
 
-            btn.type = 'button';
-            btn.className = `hand-card ${Deck.colorStyle(card, { battleColor: showBattleColor })} ${playable ? '' : 'hand-card-disabled'}`;
-            if (playableCounter || playableBrainrot || playableStack) btn.classList.add('hand-card-counter');
-            if (playableMari) btn.classList.add('hand-card-mari');
-            if (selIds.has(card.instanceId)) btn.classList.add('hand-card-selected');
-            else if (ladderHintIds?.has(card.instanceId)) btn.classList.add('hand-card-ladder-hint');
-            if (duplicateKey === dupKey && !selIds.has(card.instanceId) && dupSize > 1) {
-                btn.classList.add('hand-card-dup-group');
-            }
+            const extra = [
+                playable ? '' : 'gc-card-disabled',
+                playableCounter || playableBrainrot || playableStack ? 'gc-card-counter' : '',
+                playableMari ? 'gc-card-mari' : '',
+                selIds.has(card.instanceId) ? 'gc-card-selected' : '',
+                ladderHintIds?.has(card.instanceId) ? 'gc-card-ladder-hint' : '',
+                duplicateKey === dupKey && !selIds.has(card.instanceId) && dupSize > 1 ? 'gc-card-dup-group' : ''
+            ].filter(Boolean).join(' ');
+
             const dupBadge = showDupBadge
-                ? `<small class="hand-dup-badge">×${playableDupSize}</small>`
+                ? `<span class="gc-dup-badge">×${playableDupSize}</span>`
                 : (playableTurn && dupSize > 1 && !playSelection
-                    ? `<small class="hand-dup-badge opacity-60">×${dupSize}</small>`
+                    ? `<span class="gc-dup-badge" style="opacity:0.65">×${dupSize}</span>`
                     : '');
             const selBadge = showSelBadge
-                ? `<small class="hand-dup-sel">${dupCountSelected}/${effectiveDupSize}</small>`
+                ? `<span class="gc-dup-sel">${dupCountSelected}/${effectiveDupSize}</span>`
                 : '';
-            btn.innerHTML = `<span class="hand-label">${lbl}${dupBadge}${selBadge}</span>`;
+
+            if (CardUI) {
+                btn.type = 'button';
+                CardUI.applyCardFace(btn, card, {
+                    baseClass: 'gc-card gc-card-hand',
+                    extraClass: extra,
+                    badges: `${dupBadge}${selBadge}`,
+                    battleColor: showBattleColor
+                });
+            } else {
+                btn.type = 'button';
+                btn.className = `gc-card gc-card-hand ${Deck.colorStyle(card, { battleColor: showBattleColor })} ${extra}`;
+                btn.innerHTML = `<span class="gc-card-center">${lbl}</span>`;
+            }
             if (playableBrainrotDiscard) {
                 btn.addEventListener('click', () => onToggleBrainrotDiscard(card.instanceId));
             } else if (playableBrainrot) {
@@ -866,8 +933,9 @@
             handEl.appendChild(btn);
         });
         requestAnimationFrame(() => {
-            const wrap = handEl?.closest('.hand-scroll-wrap');
-            if (wrap && wrap.scrollWidth > wrap.clientWidth) {
+            applyHandFan(handEl);
+            const wrap = handEl?.closest('.hand-fan-wrap');
+            if (handEl.classList.contains('hand-fan-scroll') && wrap && wrap.scrollWidth > wrap.clientWidth) {
                 wrap.scrollLeft = wrap.scrollWidth - wrap.clientWidth;
             }
             syncHandDockHeight();
@@ -1009,7 +1077,6 @@
         const p = gameState.players?.[myPlayerId];
         const mustCall = count === 1 && p?.unoRequired && !p?.saidUno;
         btn.classList.toggle('uno-flash', mustCall);
-        btn.classList.toggle('opacity-40', count !== 1);
         btn.disabled = count !== 1;
         btn.title = count === 1
             ? (p?.saidUno ? 'UNO! già detto' : 'Premi prima di giocare l\'ultima carta!')
@@ -1044,10 +1111,12 @@
 
     function renderAll() {
         renderDirection();
-        renderSeats();
-        renderPlayersSidebar();
+        renderGameMode();
+        renderOpponentsArena();
+        renderMyDossier();
         renderCenter();
         renderDrawPile();
+        renderActionRail();
         renderHand();
         renderEndTurnButton();
         renderUnoButton();
@@ -1353,17 +1422,17 @@
         window.addEventListener('resize', onResizeHandDock);
         window.addEventListener('orientationchange', () => setTimeout(onResizeHandDock, 150));
 
-        $('deck-draw')?.addEventListener('click', async () => {
+        async function onDrawClick() {
             if (!Engine.canDraw(gameState, myPlayerId)) {
                 playSound('error');
                 showToast('Non puoi pescare ora');
                 return;
             }
-            playSound('click');
             await commitAction(() => Engine.drawCard(gameState, myPlayerId));
-        });
+        }
+        $('deck-draw')?.addEventListener('click', onDrawClick);
+        $('btn-pesca')?.addEventListener('click', onDrawClick);
         $('btn-uno')?.addEventListener('click', async () => {
-            playSound('click');
             await commitAction(() => Engine.declareUno(gameState, myPlayerId));
         });
         $('btn-end-turn')?.addEventListener('click', async () => {
@@ -1372,7 +1441,6 @@
                 showToast('Non puoi terminare il turno ora');
                 return;
             }
-            playSound('click');
             await commitAction(() => Engine.endTurn(gameState, myPlayerId));
         });
         $('btn-confirm-play')?.addEventListener('click', () => {
@@ -1392,13 +1460,32 @@
             startLadderSelection(playSelection.altLadder);
         });
         $('btn-cancel-play')?.addEventListener('click', () => {
-            playSound('click');
             clearPlaySelection();
         });
         $('btn-contrast')?.addEventListener('click', async () => {
             const pending = gameState?.pendingAction;
             if (pending?.type === 'brainrotDiscard' && pending.winnerId === myPlayerId) {
                 await confirmBrainrotDiscard();
+                return;
+            }
+            if (pending?.type === 'brainrotBattle') {
+                const br = firstBrainrotCard();
+                if (!br) {
+                    playSound('error');
+                    showToast('Nessun Brainrot giocabile');
+                    return;
+                }
+                await onPlayBrainrotResponse(br.instanceId);
+                return;
+            }
+            if (pending?.type === 'drawStackWindow') {
+                const stackCard = firstDrawStackCard();
+                if (!stackCard) {
+                    playSound('error');
+                    showToast('Nessuna risposta allo stack');
+                    return;
+                }
+                await onPlayDrawStackResponse(stackCard.instanceId);
                 return;
             }
             const card = firstCounterCard();
@@ -1505,6 +1592,7 @@
         const lobby = JSON.parse(localStorage.getItem('unoLobbyList') || '[]').find(r => r.id === lobbyId);
         myPlayerId = resolveMyPlayerId(lobby);
         wireControls();
+        Sounds?.bindDataSoundListeners?.();
         listenLobbyAdminClose();
 
         unsubGame = FS.subscribeGame(lobbyId, pub => {

@@ -85,10 +85,47 @@
             case 'shot':
                 tone(90, 'sawtooth', 0.35, v * 0.6, 60);
                 break;
+            case 'pop': {
+                const o = ac.createOscillator();
+                const g = ac.createGain();
+                o.connect(g);
+                g.connect(ac.destination);
+                o.type = 'sine';
+                o.frequency.setValueAtTime(600, t);
+                o.frequency.exponentialRampToValueAtTime(800, t + 0.1);
+                g.gain.setValueAtTime(v * 0.55, t);
+                g.gain.exponentialRampToValueAtTime(0.01, t + 0.1);
+                o.start(t);
+                o.stop(t + 0.1);
+                return;
+            }
+            case 'bloop': {
+                const o = ac.createOscillator();
+                const g = ac.createGain();
+                o.connect(g);
+                g.connect(ac.destination);
+                o.type = 'sine';
+                o.frequency.setValueAtTime(400, t);
+                o.frequency.exponentialRampToValueAtTime(550, t + 0.15);
+                g.gain.setValueAtTime(v * 0.55, t);
+                g.gain.linearRampToValueAtTime(0.01, t + 0.15);
+                o.start(t);
+                o.stop(t + 0.15);
+                return;
+            }
             default:
                 tone(500, 'sine', 0.08);
         }
     }
 
-    global.GameSounds = { play, setVolume: (n) => { sfxVolume = n; } };
+    function bindDataSoundListeners() {
+        document.addEventListener('click', (event) => {
+            const el = event.target.closest('[data-sound]');
+            if (!el) return;
+            const type = el.getAttribute('data-sound');
+            if (type) play(type);
+        }, true);
+    }
+
+    global.GameSounds = { play, setVolume: (n) => { sfxVolume = n; }, bindDataSoundListeners };
 })(window);

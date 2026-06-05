@@ -3,494 +3,234 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#020617">
-    <title>UNO? REVOLUTION — Tavolo</title>
+    <meta name="theme-color" content="#070f24">
+    <title>UNO? REVOLUTION — Partita</title>
+    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/mobile.css">
+    <link rel="stylesheet" href="css/game-arena.css">
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <style>
-        body { background: #020617; }
-        .tavolo-bg {
-            background: radial-gradient(ellipse 80% 70% at 50% 45%, #1e3a5f 0%, #0f172a 55%, #020617 100%);
-        }
         .no-scrollbar::-webkit-scrollbar { display: none; }
         .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .btn-purple { background-color: #a855f7; color: #fff; box-shadow: 0 8px 0 #7e22ce; }
 
-        .table-wrap {
+        /* Carte (stile Index / UNO) */
+        .gc-card {
             position: relative;
-            width: min(68vmin, 420px);
-            height: min(68vmin, 420px);
-            margin: 0 auto;
-        }
-
-        .table-surface {
-            position: absolute;
-            inset: 8%;
-            border-radius: 50%;
-            background: radial-gradient(circle at 40% 35%, #166534 0%, #14532d 40%, #052e16 100%);
-            border: 6px solid #422006;
-            box-shadow: inset 0 0 60px rgba(0,0,0,0.5), 0 12px 40px rgba(0,0,0,0.6);
-            z-index: 1;
-        }
-
-        .table-direction-ring {
-            position: absolute;
-            inset: 0;
-            border-radius: 50%;
-            pointer-events: none;
-        }
-        .table-direction-ring::before {
-            content: '';
-            position: absolute;
-            inset: 2%;
-            border-radius: 50%;
-            border: 3px dashed rgba(251, 191, 36, 0.45);
-            animation: spin-dir 28s linear infinite;
-        }
-        .table-direction-ring.dir-ccw::before {
-            animation-direction: reverse;
-        }
-        @keyframes spin-dir {
-            to { transform: rotate(360deg); }
-        }
-
-        .dir-arrow {
-            position: absolute;
-            width: 48px;
-            height: 48px;
-            color: #fbbf24;
-            font-size: 40px;
-            line-height: 1;
-            font-weight: 900;
-            text-shadow: 0 3px 12px rgba(0,0,0,0.85);
-            transform: translate(-50%, -50%);
-        }
-
-        .table-seats {
-            position: absolute;
-            inset: 0;
-            pointer-events: none;
-            z-index: 8;
-        }
-        .table-seat {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            width: min(22vw, 108px);
-            transform: translate(-50%, -50%) rotate(var(--angle)) translateY(calc(-1 * var(--radius, 168px))) rotate(calc(-1 * var(--angle)));
-            z-index: 2;
-        }
-        .seat-inner {
-            background: rgba(15, 23, 42, 0.92);
-            border: 2px solid #334155;
-            border-radius: 16px;
-            padding: 8px 10px;
+            border-radius: 0.75rem;
+            border: 3px solid rgba(255, 255, 255, 0.92);
+            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.38), 0 10px 22px rgba(0, 0, 0, 0.32);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             text-align: center;
-            pointer-events: auto;
-            transition: border-color 0.2s, box-shadow 0.2s;
-        }
-        .seat-turn {
-            border-color: #fbbf24;
-            box-shadow: 0 0 24px rgba(251, 191, 36, 0.55);
-            animation: seat-glow 1.2s ease-in-out infinite;
-        }
-        .seat-turn::before {
-            content: '▼';
-            position: absolute;
-            top: -14px;
-            left: 50%;
-            transform: translateX(-50%);
-            color: #fbbf24;
-            font-size: 0.75rem;
-            text-shadow: 0 0 8px rgba(251, 191, 36, 0.8);
-        }
-        @keyframes seat-glow {
-            0%, 100% { box-shadow: 0 0 16px rgba(251, 191, 36, 0.4); }
-            50% { box-shadow: 0 0 28px rgba(251, 191, 36, 0.75); }
-        }
-        .seat-inner { position: relative; }
-        .seat-out { opacity: 0.45; }
-        .seat-avatar {
-            width: 2.5rem;
-            height: 2.5rem;
-            margin: 0 auto 4px;
-            border-radius: 50%;
             overflow: hidden;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.35rem;
-            line-height: 1;
-            background: #0f172a;
-            border: 2px solid #475569;
-        }
-        .seat-avatar img { width: 100%; height: 100%; object-fit: cover; }
-        .seat-name { font-size: 0.7rem; font-weight: 800; color: #f1f5f9; margin-top: 2px; }
-        .seat-meta { font-size: 0.6rem; color: #94a3b8; font-family: monospace; }
-        .seat-hp { font-size: 0.55rem; color: #fb7185; font-family: monospace; }
-
-        .table-center {
-            position: absolute;
-            left: 50%;
-            top: 50%;
-            transform: translate(-50%, -50%);
-            display: flex;
-            align-items: center;
-            gap: 1.25rem;
-            z-index: 10;
+            user-select: none;
+            transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
         }
 
-        .game-layout-row {
-            display: flex;
-            flex: 1;
-            min-height: 0;
-            width: 100%;
+        .gc-card-pile {
+            width: 7.25rem;
+            height: 10.25rem;
+            padding: 0.45rem 0.35rem 0.5rem;
+            cursor: pointer;
         }
 
-        .game-sidebar {
-            width: min(220px, 28vw);
-            flex-shrink: 0;
-            background: rgba(15, 23, 42, 0.92);
-            border-right: 1px solid #334155;
-            display: flex;
-            flex-direction: column;
-            overflow: hidden;
+        .gc-card-pile:hover:not(.gc-card-disabled) {
+            transform: translateY(-4px) scale(1.03);
+            filter: brightness(1.05);
         }
 
-        .game-sidebar-title {
-            font-size: 0.65rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: #94a3b8;
-            padding: 0.75rem 0.85rem 0.5rem;
-            border-bottom: 1px solid #1e293b;
+        .gc-card-hand {
+            flex: 0 0 auto;
+            width: 5.25rem;
+            height: 7.5rem;
+            padding: 0.35rem 0.3rem 0.4rem;
+            cursor: pointer;
         }
 
-        #game-players-list {
-            flex: 1;
-            overflow-y: auto;
-            padding: 0.5rem;
-            display: flex;
-            flex-direction: column;
-            gap: 0.45rem;
+        #my-hand.hand-size-many .gc-card-hand {
+            width: 4.35rem;
+            height: 6.25rem;
         }
 
-        .sidebar-player {
-            display: flex;
-            align-items: center;
-            gap: 0.55rem;
-            padding: 0.45rem 0.5rem;
-            border-radius: 12px;
-            border: 1px solid #334155;
-            background: rgba(2, 6, 23, 0.55);
-            transition: border-color 0.2s, box-shadow 0.2s;
+        #my-hand.hand-size-crowded .gc-card-hand {
+            width: 3.65rem;
+            height: 5.35rem;
         }
 
-        .sidebar-player.sidebar-turn {
-            border-color: #fbbf24;
-            box-shadow: 0 0 14px rgba(251, 191, 36, 0.35);
-            animation: seat-glow 1.2s ease-in-out infinite;
+        .gc-card-hand:hover:not(.gc-card-disabled):not(:disabled) {
+            transform: translateY(-10px) scale(1.05);
+            box-shadow: 0 10px 0 rgba(0, 0, 0, 0.32), 0 16px 28px rgba(0, 0, 0, 0.38);
+            z-index: 5;
         }
 
-        .sidebar-player-avatar {
-            width: 2.25rem;
-            height: 2.25rem;
-            border-radius: 50%;
-            overflow: hidden;
-            flex-shrink: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: #0f172a;
-            border: 2px solid #475569;
-            font-size: 1.1rem;
-        }
-
-        .sidebar-player-avatar img {
-            width: 100%;
-            height: 100%;
-            object-fit: cover;
-        }
-
-        .sidebar-player-name {
-            font-size: 0.7rem;
-            font-weight: 800;
-            color: #f1f5f9;
-            line-height: 1.2;
-        }
-
-        .sidebar-player-meta {
-            font-size: 0.58rem;
-            color: #94a3b8;
-            font-family: monospace;
-        }
-
-        .pile-card.pile-draw-disabled {
+        .gc-card-disabled,
+        .gc-card-hand:disabled {
             opacity: 0.42;
+            cursor: not-allowed;
+            filter: grayscale(0.25);
+        }
+
+        .gc-card-counter {
+            outline: 3px solid #f59e0b;
+            box-shadow: 0 0 16px rgba(245, 158, 11, 0.5), 0 6px 0 rgba(0, 0, 0, 0.35);
+        }
+
+        .gc-card-selected {
+            outline: 3px solid #38bdf8;
+            transform: translateY(-14px) scale(1.06);
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.55), 0 8px 0 rgba(0, 0, 0, 0.32);
+            z-index: 6;
+        }
+
+        .gc-card-mari { outline: 3px solid #22c55e; box-shadow: 0 0 16px rgba(34, 197, 94, 0.45); }
+        .gc-card-ladder-hint { outline: 2px dashed #a78bfa; }
+        .gc-card-dup-group { outline: 2px dashed rgba(56, 189, 248, 0.65); }
+
+        .gc-corner {
+            position: absolute;
+            font-weight: 900;
+            line-height: 1;
+            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+        }
+
+        .gc-corner-tl { top: 0.35rem; left: 0.4rem; font-size: 0.85rem; }
+        .gc-corner-br {
+            bottom: 0.35rem;
+            right: 0.4rem;
+            font-size: 0.85rem;
+            transform: rotate(180deg);
+        }
+
+        .gc-card-center {
+            font-size: 1.65rem;
+            font-weight: 900;
+            line-height: 1.05;
+            text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+            word-break: break-word;
+            padding: 0 0.2rem;
+        }
+
+        .gc-card-pile .gc-card-center { font-size: 1.85rem; }
+        .gc-card-hand .gc-card-center { font-size: 1.35rem; }
+        #my-hand.hand-size-crowded .gc-card-center { font-size: 1rem; }
+
+        .gc-card-sub {
+            position: absolute;
+            bottom: 0.38rem;
+            left: 0.25rem;
+            right: 0.25rem;
+            font-size: 0.42rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            opacity: 0.92;
+            line-height: 1.15;
+            max-height: 2.2em;
+            overflow: hidden;
+        }
+
+        .gc-card-brainrot-name {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 0.15rem 0.2rem 1rem;
+            font-size: 0.48rem;
+            font-weight: 900;
+            line-height: 1.12;
+            word-break: break-word;
+        }
+
+        .gc-card-pt {
+            position: absolute;
+            right: 0.35rem;
+            bottom: 0.35rem;
+            font-size: 0.52rem;
+            font-weight: 900;
+            color: #fff;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+        }
+
+        .gc-card-red { background: #dc2626; color: #fff; }
+        .gc-card-yellow { background: #eab308; color: #0f172a; }
+        .gc-card-green { background: #16a34a; color: #fff; }
+        .gc-card-blue { background: #2563eb; color: #fff; }
+        .gc-card-black {
+            background: linear-gradient(145deg, #1f2937 0%, #020617 100%);
+            color: #f8fafc;
+        }
+        .gc-card-wild {
+            background: linear-gradient(145deg, #64748b 0%, #334155 100%);
+            color: #fff;
+        }
+        .gc-card-brainrot { background: linear-gradient(160deg, #312e81, #1e1b4b); color: #e0e7ff; }
+        .gc-card-battle-yellow { background: #eab308; color: #0f172a; }
+        .gc-card-battle-white { background: #f1f5f9; color: #0f172a; }
+        .gc-card-battle-pink { background: #ec4899; color: #fff; }
+        .gc-card-battle-blue { background: #2563eb; color: #fff; }
+
+        .gc-card-draw-back {
+            background: linear-gradient(145deg, #b91c1c 0%, #7f1d1d 55%, #450a0a 100%);
+            color: #fef3c7;
+            cursor: pointer;
+        }
+
+        .gc-card-draw-back::after {
+            content: 'UNO?';
+            font-weight: 900;
+            font-size: 1.05rem;
+            letter-spacing: 0.08em;
+            transform: rotate(-8deg);
+            opacity: 0.95;
+        }
+
+        .gc-card-draw-back.pile-draw-disabled {
+            opacity: 0.4;
             filter: grayscale(0.35);
             cursor: not-allowed;
         }
 
-        .hand-card-mari {
-            outline: 3px solid #22c55e;
-            box-shadow: 0 0 16px rgba(34, 197, 94, 0.45);
-        }
+        #deck-discard { transform: rotate(5deg); }
 
-        .pile-card {
-            width: 7rem;
-            height: 9.5rem;
-            border: 3px solid #fff;
-            border-radius: 1rem;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 0.6rem;
-            font-weight: 900;
-            font-style: italic;
-            color: #fff;
-            cursor: pointer;
-            box-shadow: 0 8px 24px rgba(0,0,0,0.45);
-            transition: transform 0.15s;
-        }
-        .pile-card:hover { transform: scale(1.04); }
-        .pile-corner { font-size: 1.1rem; }
-        .pile-corner.br { align-self: flex-end; transform: rotate(180deg); }
-        .pile-center {
-            position: absolute;
-            left: 50%; top: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 2rem;
-            font-weight: 900;
-        }
-        #deck-discard { position: relative; transform: rotate(6deg); }
-        #deck-draw {
-            background: linear-gradient(135deg, #b91c1c, #7f1d1d);
-            position: relative;
-        }
-        #deck-draw::after {
-            content: 'UNO?';
-            position: absolute;
-            inset: 0;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-weight: 900;
-            font-size: 1.1rem;
-            transform: rotate(-12deg);
-            opacity: 0.9;
-        }
         .draw-count {
             position: absolute;
-            bottom: -8px;
-            right: -8px;
+            bottom: -0.45rem;
+            right: -0.45rem;
             background: #0f172a;
-            border: 2px solid #fbbf24;
-            color: #fbbf24;
-            font-size: 0.65rem;
-            font-weight: 800;
-            padding: 2px 6px;
+            border: 2px solid #facc15;
+            color: #facc15;
+            font-size: 0.62rem;
+            font-weight: 900;
+            padding: 0.15rem 0.45rem;
             border-radius: 999px;
-        }
-
-        .color-hint {
-            position: absolute;
-            bottom: -2.5rem;
-            left: 50%;
-            transform: translateX(-50%);
-            font-size: 0.65rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            white-space: nowrap;
-        }
-        .color-red { color: #f87171; }
-        .color-yellow { color: #facc15; }
-        .color-green { color: #4ade80; }
-        .color-blue { color: #60a5fa; }
-
-        /* Colori carte (sempre disponibili, anche su mobile senza Tailwind JIT) */
-        .hand-card.card-red, .pile-card.card-red { background: #dc2626; color: #fff; }
-        .hand-card.card-yellow, .pile-card.card-yellow { background: #eab308; color: #0f172a; }
-        .hand-card.card-green, .pile-card.card-green { background: #16a34a; color: #fff; }
-        .hand-card.card-blue, .pile-card.card-blue { background: #2563eb; color: #fff; }
-        .hand-card.card-black, .pile-card.card-black {
-            background: #0f172a; color: #fff; border-color: #f59e0b;
-        }
-        .hand-card.card-wild, .pile-card.card-wild {
-            background: linear-gradient(135deg, #9333ea, #db2777); color: #fff;
-        }
-        .hand-card.card-brainrot, .pile-card.card-brainrot {
-            background: #581c87; color: #fff; border-color: #c084fc;
-        }
-        .hand-card.card-battle-yellow { background: #eab308; color: #0f172a; border-color: #fcd34d; }
-        .hand-card.card-battle-white { background: #f1f5f9; color: #0f172a; border-color: #94a3b8; }
-        .hand-card.card-battle-pink { background: #ec4899; color: #fff; border-color: #f9a8d4; }
-        .hand-card.card-battle-blue { background: #2563eb; color: #fff; border-color: #93c5fd; }
-        .hand-card.card-default, .pile-card.card-default { background: #475569; color: #fff; }
-
-        .hand-scroll-wrap {
-            width: 100%;
-            max-width: 100%;
-            position: relative;
-            overflow-x: auto;
-            overflow-y: hidden;
-            -webkit-overflow-scrolling: touch;
-            overscroll-behavior-x: contain;
-            border-radius: 0.65rem;
-            background: rgba(15, 23, 42, 0.55);
-            scrollbar-width: thin;
-            scrollbar-color: #64748b rgba(15, 23, 42, 0.4);
-        }
-        .hand-scroll-wrap::-webkit-scrollbar {
-            height: 8px;
-        }
-        .hand-scroll-wrap::-webkit-scrollbar-thumb {
-            background: #64748b;
-            border-radius: 999px;
-        }
-        .hand-scroll-hint {
-            display: block;
-            text-align: center;
-            font-size: 0.58rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-            color: #64748b;
-            margin-bottom: 0.25rem;
-        }
-        .hand-scroll-wrap::after {
-            content: '';
-            position: sticky;
-            right: 0;
-            float: right;
-            top: 0;
-            width: 32px;
-            height: 100%;
-            margin-left: -32px;
-            background: linear-gradient(to left, rgba(15, 23, 42, 0.95), transparent);
-            pointer-events: none;
             z-index: 2;
         }
-        #my-hand {
-            display: inline-flex;
-            flex-wrap: nowrap;
-            align-items: flex-end;
-            justify-content: flex-start;
-            gap: 0.5rem;
-            overflow: visible;
-            width: max-content;
-            min-width: 100%;
-            padding: 0.75rem 0.5rem 0.35rem;
-            box-sizing: border-box;
-            scroll-snap-type: x proximity;
-        }
-        #my-hand::-webkit-scrollbar {
-            height: 6px;
-        }
-        #my-hand::-webkit-scrollbar-thumb {
-            background: #475569;
-            border-radius: 999px;
-        }
-        #my-hand .hand-card {
-            scroll-snap-align: start;
-            flex: 0 0 auto;
-        }
-        #my-hand.hand-size-many .hand-card {
-            width: 4.75rem;
-            height: 7rem;
-        }
-        #my-hand.hand-size-many .hand-label {
-            font-size: 0.8rem;
-        }
-        #my-hand.hand-size-crowded .hand-card {
-            width: 4rem;
-            height: 5.85rem;
-        }
-        #my-hand.hand-size-crowded .hand-label {
-            font-size: 0.72rem;
+
+        .gc-dup-badge,
+        .gc-dup-sel {
+            position: absolute;
+            top: 0.3rem;
+            left: 0.3rem;
+            font-size: 0.48rem;
+            font-weight: 900;
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.35rem;
+            background: rgba(0, 0, 0, 0.35);
+            z-index: 2;
         }
 
-        .hand-card {
-            flex: 0 0 auto;
-            width: 5.5rem;
-            height: 8rem;
-            border: 2px solid #fff;
-            border-radius: 1rem;
-            font-weight: 900;
-            color: #fff;
-            cursor: pointer;
-            transition: transform 0.15s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .hand-card:hover:not(.hand-card-disabled) { transform: translateY(-12px) scale(1.05); }
-        .hand-card-disabled { opacity: 0.45; cursor: not-allowed; }
-        .hand-card-counter {
-            outline: 3px solid #f59e0b;
-            box-shadow: 0 0 16px rgba(245, 158, 11, 0.45);
-        }
-        .hand-card-selected {
-            outline: 3px solid #38bdf8;
-            transform: translateY(-16px) scale(1.06);
-            box-shadow: 0 0 20px rgba(56, 189, 248, 0.5);
-        }
-        .hand-card-ladder-hint {
-            outline: 2px dashed #a78bfa;
-        }
-        .hand-card-dup-group {
-            outline: 2px dashed rgba(56, 189, 248, 0.65);
-        }
-        .hand-dup-badge,
-        .hand-dup-sel {
-            display: block;
-            font-size: 9px;
-            font-weight: 900;
-            line-height: 1.1;
-            margin-top: 2px;
-        }
-        .hand-dup-badge {
-            color: #fde68a;
-        }
-        .hand-dup-sel {
-            color: #7dd3fc;
-        }
+        .gc-dup-sel { color: #7dd3fc; }
+        .gc-dup-badge { color: #fde68a; }
 
-        #play-selection-bar {
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            gap: 0.5rem;
-            flex-wrap: wrap;
-            padding: 0.35rem 0.5rem 0.5rem;
-        }
-        #play-selection-bar.hidden { display: none; }
-        #play-selection-label {
-            font-size: 0.65rem;
-            font-weight: 800;
-            color: #7dd3fc;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-        .btn-play-confirm {
-            background: linear-gradient(180deg, #38bdf8, #0284c7);
-            color: #0f172a;
-            border: 2px solid #bae6fd;
-            border-radius: 999px;
-            padding: 0.35rem 0.9rem;
-            font-size: 0.65rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            box-shadow: 0 3px 0 #0369a1;
-        }
-        .btn-play-cancel {
-            background: transparent;
+        .hand-empty-msg {
             color: #94a3b8;
-            border: 1px solid #475569;
-            border-radius: 999px;
-            padding: 0.35rem 0.75rem;
-            font-size: 0.65rem;
-            font-weight: 800;
+            font-size: 0.75rem;
+            font-weight: 700;
+            padding: 1rem;
         }
 
         .modal-target-revive {
@@ -508,11 +248,13 @@
             background: #1e293b;
             color: #fff;
         }
+
         .modal-color-btn.color-red { background: #dc2626; border-color: #fca5a5; }
         .modal-color-btn.color-yellow { background: #eab308; color: #0f172a; border-color: #fef08a; }
         .modal-color-btn.color-green { background: #16a34a; border-color: #86efac; }
         .modal-color-btn.color-blue { background: #2563eb; border-color: #93c5fd; }
 
+        /* Roulette */
         #bullet-roulette-overlay {
             position: fixed;
             inset: 0;
@@ -524,6 +266,7 @@
             backdrop-filter: blur(4px);
             pointer-events: none;
         }
+
         #bullet-roulette-overlay.active { pointer-events: auto; }
         #bullet-roulette-overlay.hidden { display: none; }
 
@@ -534,14 +277,13 @@
             background: linear-gradient(165deg, #1e293b 0%, #0f172a 55%, #020617 100%);
             border: 3px solid #fbbf24;
             border-radius: 1.75rem 1.75rem 1rem 1rem;
-            box-shadow: 0 -12px 48px rgba(251, 191, 36, 0.22), 0 0 0 1px rgba(255,255,255,0.06) inset;
+            box-shadow: 0 -12px 48px rgba(251, 191, 36, 0.22);
             transform: translateY(110%);
             transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
             text-align: center;
         }
-        #bullet-roulette-overlay.active .roulette-panel {
-            transform: translateY(0);
-        }
+
+        #bullet-roulette-overlay.active .roulette-panel { transform: translateY(0); }
 
         .roulette-wheel-wrap {
             position: relative;
@@ -558,8 +300,6 @@
             z-index: 12;
             font-size: 2.25rem;
             color: #fef08c;
-            line-height: 1;
-            filter: drop-shadow(0 3px 6px rgba(0,0,0,0.9));
             pointer-events: none;
         }
 
@@ -569,178 +309,29 @@
             height: 100%;
             border-radius: 50%;
             border: 6px solid #78350f;
-            box-shadow:
-                0 0 0 3px rgba(251, 191, 36, 0.35),
-                inset 0 0 28px rgba(0,0,0,0.45),
-                0 14px 36px rgba(0,0,0,0.55);
             overflow: hidden;
             will-change: transform;
             background-color: #1e293b;
         }
-        .roulette-svg {
-            position: absolute;
-            inset: 0;
-            width: 100%;
-            height: 100%;
-            display: block;
-            pointer-events: none;
-            z-index: 1;
-        }
 
-        .roulette-slice-label {
-            position: absolute;
-            z-index: 2;
-            max-width: 32%;
-            padding: 0 2px;
-            font-size: 0.62rem;
-            font-weight: 900;
-            color: #fff;
-            text-align: center;
-            text-shadow: 0 1px 4px rgba(0,0,0,0.9), 0 0 8px rgba(0,0,0,0.6);
-            line-height: 1.15;
-            pointer-events: none;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            white-space: nowrap;
-        }
-
+        .roulette-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
         .roulette-hub {
             position: absolute;
-            left: 50%;
-            top: 50%;
-            width: 18%;
-            height: 18%;
+            left: 50%; top: 50%;
+            width: 18%; height: 18%;
             transform: translate(-50%, -50%);
             border-radius: 50%;
             background: radial-gradient(circle at 35% 30%, #fde68a, #b45309 70%, #78350f);
             border: 3px solid #fef3c7;
-            box-shadow: inset 0 2px 8px rgba(255,255,255,0.35), 0 4px 12px rgba(0,0,0,0.5);
             z-index: 5;
-            pointer-events: none;
         }
 
-        .roulette-spin-btn {
-            margin-top: 1rem;
-            width: 100%;
-            padding: 0.85rem;
-            border-radius: 999px;
-            background: #ef4444;
-            color: #fff;
-            font-weight: 900;
-            font-size: 0.85rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            border: 3px solid rgba(0,0,0,0.2);
-            box-shadow: 0 6px 0 #b91c1c;
-            cursor: pointer;
-        }
-        .roulette-spin-btn:disabled {
-            opacity: 0.45;
-            cursor: not-allowed;
-            box-shadow: none;
-        }
-
-        .roulette-result {
-            margin-top: 0.75rem;
-            font-size: 0.9rem;
-            font-weight: 800;
-            color: #fca5a5;
-            min-height: 1.25rem;
-        }
-
-        #btn-uno.uno-flash {
-            animation: uno-pulse 0.9s ease-in-out infinite;
-            box-shadow: 0 0 20px rgba(251, 191, 36, 0.7);
-        }
-        @keyframes uno-pulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.08); }
-        }
-
-        .btn-end-turn {
-            background: linear-gradient(180deg, #22c55e 0%, #15803d 100%);
-            color: #ecfdf5;
-            border: 3px solid #86efac;
-            border-radius: 14px;
-            padding: 0.55rem 1.25rem;
-            font-size: 0.75rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            box-shadow: 0 4px 0 #14532d, 0 8px 20px rgba(34, 197, 94, 0.35);
-            transition: transform 0.15s, box-shadow 0.15s, filter 0.15s;
-            cursor: pointer;
-        }
-        .btn-end-turn:hover:not(:disabled) {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 0 #14532d, 0 10px 24px rgba(34, 197, 94, 0.45);
-            filter: brightness(1.08);
-        }
-        .btn-end-turn:active:not(:disabled) {
-            transform: translateY(2px);
-            box-shadow: 0 2px 0 #14532d;
-        }
-        .btn-end-turn:disabled {
-            opacity: 0.38;
-            cursor: not-allowed;
-            box-shadow: 0 3px 0 #334155;
-        }
-
-        #counter-overlay {
-            position: fixed;
-            top: 3.5rem;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 55;
-            background: rgba(15, 23, 42, 0.95);
-            border: 2px solid #f59e0b;
-            border-radius: 1rem;
-            padding: 0.75rem 1.25rem;
-            text-align: center;
-            box-shadow: 0 8px 32px rgba(245, 158, 11, 0.25);
-        }
-        #counter-overlay.hidden { display: none; }
-        #counter-timer {
-            font-size: 2.5rem;
-            font-weight: 900;
-            color: #fbbf24;
-            font-variant-numeric: tabular-nums;
-            line-height: 1;
-        }
-        .btn-contrast {
-            margin-top: 0.5rem;
-            background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
-            color: #0f172a;
-            border: 2px solid #fde68a;
-            border-radius: 999px;
-            padding: 0.4rem 1rem;
-            font-size: 0.7rem;
-            font-weight: 900;
-            text-transform: uppercase;
-            box-shadow: 0 3px 0 #92400e;
-            cursor: pointer;
-            transition: transform 0.12s;
-        }
-        .btn-contrast:hover { transform: translateY(-1px); }
-
-        #game-toast {
-            position: fixed;
-            bottom: 140px;
-            left: 50%;
-            transform: translateX(-50%);
-            z-index: 60;
-            background: #1e293b;
-            border: 1px solid #fbbf24;
-            color: #fef3c7;
-            padding: 0.5rem 1rem;
-            border-radius: 999px;
-            font-size: 0.8rem;
-            font-weight: 700;
-        }
+        .roulette-result { margin-top: 0.75rem; font-size: 0.9rem; font-weight: 800; color: #fca5a5; min-height: 1.25rem; }
     </style>
     <script src="js/avatar-ui.js"></script>
     <script src="js/game-sounds.js"></script>
     <script src="js/game-deck.js"></script>
+    <script src="js/game-card-ui.js"></script>
     <script src="js/game-engine.js"></script>
     <script src="js/game-firestore.js"></script>
     <script src="js/admin-config.js"></script>
@@ -771,84 +362,113 @@
         window.deleteDoc = deleteDoc;
     </script>
 </head>
-<body class="uno-page uno-game w-full h-screen text-white flex flex-col overflow-hidden font-sans select-none">
+<body class="uno-page uno-game game-root w-full h-screen flex flex-col overflow-hidden select-none">
 
-    <header class="game-header w-full h-12 shrink-0 bg-slate-950/90 border-b border-slate-800 flex items-center justify-between px-4 z-20">
-        <span class="game-header-title text-lg font-black text-amber-500 tracking-wider">UNO? REVOLUTION</span>
-        <div class="game-header-meta flex items-center gap-4 text-sm">
-            <span class="text-slate-400 shrink-0">Giro: <span id="game-direction" class="text-emerald-400 font-bold">Oraria ↻</span></span>
-            <div id="turn-alert" class="bg-amber-500/15 text-amber-300 px-3 py-1 rounded-lg border border-amber-500/30 font-bold text-xs hidden">—</div>
-            <button id="btn-leave" type="button" class="text-xs text-slate-400 hover:text-white underline shrink-0 min-h-[44px] px-1">Esci</button>
+    <header class="game-topbar">
+        <div class="game-logo">
+            <span class="game-logo-icon">🃏</span>
+            <span>UNO? REVOLUTION</span>
+        </div>
+        <div id="turn-alert" class="hidden">—</div>
+        <div class="topbar-actions">
+            <button type="button" class="topbar-icon-btn" title="Regole (menu)" data-sound="click">📋</button>
+            <button id="btn-leave" type="button" class="topbar-icon-btn" title="Esci" data-sound="error">✕</button>
         </div>
     </header>
 
-    <main class="game-layout-row flex-1 min-h-0">
-        <aside class="game-sidebar shrink-0 flex">
-            <div class="game-sidebar-title">Giocatori</div>
-            <div id="game-players-list"></div>
-        </aside>
+    <main class="game-arena">
+        <div class="arena-viewport">
+            <div id="opponents-arena" aria-label="Avversari"></div>
 
-        <div class="game-main-column flex-1 min-h-0 flex flex-col tavolo-bg relative">
-        <div id="stack-alert" class="hidden absolute top-3 left-1/2 -translate-x-1/2 z-30 bg-rose-950/90 border border-rose-500 text-rose-200 text-xs font-bold px-4 py-2 rounded-full"></div>
+            <div id="stack-alert" class="hidden">Stack attivo</div>
+            <div id="pending-banner" aria-live="polite"></div>
 
-        <div class="game-table-area flex-1 flex items-center justify-center p-2 pt-1 min-h-0 overflow-hidden">
-            <div class="table-wrap">
-                <div id="table-direction-ring" class="table-direction-ring"></div>
-                <!-- Frecce direzione -->
-                <span class="dir-arrow" style="left:50%;top:4%;">➤</span>
-                <span class="dir-arrow" style="left:92%;top:50%;">➤</span>
-                <span class="dir-arrow" style="left:50%;top:92%;">➤</span>
-                <span class="dir-arrow" style="left:8%;top:50%;">➤</span>
-
-                <div class="table-surface"></div>
-                <div id="table-seats" class="table-seats"></div>
-
-                <div class="table-center">
-                    <div id="deck-draw" class="pile-card" title="Pesca">
-                        <span id="draw-count" class="draw-count">0</span>
+            <div class="arena-middle">
+                <aside class="status-panel">
+                    <div class="stat-box">
+                        <label>Modalità</label>
+                        <span id="game-mode" class="stat-value">CLASSICA</span>
                     </div>
-                    <div>
-                        <div id="deck-discard" class="pile-card card-blue">
-                            <span class="pile-corner">—</span>
-                            <span class="pile-center">—</span>
+                    <div class="stat-box">
+                        <label>Direzione</label>
+                        <span id="game-direction" class="stat-value">↻</span>
+                    </div>
+                    <div class="stat-box">
+                        <label>Colore attivo</label>
+                        <span id="active-color-dot" class="color-slate" title="—"></span>
+                    </div>
+                </aside>
+
+                <div class="pile-stage">
+                    <div id="dir-ring" class="dir-ring" aria-hidden="true"></div>
+                    <div class="center-piles">
+                        <div id="deck-draw" class="gc-card gc-card-pile gc-card-draw-back" title="Pesca" role="button" tabindex="0" data-sound="draw">
+                            <span id="draw-count" class="draw-count">0</span>
                         </div>
-                        <div id="active-color-hint" class="color-hint color-slate">Colore: —</div>
+                        <div id="deck-discard" class="gc-card gc-card-pile gc-card-blue" aria-label="Ultima carta giocata">
+                            <span class="gc-card-center">—</span>
+                        </div>
                     </div>
                 </div>
+
+                <aside class="action-rail">
+                    <button type="button" id="btn-pesca" class="action-tile action-tile--draw" data-sound="draw">
+                        <span class="action-tile-icon">🎴</span>
+                        Pesca
+                    </button>
+                    <button type="button" id="btn-contrast" class="action-tile action-tile--shield" disabled data-sound="bloop">
+                        <span class="action-tile-icon">🛡️</span>
+                        Contrasta
+                    </button>
+                    <div id="timer-ring" class="timer-ring hidden">
+                        <svg viewBox="0 0 36 36" aria-hidden="true">
+                            <circle class="track" cx="18" cy="18" r="15.5"></circle>
+                            <circle class="progress" cx="18" cy="18" r="15.5"></circle>
+                        </svg>
+                        <span id="counter-timer">05</span>
+                        <small>SEC</small>
+                    </div>
+                </aside>
             </div>
         </div>
 
-        <div id="game-log-mini" class="shrink-0 max-h-16 overflow-y-auto px-4 text-[10px] font-mono text-slate-500 space-y-0.5 no-scrollbar"></div>
+        <div id="game-log-mini" class="no-scrollbar"></div>
 
-        <section class="hand-section shrink-0 bg-slate-950/90 border-t border-slate-800 p-3">
-            <div class="max-w-5xl mx-auto flex items-center justify-between mb-2 px-1 gap-2 flex-wrap">
-                <span class="text-[10px] text-slate-500 uppercase tracking-widest font-bold">La tua mano</span>
-                <div class="flex items-center gap-2">
-                    <button id="btn-end-turn" type="button" class="btn-end-turn" disabled data-sound="click">Finisci Turno</button>
-                    <button id="btn-uno" type="button" class="bg-amber-500 hover:bg-amber-400 text-slate-950 px-4 py-1 rounded-full font-black text-xs uppercase">UNO!</button>
+        <footer class="player-stage">
+            <div id="my-dossier" class="player-dossier">
+                <div class="dossier-row">
+                    <div id="my-dossier-avatar" class="dossier-avatar">🦊</div>
+                    <div class="dossier-info">
+                        <div id="my-player-label" class="dossier-name">Giocatore</div>
+                        <div class="dossier-badges">
+                            <span id="my-player-star" class="dossier-badge dossier-badge--star">★ 0</span>
+                            <span id="my-player-meta" class="dossier-badge dossier-badge--cards">0 🃏</span>
+                        </div>
+                    </div>
+                </div>
+                <button id="btn-uno" type="button" class="btn-uno-mini" data-sound="uno">UNO!</button>
+            </div>
+
+            <div class="hand-fan-zone">
+                <div id="play-selection-bar" class="hidden">
+                    <span id="play-selection-label">—</span>
+                    <button type="button" id="btn-play-all-dup" class="hidden btn-chunky btn-cyan text-[10px] px-2 py-1" data-sound="click">Tutte</button>
+                    <button type="button" id="btn-play-ladder-alt" class="hidden btn-chunky btn-purple text-[10px] px-2 py-1" data-sound="click">Scala</button>
+                    <button type="button" id="btn-confirm-play" class="btn-chunky btn-emerald text-[10px] px-2 py-1" data-sound="bloop">Gioca</button>
+                    <button type="button" id="btn-cancel-play" class="btn-chunky btn-slate text-[10px] px-2 py-1" data-sound="pop">Annulla</button>
+                </div>
+                <div class="hand-fan-wrap no-scrollbar">
+                    <div id="my-hand" class="hand-size-normal"></div>
                 </div>
             </div>
-            <div id="play-selection-bar" class="hidden max-w-5xl mx-auto">
-                <span id="play-selection-label">Scala selezionata</span>
-                <button type="button" id="btn-play-all-dup" class="btn-play-confirm hidden" data-sound="click">Gioca tutte</button>
-                <button type="button" id="btn-play-ladder-alt" class="btn-play-cancel hidden" data-sound="click">Gioca scala</button>
-                <button type="button" id="btn-confirm-play" class="btn-play-confirm" data-sound="click">Gioca scala</button>
-                <button type="button" id="btn-cancel-play" class="btn-play-cancel">Annulla</button>
-            </div>
-            <div class="max-w-5xl mx-auto">
-                <span class="hand-scroll-hint">Scorri orizzontalmente la mano →</span>
-                <div class="hand-scroll-wrap max-w-5xl mx-auto">
-                    <div id="my-hand" class="hand-size-normal" style="min-height: 8.5rem;"></div>
-                </div>
-            </div>
-        </section>
-        </div>
+
+            <button id="btn-end-turn" type="button" class="btn-fine-turno" disabled data-sound="bloop">Fine<br>Turno</button>
+        </footer>
     </main>
 
-    <div id="counter-overlay" class="hidden">
-        <p class="text-xs font-black uppercase tracking-widest text-amber-300">Attesa risposte…</p>
-        <p id="counter-timer">5</p>
-        <button type="button" id="btn-contrast" class="btn-contrast hidden" data-sound="click">Contrasta</button>
+    <div id="counter-overlay" class="hidden" aria-hidden="true">
+        <p>—</p>
+        <span id="counter-timer-fallback">5</span>
     </div>
 
     <div id="game-toast" class="hidden"></div>
@@ -869,7 +489,7 @@
                 <div id="roulette-wheel" class="roulette-wheel"></div>
             </div>
             <p id="roulette-hint" class="text-[11px] text-slate-400 mt-2 font-bold"></p>
-            <button type="button" id="roulette-spin-btn" class="roulette-spin-btn" disabled>Gira la ruota</button>
+            <button type="button" id="roulette-spin-btn" class="btn-chunky btn-red w-full py-3 mt-3 text-sm" disabled data-sound="bloop">Gira la ruota</button>
             <p id="roulette-result" class="roulette-result"></p>
         </div>
     </div>
