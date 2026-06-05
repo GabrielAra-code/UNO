@@ -63,9 +63,13 @@
             overflow-y: auto;
         }
 
-        .modal-content:not(.hidden),
-        .modal-shell:not(.hidden) {
-            animation: modal-pop 0.24s cubic-bezier(0.16, 1, 0.3, 1) both;
+        #modal-overlay {
+            will-change: opacity;
+        }
+
+        .modal-content,
+        .modal-shell {
+            will-change: transform, opacity;
         }
 
         .modal-shell {
@@ -248,26 +252,275 @@
             transform: translateY(6px);
         }
 
-        .stats-panel-animate {
-            animation: tab-slide-fade 0.24s ease both;
+        #index-nav-stage {
+            will-change: transform, opacity;
         }
 
-        @keyframes modal-pop {
-            0% { opacity: 0; transform: translateY(14px) scale(0.94); }
-            100% { opacity: 1; transform: translateY(0) scale(1); }
+        .stats-pages-viewport {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
         }
 
-        @keyframes tab-slide-fade {
-            0% { opacity: 0; transform: translateX(18px); }
-            100% { opacity: 1; transform: translateX(0); }
+        .admin-pages-viewport {
+            position: relative;
+            width: 100%;
+            overflow: hidden;
         }
+
+        #modal-stats.stats-modal-index-view {
+            max-width: 34.2rem;
+            min-height: 26.6rem;
+            padding: 1.425rem !important;
+        }
+
+        #modal-stats.stats-modal-index-view .flex.gap-3.mb-4 {
+            gap: 0.7125rem;
+            margin-bottom: 1.425rem;
+        }
+
+        #modal-stats.stats-modal-index-view .stats-tab-btn {
+            font-size: 0.83125rem;
+            padding-top: 0.7125rem;
+            padding-bottom: 0.7125rem;
+        }
+
+        #modal-stats.stats-modal-index-view #index-nav-stage.space-y-3 > * + * {
+            margin-top: 0.7125rem;
+        }
+
+        #modal-stats.stats-modal-index-view #search-cards-input {
+            padding: 0.59375rem 1.425rem;
+            font-size: 0.7125rem;
+        }
+
+        .index-card-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            grid-template-rows: repeat(2, minmax(0, 1fr));
+            gap: 0.57rem;
+            min-height: 11.875rem;
+        }
+
+        .index-card-slot {
+            position: relative;
+            aspect-ratio: 2 / 3;
+            border-radius: 0.665rem;
+            border: 3px solid rgba(0, 0, 0, 0.35);
+            box-shadow: 0 5.7px 0 rgba(0, 0, 0, 0.35), 0 9.5px 20.9px rgba(0, 0, 0, 0.28);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0.4275rem 0.3325rem 0.475rem;
+            text-align: center;
+            overflow: hidden;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+            user-select: none;
+        }
+
+        .index-card-slot:not(.index-card-slot--empty):hover {
+            transform: translateY(-3.8px) scale(1.03);
+            box-shadow: 0 7.6px 0 rgba(0, 0, 0, 0.32), 0 15.2px 26.6px rgba(0, 0, 0, 0.35);
+            filter: brightness(1.06);
+        }
+
+        .index-card-slot--empty {
+            visibility: hidden;
+            pointer-events: none;
+            box-shadow: none;
+            border-color: transparent;
+        }
+
+        .index-card-slot--locked {
+            background: linear-gradient(160deg, #1e293b 0%, #0f172a 100%) !important;
+            color: #64748b !important;
+            opacity: 0.72;
+            filter: grayscale(0.35);
+        }
+
+        .index-card-slot--locked:hover {
+            transform: none;
+            filter: grayscale(0.35);
+            box-shadow: 0 5.7px 0 rgba(0, 0, 0, 0.35), 0 9.5px 20.9px rgba(0, 0, 0, 0.28);
+        }
+
+        .index-card-lock {
+            font-size: 1.2825rem;
+            line-height: 1;
+            margin-top: auto;
+            margin-bottom: auto;
+            opacity: 0.85;
+        }
+
+        .index-card-qty {
+            align-self: flex-end;
+            font-size: 0.551rem;
+            font-weight: 900;
+            padding: 0.114rem 0.3325rem;
+            border-radius: 0.3325rem;
+            background: rgba(0, 0, 0, 0.28);
+            letter-spacing: 0.04em;
+        }
+
+        .index-card-label {
+            font-size: 1.0925rem;
+            font-weight: 900;
+            line-height: 1.05;
+            text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+            word-break: break-word;
+        }
+
+        .index-card-name {
+            font-size: 0.494rem;
+            font-weight: 800;
+            line-height: 1.2;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            opacity: 0.95;
+            max-height: 2.4em;
+            overflow: hidden;
+        }
+
+        .index-card-slot--brainrot {
+            justify-content: flex-start;
+        }
+
+        .index-card-brainrot-name {
+            flex: 1;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 100%;
+            padding: 0.2rem 0.25rem 1.1rem;
+            font-size: 0.52rem;
+            font-weight: 900;
+            line-height: 1.15;
+            text-align: center;
+            word-break: break-word;
+            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.2);
+        }
+
+        .index-card-brainrot-pt {
+            position: absolute;
+            right: 0.35rem;
+            bottom: 0.35rem;
+            font-size: 0.56rem;
+            font-weight: 900;
+            color: #fff;
+            letter-spacing: 0.04em;
+            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+        }
+
+        .index-card-red { background: #dc2626; color: #fff; }
+        .index-card-yellow { background: #eab308; color: #0f172a; }
+        .index-card-green { background: #16a34a; color: #fff; }
+        .index-card-blue { background: #2563eb; color: #fff; }
+        .index-card-black {
+            background: linear-gradient(145deg, #1f2937 0%, #020617 100%);
+            color: #f8fafc;
+        }
+        .index-card-wild {
+            background: linear-gradient(145deg, #64748b 0%, #334155 100%);
+            color: #fff;
+        }
+        .index-card-brainrot {
+            background: linear-gradient(145deg, #7c3aed 0%, #4c1d95 100%);
+            color: #fff;
+        }
+        .index-card-battle-yellow { background: #eab308; color: #0f172a; }
+        .index-card-battle-white { background: #f1f5f9; color: #0f172a; }
+        .index-card-battle-pink { background: #ec4899; color: #fff; }
+        .index-card-battle-blue { background: #2563eb; color: #fff; }
+
+        .index-category-slot {
+            aspect-ratio: 2 / 3;
+            border-radius: 0.665rem;
+            border: 3px solid rgba(0, 0, 0, 0.35);
+            box-shadow: 0 5.7px 0 rgba(0, 0, 0, 0.35), 0 9.5px 20.9px rgba(0, 0, 0, 0.28);
+            background: linear-gradient(155deg, #1e293b 0%, #0f172a 55%, #172554 100%);
+            color: #f8fafc;
+            cursor: pointer;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.35rem;
+            padding: 0.45rem 0.35rem;
+            text-align: center;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, filter 0.18s ease;
+        }
+
+        .index-category-slot:hover {
+            transform: translateY(-3.8px) scale(1.03);
+            box-shadow: 0 7.6px 0 rgba(0, 0, 0, 0.32), 0 15.2px 26.6px rgba(0, 0, 0, 0.35);
+            filter: brightness(1.08);
+        }
+
+        .index-category-slot:active {
+            transform: translateY(2px) scale(0.98);
+        }
+
+        .index-category-label {
+            font-size: 0.52rem;
+            font-weight: 900;
+            line-height: 1.15;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+        }
+
+        .index-category-meta {
+            font-size: 0.48rem;
+            font-weight: 800;
+            color: #67e8f9;
+            letter-spacing: 0.06em;
+        }
+
+        #index-btn-back {
+            z-index: 20;
+        }
+
+        .index-pagination {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 0.475rem;
+            margin-top: 0.2375rem;
+        }
+
+        .index-page-btn {
+            flex: 1;
+            max-width: 8.55rem;
+            padding: 0.5225rem 0.475rem;
+            font-size: 0.589rem;
+            cursor: pointer;
+        }
+
+        .index-page-btn:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            pointer-events: none;
+        }
+
+        .index-page-indicator {
+            font-size: 0.6175rem;
+            font-weight: 900;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            white-space: nowrap;
+        }
+
     </style>
 
     <script src="js/admin-config.js"></script>
+    <script src="js/ui-transitions.js"></script>
+    <script src="js/lobby-notice.js"></script>
     <script src="js/ban-service.js"></script>
     <script src="js/anti-cheat.js"></script>
     <script src="js/avatar-ui.js"></script>
     <script src="js/carte-data.js"></script>
+    <script src="js/carte-catalog.js"></script>
     <script src="js/lobby-list.js"></script>
     <script src="js/admin-panel.js"></script>
     <script type="module">
@@ -360,17 +613,19 @@
                 const part = dati.partiteGiocate ?? 0;
                 const vitt = dati.vittorie ?? 0;
                 const winRate = part > 0 ? Math.round((vitt / part) * 100) : 0;
-                const liv = dati.livello ?? 1;
                 const xpAttuali = dati.xp ?? 0;
-                const xpTarget = liv * 100;
-                const percentualeXp = Math.min(100, Math.round((xpAttuali / xpTarget) * 100));
+                const prog = window.AdminConfig?.calcolaProgressoXp
+                    ? window.AdminConfig.calcolaProgressoXp(xpAttuali)
+                    : { livello: dati.livello ?? 1, xpCorrente: xpAttuali, xpRichiesto: 100, percentuale: 0, alMassimo: false };
 
                 document.getElementById('stat-partite').innerText = part;
                 document.getElementById('stat-vittorie').innerText = vitt;
                 document.getElementById('stat-winrate').innerText = winRate + "%";
-                document.getElementById('stat-livello').innerText = "LIV. " + liv;
-                document.getElementById('stat-xp-bar').style.width = percentualeXp + "%";
-                document.getElementById('stat-xp-testo').innerText = `${xpAttuali}/${xpTarget} XP`;
+                document.getElementById('stat-livello').innerText = "LIV. " + prog.livello;
+                document.getElementById('stat-xp-bar').style.width = prog.percentuale + "%";
+                document.getElementById('stat-xp-testo').innerText = prog.alMassimo
+                    ? `${xpAttuali} XP · LIV. MAX`
+                    : `${prog.xpCorrente}/${prog.xpRichiesto} XP`;
                 localStorage.setItem('unoCurrentUser', JSON.stringify({
                     nickname: dati.nickname,
                     avatar: dati.avatar,
@@ -568,17 +823,19 @@
 
         <!-- 4. POPUP STATISTICHE E INDEX CARTE -->
         <div id="modal-stats" class="modal-content hidden game-panel-dark w-full max-w-md p-6 rounded-3xl relative">
+            <button type="button" id="index-btn-back" class="hidden absolute -top-3 -left-3 w-10 h-10 btn-chunky btn-slate flex items-center justify-center text-sm cursor-pointer" onclick="window.indexTornaCategorie()" data-sound="pop" aria-label="Torna alle categorie">←</button>
             <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
             
             <div class="flex gap-3 mb-4">
-                <button id="btn-tab-mie-stats" onclick="switchStatsTab('mie')" class="stats-tab-btn is-active flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-pink-600 text-white shadow-[0_2px_0_transparent] cursor-pointer" data-sound="click">
+                <button id="btn-tab-mie-stats" onclick="switchStatsTab('mie')" class="stats-tab-btn is-active flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-pink-600 text-white shadow-[0_2px_0_transparent] cursor-pointer" data-sound="bloop">
                     👤 GIOCATORE
                 </button>
-                <button id="btn-tab-classifica" onclick="switchStatsTab('global')" class="stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_8px_0_#1e293b] cursor-pointer" data-sound="click">
+                <button id="btn-tab-classifica" onclick="switchStatsTab('global')" class="stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_8px_0_#1e293b] cursor-pointer" data-sound="bloop">
                     📊 INDEX
                 </button>
             </div>
 
+            <div id="stats-pages-viewport" class="stats-pages-viewport">
             <!-- Sotto-Pannello 1: GIOCATORE -->
             <div id="sub-panel-mie-stats" class="space-y-5">
                 <div class="bg-black/40 border border-slate-900 rounded-2xl p-4 text-center">
@@ -605,48 +862,56 @@
                 </div>
             </div>
 
-            <!-- Sotto-Pannello 2: INDEX CON SEARCH BAR -->
-            <div id="sub-panel-classifica" class="hidden space-y-3">
-                <div class="relative">
-                    <input type="text" id="search-cards-input" placeholder="🔍 Cerca per nome, effetto o tipo..." 
-                        class="w-full bg-slate-950 rounded-2xl px-4 py-2.5 text-white font-bold text-xs outline-none border-2 border-slate-800 focus:border-cyan-500 transition-all placeholder:text-slate-500"
-                        oninput="window.filtraCarteIndex(this.value)">
+            <!-- Sotto-Pannello 2: INDEX COLLEZIONE -->
+            <div id="sub-panel-classifica" class="hidden">
+                <div id="index-nav-stage" class="space-y-3">
+                    <div class="relative">
+                        <input type="text" id="search-cards-input" placeholder="🔍 Cerca per nome, effetto o tipo..." 
+                            class="w-full bg-slate-950 rounded-2xl px-4 py-2.5 text-white font-bold text-xs outline-none border-2 border-slate-800 focus:border-cyan-500 transition-all placeholder:text-slate-500"
+                            oninput="window.filtraCarteIndex(this.value)">
+                    </div>
+                    <div id="index-card-grid" class="index-card-grid" aria-live="polite">
+                        <!-- Griglia 3×2 caricata dinamicamente -->
+                    </div>
+                    <div class="index-pagination">
+                        <button type="button" id="index-btn-prev" class="index-page-btn btn-chunky btn-slate" onclick="window.indexPaginaPrecedente()" data-sound="click">← Precedente</button>
+                        <span id="index-page-indicator" class="index-page-indicator">Pagina 1 / 1</span>
+                        <button type="button" id="index-btn-next" class="index-page-btn btn-chunky btn-cyan" onclick="window.indexPaginaSuccessiva()" data-sound="click">Successiva →</button>
+                    </div>
                 </div>
-                <div id="leaderboard-list" class="overflow-y-auto custom-scroll max-h-[36vh] space-y-2 pr-1">
-                    <!-- Caricato dinamicamente -->
-                </div>
+            </div>
             </div>
         </div>
 
         <!-- 5. POPUP CREAZIONE STANZA -->
-        <div id="modal-create" class="modal-content hidden game-panel-dark w-full max-w-3xl p-6 rounded-3xl relative">
+        <div id="modal-create" class="modal-content hidden game-panel-dark w-full max-w-md p-5 rounded-3xl relative">
             <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
-            <h2 class="text-center text-2xl font-black uppercase tracking-[0.18em] text-amber-400">🎮 CREA STANZA</h2>
-            <div class="mt-5 grid gap-4 md:grid-cols-[1.15fr_0.85fr] md:items-start">
-                <div class="space-y-2">
+            <h2 class="text-center text-xl font-black uppercase tracking-[0.15em] text-amber-400">🎮 CREA STANZA</h2>
+            <div class="mt-4 flex flex-col gap-3.5">
+                <div class="space-y-1.5">
                     <label for="create-room-name-input" class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">NOME LOBBY</label>
-                    <input id="create-room-name-input" type="text" maxlength="32" placeholder="NIESTANIESTA's Room" class="room-input w-full rounded-3xl px-4 py-3 text-sm font-black outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20" />
+                    <input id="create-room-name-input" type="text" maxlength="32" placeholder="Nome della lobby" class="room-input w-full rounded-2xl px-4 py-2.5 text-sm font-black outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20" />
                 </div>
 
-                <div class="space-y-2">
+                <div class="space-y-1.5">
                     <label for="create-room-max" class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">NUMERO MASSIMO GIOCATORI</label>
-                    <input id="create-room-max" type="number" min="2" max="15" value="6" class="room-input w-full rounded-3xl px-4 py-3 text-sm font-black outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20" />
-                    <p class="text-[10px] text-slate-500 font-bold uppercase tracking-wider">Minimo 2, massimo 15 giocatori.</p>
+                    <input id="create-room-max" type="number" min="2" max="15" value="6" class="room-input w-full rounded-2xl px-4 py-2.5 text-sm font-black outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20" />
+                    <p class="text-[9px] text-slate-500 font-bold uppercase tracking-wider">Minimo 2, massimo 15 giocatori.</p>
                 </div>
 
-                <button type="button" onclick="toggleRoomPrivacy()" class="md:col-span-2 w-full flex items-center gap-4 rounded-3xl border border-slate-800 bg-slate-950 px-4 py-3 text-left transition-all hover:border-amber-500" data-sound="click">
+                <button type="button" onclick="toggleRoomPrivacy()" class="w-full flex items-center gap-3 rounded-2xl border border-slate-800 bg-slate-950 px-4 py-2.5 text-left transition-all hover:border-amber-500" data-sound="click">
                     <span id="create-room-privacy-checkbox" class="room-checkbox-button"><span class="checkbox-mark">✓</span></span>
                     <span class="text-sm font-black text-white">🔒 Lobby Privata</span>
                 </button>
 
-                <div id="room-password-wrapper" class="hidden md:col-span-2">
+                <div id="room-password-wrapper" class="hidden space-y-1.5">
                     <label for="create-room-password-input" class="text-[10px] font-black uppercase tracking-[0.3em] text-slate-400">PASSWORD LOBBY</label>
-                    <input id="create-room-password-input" type="password" maxlength="20" placeholder="Inserisci una password" class="room-input w-full rounded-3xl px-4 py-3 text-sm font-black outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20" />
+                    <input id="create-room-password-input" type="password" maxlength="20" placeholder="Inserisci una password" class="room-input w-full rounded-2xl px-4 py-2.5 text-sm font-black outline-none focus:border-amber-500 focus:ring-2 focus:ring-amber-500/20" />
                 </div>
 
-                <div id="room-create-error" class="hidden md:col-span-2 bg-red-950/80 border border-red-900 text-red-300 rounded-2xl p-3 text-[11px] font-bold text-center"></div>
+                <div id="room-create-error" class="hidden bg-red-950/80 border border-red-900 text-red-300 rounded-2xl p-2.5 text-[11px] font-bold text-center"></div>
 
-                <button onclick="creaLobbySelezionata()" class="md:col-span-2 btn-chunky btn-emerald w-full py-4 text-sm font-black rounded-full uppercase tracking-[0.1em]" data-sound="bloop">CREA LOBBY ✓</button>
+                <button onclick="creaLobbySelezionata()" class="btn-chunky btn-emerald w-full py-3.5 text-sm font-black rounded-full uppercase tracking-[0.1em] mt-0.5" data-sound="bloop">CREA LOBBY ✓</button>
             </div>
         </div>
 
@@ -661,6 +926,7 @@
                 <button type="button" data-admin-tab="ban" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-slate-800 text-slate-400">Ban</button>
                 <button type="button" data-admin-tab="security" class="flex-1 py-2 text-xs font-black rounded-xl uppercase bg-slate-800 text-slate-400">Sicurezza</button>
             </div>
+            <div id="admin-pages-viewport" class="admin-pages-viewport">
             <div id="admin-section-lobbies" class="space-y-3">
                 <input id="admin-lobbies-search" type="text" placeholder="Cerca lobby..." class="room-input w-full rounded-2xl px-4 py-3 text-sm font-black outline-none focus:border-red-500" />
                 <div id="admin-lobbies-list" class="space-y-2 max-h-[50vh] overflow-y-auto custom-scroll pr-1"></div>
@@ -677,6 +943,7 @@
             <div id="admin-section-security" class="hidden space-y-3">
                 <input id="admin-security-search" type="text" placeholder="Cerca eventi (UID, tipo, nickname)..." class="room-input w-full rounded-2xl px-4 py-3 text-sm font-black outline-none focus:border-cyan-500" />
                 <div id="admin-security-list" class="space-y-2 max-h-[50vh] overflow-y-auto custom-scroll pr-1"></div>
+            </div>
             </div>
             </div>
         </div>
@@ -922,97 +1189,160 @@
         const overlay = document.getElementById('modal-overlay');
         let modalAttiva = null;
 
-        window.openModal = function openModal(id) {
-            playSynth('bloop');
-            if(modalAttiva) {
-                document.getElementById(modalAttiva).classList.add('hidden');
+        function afterModalOpen(id) {
+            if (id === 'modal-stats') {
+                switchStatsTab('mie', { animate: false });
             }
-            overlay.classList.remove('hidden');
-            const target = document.getElementById(id);
-            target.classList.remove('hidden');
-            modalAttiva = id;
-
-            if(id === 'modal-stats') {
-                switchStatsTab('mie');
-            }
-            if(id === 'modal-create') {
+            if (id === 'modal-create') {
                 resetCreateRoomFlow();
             }
-            if(id === 'modal-public-lobbies') {
+            if (id === 'modal-public-lobbies') {
                 const search = document.getElementById('public-lobbies-search');
                 if (search) search.value = '';
                 renderListaLobby();
             }
+        }
+
+        window.openModal = function openModal(id) {
+            const UI = window.UITransitions;
+            UI?.withLock(async () => {
+                playSynth('bloop');
+                const target = document.getElementById(id);
+                if (!target || modalAttiva === id) return;
+
+                const previous = modalAttiva ? document.getElementById(modalAttiva) : null;
+                const overlayHidden = overlay.classList.contains('hidden');
+
+                if (overlayHidden) {
+                    overlay.classList.remove('hidden');
+                    if (UI) await UI.fadeOverlay(overlay, true);
+                }
+
+                if (previous && previous !== target) {
+                    if (UI) await UI.close(previous);
+                    else previous.classList.add('hidden');
+                }
+
+                modalAttiva = id;
+                if (UI) await UI.open(target);
+                else target.classList.remove('hidden');
+
+                afterModalOpen(id);
+            });
         };
 
         window.closeModal = function closeModal(playAudio = true) {
-            if(!modalAttiva || modalAttiva === 'modal-loading-room') return;
-            if (modalAttiva === 'modal-admin-panel' && typeof window.__closeAdminPanelListeners === 'function') {
-                window.__closeAdminPanelListeners();
-            }
-            if (playAudio) playSynth('pop');
-            document.getElementById(modalAttiva).classList.add('hidden');
-            overlay.classList.add('hidden');
-            modalAttiva = null;
+            const UI = window.UITransitions;
+            UI?.withLock(async () => {
+                if (!modalAttiva || modalAttiva === 'modal-loading-room') return;
+                if (modalAttiva === 'modal-admin-panel' && typeof window.__closeAdminPanelListeners === 'function') {
+                    window.__closeAdminPanelListeners();
+                }
+                if (playAudio) playSynth('pop');
+
+                const current = document.getElementById(modalAttiva);
+                if (UI) await UI.close(current);
+                else current?.classList.add('hidden');
+
+                modalAttiva = null;
+                if (UI) await UI.fadeOverlay(overlay, false);
+                else overlay.classList.add('hidden');
+            });
         };
 
         let modalPrimaDelCaricamento = null;
 
+        function loadingRoomElements() {
+            const loading = document.getElementById('modal-loading-room');
+            return { loading, panel: loading?.querySelector(':scope > div') };
+        }
+
         function showLoadingOverlay() {
+            const UI = window.UITransitions;
             const titolo = document.getElementById('modal-loading-room-title');
             if (titolo) titolo.innerText = 'Caricamento in corso...';
 
             if (modalAttiva && modalAttiva !== 'modal-loading-room') {
                 modalPrimaDelCaricamento = modalAttiva;
-                document.getElementById(modalAttiva)?.classList.add('hidden');
+                const prev = document.getElementById(modalAttiva);
+                if (prev) prev.classList.add('hidden');
             }
 
-            document.getElementById('modal-loading-room')?.classList.remove('hidden');
+            const { loading, panel } = loadingRoomElements();
             modalAttiva = 'modal-loading-room';
-            overlay.classList.remove('hidden');
+            if (UI && loading) UI.openOverlayModal(loading, panel);
+            else loading?.classList.remove('hidden');
         }
 
         function hideLoadingOverlay() {
-            document.getElementById('modal-loading-room')?.classList.add('hidden');
+            const UI = window.UITransitions;
+            const { loading, panel } = loadingRoomElements();
+            const restore = async () => {
+                if (UI && loading) await UI.closeOverlayModal(loading, panel);
+                else loading?.classList.add('hidden');
 
-            if (modalPrimaDelCaricamento) {
-                document.getElementById(modalPrimaDelCaricamento)?.classList.remove('hidden');
-                modalAttiva = modalPrimaDelCaricamento;
-                modalPrimaDelCaricamento = null;
-                overlay.classList.remove('hidden');
-            } else {
-                overlay.classList.add('hidden');
-                modalAttiva = null;
-            }
+                if (modalPrimaDelCaricamento) {
+                    const prev = document.getElementById(modalPrimaDelCaricamento);
+                    modalAttiva = modalPrimaDelCaricamento;
+                    modalPrimaDelCaricamento = null;
+                    overlay.classList.remove('hidden');
+                    if (UI && prev) await UI.open(prev);
+                    else prev?.classList.remove('hidden');
+                } else {
+                    modalAttiva = null;
+                }
+            };
+            if (UI) UI.withLock(restore);
+            else restore();
         }
 
-        window.switchStatsTab = function(tab) {
-            playSynth('click');
-            const btnMie = document.getElementById('btn-tab-mie-stats');
-            const btnGlobal = document.getElementById('btn-tab-classifica');
-            const panelMie = document.getElementById('sub-panel-mie-stats');
-            const panelGlobal = document.getElementById('sub-panel-classifica');
+        window.switchStatsTab = function(tab, options = {}) {
+            const { animate = true } = options;
+            const UI = window.UITransitions;
+            const run = async () => {
+                playSynth('click');
+                const btnMie = document.getElementById('btn-tab-mie-stats');
+                const btnGlobal = document.getElementById('btn-tab-classifica');
+                const panelMie = document.getElementById('sub-panel-mie-stats');
+                const panelGlobal = document.getElementById('sub-panel-classifica');
+                const viewport = document.getElementById('stats-pages-viewport');
+                const modalStats = document.getElementById('modal-stats');
 
-            if(tab === 'mie') {
-                btnMie.className = "stats-tab-btn is-active flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-pink-600 text-white shadow-[0_2px_0_transparent] cursor-pointer";
-                btnGlobal.className = "stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_8px_0_#1e293b] cursor-pointer";
-                panelMie.classList.remove('hidden');
-                panelGlobal.classList.add('hidden');
-                panelMie.classList.remove('stats-panel-animate');
-                void panelMie.offsetWidth;
-                panelMie.classList.add('stats-panel-animate');
-            } else {
-                btnGlobal.className = "stats-tab-btn is-active flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-cyan-600 text-white shadow-[0_2px_0_transparent] cursor-pointer";
-                btnMie.className = "stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_8px_0_#1e293b] cursor-pointer";
-                panelMie.classList.add('hidden');
-                panelGlobal.classList.remove('hidden');
-                panelGlobal.classList.remove('stats-panel-animate');
-                void panelGlobal.offsetWidth;
-                panelGlobal.classList.add('stats-panel-animate');
-                
-                document.getElementById('search-cards-input').value = "";
-                caricaDatabaseCarteIndex();
-            }
+                if (tab === 'mie') {
+                    btnMie.className = "stats-tab-btn is-active flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-pink-600 text-white shadow-[0_2px_0_transparent] cursor-pointer";
+                    btnGlobal.className = "stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_8px_0_#1e293b] cursor-pointer";
+                    document.getElementById('index-btn-back')?.classList.add('hidden');
+
+                    const fromIndex = panelGlobal && !panelGlobal.classList.contains('hidden');
+                    if (animate && fromIndex && UI) {
+                        await UI.verticalPageSwap(viewport, panelGlobal, panelMie, { direction: 'back' });
+                        modalStats?.classList.remove('stats-modal-index-view');
+                    } else {
+                        modalStats?.classList.remove('stats-modal-index-view');
+                        panelMie?.classList.remove('hidden');
+                        panelGlobal?.classList.add('hidden');
+                    }
+                } else {
+                    btnGlobal.className = "stats-tab-btn is-active flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-cyan-600 text-white shadow-[0_2px_0_transparent] cursor-pointer";
+                    btnMie.className = "stats-tab-btn flex-1 py-3 text-sm font-black rounded-2xl uppercase tracking-wider bg-slate-700 text-slate-300 shadow-[0_8px_0_#1e293b] cursor-pointer";
+                    modalStats?.classList.add('stats-modal-index-view');
+
+                    indexCategoriaAttiva = null;
+                    const search = document.getElementById('search-cards-input');
+                    if (search) search.value = '';
+                    caricaDatabaseCarteIndex();
+
+                    const fromGiocatore = panelMie && !panelMie.classList.contains('hidden');
+                    if (animate && fromGiocatore && UI) {
+                        await UI.verticalPageSwap(viewport, panelMie, panelGlobal, { direction: 'forward' });
+                    } else {
+                        panelMie?.classList.add('hidden');
+                        panelGlobal?.classList.remove('hidden');
+                    }
+                }
+            };
+            if (UI && animate) UI.withLock(run);
+            else run();
         }
 
         let roomSettings = {
@@ -1022,8 +1352,33 @@
             pistolHp: 3
         };
 
+        function getPlayerNickname() {
+            const settingsNick = document.getElementById('settings-nickname-input')?.value?.trim();
+            if (settingsNick) return settingsNick;
+
+            try {
+                const stored = JSON.parse(localStorage.getItem('unoCurrentUser') || '{}');
+                if (stored.nickname?.trim()) return stored.nickname.trim();
+            } catch (_) { /* ignore */ }
+
+            const authEmail = window.auth?.currentUser?.email;
+            if (authEmail) {
+                const fromEmail = authEmail.split('@')[0]?.trim();
+                if (fromEmail) return fromEmail;
+            }
+
+            return 'Giocatore';
+        }
+
+        function getDefaultLobbyName() {
+            return `${getPlayerNickname()}'s Room`;
+        }
+
         window.resetCreateRoomFlow = function() {
-            document.getElementById('create-room-name-input').value = '';
+            const defaultLobbyName = getDefaultLobbyName();
+            const nameInput = document.getElementById('create-room-name-input');
+            nameInput.value = defaultLobbyName;
+            nameInput.placeholder = defaultLobbyName;
             document.getElementById('create-room-max').value = 6;
             document.getElementById('create-room-password-input').value = '';
             document.getElementById('create-room-password-input').blur();
@@ -1175,7 +1530,9 @@
         }
 
         async function leggiLobbyRemote() {
-            if (!window.db || !window.collection || !window.query || !window.orderBy || !window.limit || !window.getDocs) return [];
+            if (!window.db || !window.collection || !window.query || !window.orderBy || !window.limit || !window.getDocs) {
+                return { lobbies: [], ok: false };
+            }
             try {
                 const ref = window.query(
                     window.collection(window.db, 'lobbies'),
@@ -1183,16 +1540,20 @@
                     window.limit(50)
                 );
                 const snapshot = await window.getDocs(ref);
-                return snapshot.docs.map(docSnap => docSnap.data());
+                const fromDoc = window.LobbyList?.lobbyFromFirestoreDoc;
+                const lobbies = snapshot.docs.map(docSnap =>
+                    fromDoc ? fromDoc(docSnap) : { ...docSnap.data(), id: docSnap.id }
+                );
+                return { lobbies, ok: true };
             } catch(error) {
                 console.warn('Recupero lobby remote non disponibile:', error);
-                return [];
+                return { lobbies: [], ok: false };
             }
         }
 
         window.creaLobbySelezionata = async function() {
             const errore = document.getElementById('room-create-error');
-            const nome = document.getElementById('create-room-name-input').value.trim() || `${document.getElementById('header-nickname').innerText || 'PLAYER'} ROOM`;
+            const nome = document.getElementById('create-room-name-input').value.trim() || getDefaultLobbyName();
             roomSettings.password = document.getElementById('create-room-password-input').value.trim();
             const isPrivata = roomSettings.private;
 
@@ -1211,9 +1572,7 @@
             }
 
             const currentUser = JSON.parse(localStorage.getItem('unoCurrentUser') || '{}');
-            const hostName = currentUser.nickname
-                || document.getElementById('settings-nickname-input')?.value?.trim()
-                || 'Giocatore';
+            const hostName = getPlayerNickname();
             const hostAvatar = currentUser.avatar || '🦊';
             const hostUid = window.currentUserUid || currentUser.uid || null;
 
@@ -1261,7 +1620,6 @@
                     page: 'Menu_principale.html'
                 }, async () => {
                     showLoadingOverlay();
-                    document.getElementById('modal-create').classList.add('hidden');
 
                     lobbies.unshift(nuovaLobby);
                     salvaLobby(lobbies.slice(0, 12));
@@ -1283,7 +1641,9 @@
                 try {
                     const snap = await window.getDoc(window.doc(window.db, 'lobbies', id));
                     if (snap.exists()) {
-                        return { id, ...snap.data() };
+                        return window.LobbyList?.lobbyFromFirestoreDoc
+                            ? window.LobbyList.lobbyFromFirestoreDoc(snap)
+                            : { ...snap.data(), id: snap.id };
                     }
                 } catch (error) {
                     console.warn('Lettura lobby remota non disponibile:', error);
@@ -1309,13 +1669,16 @@
 
             if (!lobby) {
                 playSynth('error');
-                alert('Lobby non più disponibile.');
+                window.LobbyNotice?.showLobbyNotFound?.()
+                    || alert('Lobby non trovata.');
                 return;
             }
 
             if (String(lobby.status || 'waiting').toLowerCase() !== 'waiting') {
                 playSynth('error');
-                alert('Lobby non più disponibile.');
+                window.LobbyNotice?.showLobbyNotFound?.({
+                    message: 'La lobby non è più in attesa di giocatori.'
+                }) || alert('Lobby non più disponibile.');
                 return;
             }
 
@@ -1388,7 +1751,12 @@
             } catch (error) {
                 hideLoadingOverlay();
                 playSynth('error');
-                alert(error.message || 'Impossibile entrare nella lobby.');
+                const msg = error?.message || 'Impossibile entrare nella lobby.';
+                if (window.LobbyNotice?.showLobbyNotFound && /lobby/i.test(msg)) {
+                    window.LobbyNotice.showLobbyNotFound({ message: msg });
+                } else {
+                    alert(msg);
+                }
             }
         }
 
@@ -1400,7 +1768,8 @@
 
             let lobby = await caricaLobbyPerIngresso(id);
             if (!lobby) {
-                alert('Lobby non trovata.');
+                window.LobbyNotice?.showLobbyNotFound?.()
+                    || alert('Lobby non trovata.');
                 return;
             }
 
@@ -1455,7 +1824,12 @@
             } catch (error) {
                 hideLoadingOverlay();
                 playSynth('error');
-                alert(error.message || 'Ingresso admin non riuscito.');
+                const msg = error?.message || 'Ingresso admin non riuscito.';
+                if (window.LobbyNotice?.showLobbyNotFound && /lobby/i.test(msg)) {
+                    window.LobbyNotice.showLobbyNotFound({ message: msg });
+                } else {
+                    alert(msg);
+                }
             }
         };
 
@@ -1466,14 +1840,17 @@
         window.renderListaLobby = async function() {
             const container = document.getElementById('public-lobbies-list');
             const searchValue = (document.getElementById('public-lobbies-search')?.value || '').trim().toUpperCase();
-            const lobbiesById = new Map();
-            leggiLobbySalvate().forEach(lobby => {
-                if (lobby?.id) lobbiesById.set(lobby.id, lobby);
-            });
-            (await leggiLobbyRemote()).forEach(lobby => {
-                if (lobby?.id) lobbiesById.set(lobby.id, lobby);
-            });
-            const merged = [...lobbiesById.values()];
+            const remoteResult = await leggiLobbyRemote();
+            let merged;
+            if (remoteResult.ok) {
+                merged = remoteResult.lobbies.filter(lobby => lobby?.id);
+            } else {
+                const lobbiesById = new Map();
+                leggiLobbySalvate().forEach(lobby => {
+                    if (lobby?.id) lobbiesById.set(lobby.id, lobby);
+                });
+                merged = [...lobbiesById.values()];
+            }
             const pulite = window.LobbyList?.pruneLobbyList(merged) || merged.filter(lobbyDisponibile);
             salvaLobby(pulite.slice(0, 50));
             const lobbies = pulite
@@ -1512,85 +1889,300 @@
             if (modalAttiva === 'modal-public-lobbies') renderListaLobby();
         }, 1000);
 
-        const databaseCarte = [
-            { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: "2 per numero", effetto: "Nessuno. Giocabili solo se l'ultimo numero coincide o su carte speciali incolori.", cat: "⚪ Incolore" },
-            { id: "c_piu2", nome: "Classico: +2", quantita: "2 per colore", effetto: "Il bersaglio pesca 2 carte e salta il turno corrente.", cat: "🟥🟨🟩🟦 Classico" },
-            { id: "c_rev", nome: "Classico: Reverse", quantita: "2 per colore", effetto: "Inverte istantaneamente la direzione dei turni di gioco.", cat: "🟥🟨🟩🟦 Classico" },
-            { id: "c_bloc", nome: "Classico: Blocco", quantita: "2 per colore", effetto: "Salto del turno immediato per il giocatore successivo.", cat: "🟥🟨🟩🟦 Classico" },
-            { id: "c_cc", nome: "Nero: Cambio Colore", quantita: "4", effetto: "Scegli il colore dominante del tavolo di gioco.", cat: "⚫ Nero" },
-            { id: "c_piu4", nome: "Nero: +4", quantita: "4", effetto: "Il bersaglio pesca 4 carte e perde il proprio turno.", cat: "⚫ Nero" },
-            { id: "c_jack", nome: "Jack Sparrow", quantita: "1", effetto: "Copia sul momento l'effetto di un +2, +4, Cambio Colore o Reverse.", cat: "⭐ Speciale UNO?" },
-            { id: "c_piu10", nome: "Speciale: +10", quantita: "Da definire", effetto: "Il malcapitato subisce la pesca di 10 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
-            { id: "c_piu16", nome: "Speciale: +16", quantita: "Da definire", effetto: "Il malcapitato subisce la pesca di 16 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
-            { id: "c_scudo", nome: "Scudo", quantita: "4", effetto: "Protegge solo da Blobby e Proiettile. Si consuma quando salva il giocatore.", cat: "⭐ Speciale UNO?" },
-            { id: "c_death", nome: "Death Note", quantita: "1", MD: true, effetto: "Eliminazione immediata di un giocatore a scelta.", cat: "⭐ Speciale UNO?" },
-            { id: "c_blobby", nome: "Blobby", quantita: "1", effetto: "Vittoria istantanea. Se il bersaglio ha Scudo, lo Scudo si consuma e il bersaglio sopravvive.", cat: "⭐ Speciale UNO?" },
-            { id: "c_righello", nome: "Righello o X?", quantita: "4", effetto: "Giocabile fuori dal turno. Annulla interamente l'ultima mossa.", cat: "⭐ Speciale UNO?" },
-            { id: "c_donna", nome: "Donna di Mazze", quantita: "1", effetto: "Resetta e annulla tutte le catene ed effetti attivi globali sul tavolo.", cat: "⭐ Speciale UNO?" },
-            { id: "c_imprevisti", nome: "Imprevisti", quantita: "1", effetto: "Appena entra in mano si gioca da sola. Tutti pescano una carta.", cat: "⚪ Speciale Incolore" },
-            { id: "c_scambio", nome: "Scambio", quantita: "2", effetto: "Scambia l'intera mano di carte con un giocatore bersaglio.", cat: "⭐ Speciale UNO?" },
-            { id: "c_vaff", nome: "Vaffanculo", quantita: "2", effetto: "Annulla l'effetto e la streak attiva. Le carte tornano in mano.", cat: "🌍 Evento (Giallo)" },
-            { id: "c_mari", nome: "Mariguana", quantita: "1", effetto: "Obbliga tutti a giocare Verde o pescare finché non lo si trova.", cat: "🌍 Evento (Verde)" },
-            { id: "c_onde", nome: "Le ONDE", quantita: "2", effetto: "Tutti tranne chi la usa si scambiano le mani in modo casuale.", cat: "🌍 Evento (Blu)" },
-            { id: "c_cuore", nome: "Cuore", quantita: "2", effetto: "Effettua la resurrezione immediata di un player precedentemente eliminato.", cat: "🌍 Evento (Verde)" },
-            { id: "c_comunismo", nome: "Comunismo", quantita: "1", effetto: "Ruba e guarda le carte. Se intercetta Blobby attiva lo scontro 1vs1.", cat: "🌍 Evento (Rosso)" },
-            { id: "c_nazismo", nome: "Nazismo", quantita: "1", effetto: "Seleziona una carta dalla tua mano e cedila forzatamente a un altro.", cat: "🌍 Evento (Rosso)" },
-            { id: "c_proiettile", nome: "Proiettile", quantita: "6", effetto: "Parte una roulette russa: chi viene colpito perde 1 PistolHP (Max 2).", cat: "🔫 Sistema Proiettile" },
-            { id: "c_quagruppo", nome: "QUA GRUPPO!", quantita: "1", effetto: "La metà esatta dei giocatori pesca una carta (arrotondato per eccesso).", cat: "🎯 Cutruzzolà Move" },
-            { id: "c_messa", nome: "La Messa è Finita", quantita: "1", effetto: "Prende tutti i rifiuti e gli scarti accumulati e li rimescola nel deck.", cat: "🎯 Cutruzzolà Move" },
-            { id: "c_piani", nome: "Piani di Proiezione (P.V/P.L/P.O/L.T)", quantita: "1 per tipo", effetto: "Chi unisce tutti e 4 i pezzi sblocca la vittoria suprema.", cat: "📐 Piani di Proiezione" },
-            { id: "c_brainrot", nome: "Brainrot Battle", quantita: "Da definire", effetto: "Inizia una sfida Brainrot globale. Il punteggio PT più alto vince.", cat: "🧠 Brainrot" },
-            { id: "c_specchio", nome: "Specchio", quantita: "Da definire", effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente.", cat: "❓ Non Definita" }
+        const databaseCarte = window.databaseCarte || [];
+        const catalogoCarteIndex = () => window.CarteCatalog?.getCatalogoIndex?.() || databaseCarte;
+        const INDEX_PAGE_SIZE = 6;
+        const INDEX_CATEGORY_ORDER = [
+            '🔢 Carte Numeriche',
+            '🟥🟨🟩🟦 Classico',
+            '⚫ Nero',
+            '⭐ Speciale UNO?',
+            '⚪ Speciale Incolore',
+            '⚪ Incolore',
+            '🌍 Evento (Giallo)',
+            '🌍 Evento (Verde)',
+            '🌍 Evento (Blu)',
+            '🌍 Evento (Rosso)',
+            '🔫 Sistema Proiettile',
+            '🎯 Cutruzzolà Move',
+            '📐 Piani di Proiezione',
+            '🧠 Brainrot',
+            '❓ Non Definita'
         ];
+        let indexCategoriaAttiva = null;
+        let indexCarteFiltrate = [];
+        let indexCategorieFiltrate = [];
+        let indexPaginaCorrente = 0;
 
-        function caricaDatabaseCarteIndex(testoFiltro = "") {
-            const container = document.getElementById('leaderboard-list');
-            container.innerHTML = "";
-            const sbloccate = window.carteSbloccateUtente || [];
-            const queryNorm = testoFiltro.toLowerCase().trim();
-
-            databaseCarte.forEach(carta => {
-                const corrispondeFiltro = carta.nome.toLowerCase().includes(queryNorm) || 
-                                          carta.effetto.toLowerCase().includes(queryNorm) || 
-                                          carta.cat.toLowerCase().includes(queryNorm);
-                
-                if (testoFiltro && !corrispondeFiltro) return;
-
-                const isTrovata = sbloccate.includes(carta.id);
-
-                if (isTrovata) {
-                    const cardTemplate = `
-                        <div class="bg-slate-900/60 border border-slate-800 rounded-2xl p-3 flex flex-col gap-1 transition-all hover:border-cyan-500/40 shadow-inner">
-                            <div class="flex justify-between items-center">
-                                <span class="text-xs font-black tracking-wide text-amber-400 uppercase">${carta.nome}</span>
-                                <span class="text-[9px] bg-slate-950 text-slate-400 px-2 py-0.5 rounded-md font-mono font-bold">QTÀ: ${carta.quantita}</span>
-                            </div>
-                            <div class="text-[10px] text-slate-400 font-bold tracking-tight mt-0.5 leading-relaxed">${carta.effetto}</div>
-                            <div class="text-[9px] text-cyan-400/80 font-black uppercase tracking-wider mt-1">${carta.cat}</div>
-                        </div>
-                    `;
-                    container.innerHTML += cardTemplate;
-                } else {
-                    const cardOscuredTemplate = `
-                        <div class="bg-black/60 border border-dashed border-slate-800/80 rounded-2xl p-4 flex items-center justify-between opacity-50 relative overflow-hidden select-none">
-                            <div class="flex items-center gap-4">
-                                <span class="text-2xl font-black text-pink-500 drop-shadow-[0_2px_0_rgba(0,0,0,1)] animate-pulse">❓</span>
-                                <div class="flex flex-col">
-                                    <span class="text-xs font-black text-slate-600 uppercase tracking-widest">Contenuto Bloccato</span>
-                                    <span class="text-[9px] text-slate-700 font-bold uppercase tracking-tight">Trova questa carta in partita per registrarla</span>
-                                </div>
-                            </div>
-                            <span class="text-2xl font-black text-slate-800/40 select-none">?</span>
-                        </div>
-                    `;
-                    container.innerHTML += cardOscuredTemplate;
-                }
+        function sortIndexCategories(lista) {
+            return [...lista].sort((a, b) => {
+                const ia = INDEX_CATEGORY_ORDER.indexOf(a.id);
+                const ib = INDEX_CATEGORY_ORDER.indexOf(b.id);
+                if (ia === -1 && ib === -1) return a.label.localeCompare(b.label, 'it');
+                if (ia === -1) return 1;
+                if (ib === -1) return -1;
+                return ia - ib;
             });
         }
 
-        window.filtraCarteIndex = function(valore) {
-            caricaDatabaseCarteIndex(valore);
+        function buildIndexCategories() {
+            const mappa = new Map();
+            const sbloccate = window.carteSbloccateUtente || [];
+
+            catalogoCarteIndex().forEach(carta => {
+                const catId = carta.cat || 'Altro';
+                if (!mappa.has(catId)) {
+                    mappa.set(catId, { id: catId, label: catId, count: 0, unlocked: 0 });
+                }
+                const gruppo = mappa.get(catId);
+                gruppo.count += 1;
+                const unlockId = carta.packId || carta.id;
+                if (sbloccate.includes(unlockId)) gruppo.unlocked += 1;
+            });
+
+            return sortIndexCategories([...mappa.values()]);
         }
+
+        function aggiornaIndexBackButton() {
+            const btnBack = document.getElementById('index-btn-back');
+            const tabIndexAttivo = !document.getElementById('sub-panel-classifica')?.classList.contains('hidden');
+            if (btnBack) {
+                btnBack.classList.toggle('hidden', !tabIndexAttivo || !indexCategoriaAttiva);
+            }
+        }
+
+        function aggiornaIndexSearchPlaceholder() {
+            const input = document.getElementById('search-cards-input');
+            if (!input) return;
+            input.placeholder = indexCategoriaAttiva
+                ? '🔍 Cerca per nome, effetto o tipo...'
+                : '🔍 Cerca categoria...';
+        }
+
+        function indexCardColorClass(carta) {
+            const hint = carta.colorHint;
+            if (hint) return `index-card-${hint}`;
+            if (carta.cat?.includes('Brainrot')) return 'index-card-brainrot';
+            if (carta.cat?.includes('Nero')) return 'index-card-black';
+            if (carta.cat?.includes('Incolore')) return 'index-card-wild';
+            return 'index-card-black';
+        }
+
+        function isClassicOrBlackIndexCard(carta) {
+            const cat = String(carta.cat || '');
+            return cat.includes('Classico')
+                || cat.includes('Nero')
+                || cat.includes('Speciale UNO');
+        }
+
+        function indexCardCenterName(carta) {
+            return String(carta.nome || '')
+                .replace(/^(Classico|Nero|Speciale):\s*/i, '')
+                .trim();
+        }
+
+        function indexCardDisplayParts(carta) {
+            if (carta.cat?.includes('Brainrot')) {
+                const pt = String(carta.effetto || '').match(/^(\d+)PT/);
+                return {
+                    isBrainrot: true,
+                    nome: carta.nome,
+                    pt: pt ? `${pt[1]}PT` : ''
+                };
+            }
+            if (isClassicOrBlackIndexCard(carta)) {
+                return {
+                    label: indexCardCenterName(carta),
+                    subtitle: carta.cat || ''
+                };
+            }
+            if (carta.displayLabel) {
+                return { label: carta.displayLabel, subtitle: carta.cat || '' };
+            }
+            const matchNum = carta.nome.match(/^(\d+)\s+(.+)$/);
+            if (matchNum) {
+                return { label: matchNum[1], subtitle: carta.cat || matchNum[2] };
+            }
+            const matchAction = carta.nome.match(/^([+↺]?\d*|Stop|↺)\s+(.+)$/);
+            if (matchAction) {
+                return { label: matchAction[1], subtitle: carta.cat || matchAction[2] };
+            }
+            const short = carta.nome.length > 14 ? `${carta.nome.slice(0, 12)}…` : carta.nome;
+            return { label: short, subtitle: carta.cat || '' };
+        }
+
+        function renderIndexCardSlot(carta, sbloccate) {
+            const unlockId = carta.packId || carta.id;
+            const isTrovata = sbloccate.includes(unlockId);
+            const colorClass = indexCardColorClass(carta);
+            const deckCount = carta.deckCount || parseInt(carta.quantita, 10) || 1;
+
+            if (!isTrovata) {
+                return `
+                    <div class="index-card-slot index-card-slot--locked ${colorClass}" title="Carta bloccata">
+                        <span class="index-card-lock" aria-hidden="true">🔒</span>
+                    </div>
+                `;
+            }
+
+            const parts = indexCardDisplayParts(carta);
+            const qtyBadge = deckCount > 1
+                ? `<span class="index-card-qty">×${deckCount}</span>`
+                : '<span class="index-card-qty" aria-hidden="true">&nbsp;</span>';
+
+            if (parts.isBrainrot) {
+                const ptHtml = parts.pt
+                    ? `<span class="index-card-brainrot-pt">${escapeHtml(parts.pt)}</span>`
+                    : '';
+                return `
+                    <div class="index-card-slot index-card-slot--brainrot ${colorClass}" title="${escapeHtml(carta.nome)}">
+                        ${qtyBadge}
+                        <span class="index-card-brainrot-name">${escapeHtml(parts.nome)}</span>
+                        ${ptHtml}
+                    </div>
+                `;
+            }
+
+            return `
+                <div class="index-card-slot ${colorClass}" title="${escapeHtml(carta.nome)}">
+                    ${qtyBadge}
+                    <span class="index-card-label">${escapeHtml(parts.label)}</span>
+                    <span class="index-card-name">${escapeHtml(parts.subtitle || carta.nome)}</span>
+                </div>
+            `;
+        }
+
+        function renderIndexCategorySlot(categoria) {
+            return `
+                <button type="button" class="index-category-slot" data-index-cat="${escapeHtml(categoria.id)}" data-sound="click">
+                    <span class="index-category-label">${escapeHtml(categoria.label)}</span>
+                    <span class="index-category-meta">${categoria.unlocked}/${categoria.count}</span>
+                </button>
+            `;
+        }
+
+        function renderIndexPagina() {
+            const grid = document.getElementById('index-card-grid');
+            const indicator = document.getElementById('index-page-indicator');
+            const btnPrev = document.getElementById('index-btn-prev');
+            const btnNext = document.getElementById('index-btn-next');
+            if (!grid) return;
+
+            const inVistaCategorie = !indexCategoriaAttiva;
+            const lista = inVistaCategorie ? indexCategorieFiltrate : indexCarteFiltrate;
+            const totale = lista.length;
+            const totalePagine = Math.max(1, Math.ceil(totale / INDEX_PAGE_SIZE));
+            if (indexPaginaCorrente >= totalePagine) indexPaginaCorrente = totalePagine - 1;
+            if (indexPaginaCorrente < 0) indexPaginaCorrente = 0;
+
+            const inizio = indexPaginaCorrente * INDEX_PAGE_SIZE;
+            const pagina = lista.slice(inizio, inizio + INDEX_PAGE_SIZE);
+            const sbloccate = window.carteSbloccateUtente || [];
+
+            const slots = [];
+            for (let i = 0; i < INDEX_PAGE_SIZE; i += 1) {
+                const voce = pagina[i];
+                if (!voce) {
+                    slots.push('<div class="index-card-slot index-card-slot--empty" aria-hidden="true"></div>');
+                } else if (inVistaCategorie) {
+                    slots.push(renderIndexCategorySlot(voce));
+                } else {
+                    slots.push(renderIndexCardSlot(voce, sbloccate));
+                }
+            }
+            grid.innerHTML = slots.join('');
+
+            if (indicator) {
+                indicator.textContent = inVistaCategorie
+                    ? `Categorie ${indexPaginaCorrente + 1} / ${totalePagine}`
+                    : `Pagina ${indexPaginaCorrente + 1} / ${totalePagine}`;
+            }
+            if (btnPrev) btnPrev.disabled = indexPaginaCorrente <= 0;
+            if (btnNext) btnNext.disabled = indexPaginaCorrente >= totalePagine - 1;
+
+            aggiornaIndexBackButton();
+            aggiornaIndexSearchPlaceholder();
+        }
+
+        function caricaDatabaseCarteIndex(testoFiltro = "", mantieniPagina = false) {
+            const queryNorm = testoFiltro.toLowerCase().trim();
+
+            if (!indexCategoriaAttiva) {
+                indexCategorieFiltrate = buildIndexCategories().filter(cat => {
+                    if (!queryNorm) return true;
+                    return cat.label.toLowerCase().includes(queryNorm);
+                });
+            } else {
+                indexCarteFiltrate = catalogoCarteIndex().filter(carta => {
+                    if (carta.cat !== indexCategoriaAttiva) return false;
+                    if (!queryNorm) return true;
+                    return carta.nome.toLowerCase().includes(queryNorm)
+                        || String(carta.effetto || '').toLowerCase().includes(queryNorm)
+                        || String(carta.cat || '').toLowerCase().includes(queryNorm);
+                });
+            }
+
+            if (!mantieniPagina) indexPaginaCorrente = 0;
+            renderIndexPagina();
+        }
+
+        window.filtraCarteIndex = function(valore) {
+            caricaDatabaseCarteIndex(valore, true);
+        };
+
+        function indexNavigaCategoria(mutate, direction) {
+            const UI = window.UITransitions;
+            const stage = document.getElementById('index-nav-stage');
+            const apply = () => {
+                mutate();
+                caricaDatabaseCarteIndex('');
+            };
+            if (UI && stage) {
+                UI.withLock(async () => {
+                    await UI.pulseStage(stage, direction, apply);
+                });
+            } else {
+                apply();
+            }
+        }
+
+        window.indexApriCategoria = function(catId) {
+            indexNavigaCategoria(() => {
+                indexCategoriaAttiva = catId;
+                indexPaginaCorrente = 0;
+                const search = document.getElementById('search-cards-input');
+                if (search) search.value = '';
+            }, 'forward');
+        };
+
+        window.indexTornaCategorie = function() {
+            indexNavigaCategoria(() => {
+                indexCategoriaAttiva = null;
+                indexPaginaCorrente = 0;
+                const search = document.getElementById('search-cards-input');
+                if (search) search.value = '';
+            }, 'back');
+        };
+
+        window.indexPaginaPrecedente = function() {
+            if (indexPaginaCorrente <= 0) return;
+            indexPaginaCorrente -= 1;
+            renderIndexPagina();
+        };
+
+        window.indexPaginaSuccessiva = function() {
+            const lista = indexCategoriaAttiva ? indexCarteFiltrate : indexCategorieFiltrate;
+            const totalePagine = Math.max(1, Math.ceil(lista.length / INDEX_PAGE_SIZE));
+            if (indexPaginaCorrente >= totalePagine - 1) return;
+            indexPaginaCorrente += 1;
+            renderIndexPagina();
+        };
+
+        document.getElementById('index-card-grid')?.addEventListener('click', (evento) => {
+            const target = evento.target.closest('[data-index-cat]');
+            if (!target || indexCategoriaAttiva) return;
+            window.indexApriCategoria(target.getAttribute('data-index-cat'));
+        });
 
         window.seminaCarteFirebase = async function() {
             const conferma = confirm("Vuoi caricare tutte le carte nella collezione Firestore 'carte'? I documenti con lo stesso ID verranno sovrascritti.");

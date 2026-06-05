@@ -36,6 +36,27 @@
         Sounds?.play?.(type);
     }
 
+    function gameModalElements() {
+        const modal = $('game-modal');
+        return { modal, panel: modal?.querySelector(':scope > div') };
+    }
+
+    function revealGameModal() {
+        const { modal, panel } = gameModalElements();
+        if (!modal) return;
+        const UI = global.UITransitions;
+        if (UI) UI.openOverlayModal(modal, panel);
+        else modal.classList.remove('hidden');
+    }
+
+    function hideGameModal() {
+        const { modal, panel } = gameModalElements();
+        if (!modal) return;
+        const UI = global.UITransitions;
+        if (UI) UI.closeOverlayModal(modal, panel);
+        else modal.classList.add('hidden');
+    }
+
     function formatDuration(ms) {
         if (!ms || ms < 0) return '—';
         const s = Math.floor(ms / 1000);
@@ -68,13 +89,25 @@
             const snap = await window.getDoc(ref);
             const data = snap.exists() ? snap.data() : {};
             const xpGain = 50;
+            const prevLevel = window.AdminConfig?.calcolaLivelloDaXp
+                ? window.AdminConfig.calcolaLivelloDaXp(data.xp || 0)
+                : (data.livello || 1);
+            const progresso = window.AdminConfig?.applicaGuadagnoXp
+                ? window.AdminConfig.applicaGuadagnoXp(data.xp || 0, xpGain)
+                : { xp: (data.xp || 0) + xpGain, livello: prevLevel };
             await window.updateDoc(ref, {
-                xp: (data.xp || 0) + xpGain,
+                xp: progresso.xp,
+                livello: progresso.livello,
                 vittorie: (data.vittorie || 0) + 1,
                 partiteGiocate: (data.partiteGiocate || 0) + 1
             });
             const el = $('end-rewards');
-            if (el) el.textContent = `+${xpGain} XP · Vittoria registrata`;
+            const levelUp = progresso.livello > prevLevel;
+            if (el) {
+                el.textContent = levelUp
+                    ? `+${xpGain} XP · LIV. ${progresso.livello}!`
+                    : `+${xpGain} XP · Vittoria registrata`;
+            }
         } catch (err) {
             console.error('Ricompense vittoria:', err);
         }
@@ -1189,7 +1222,7 @@
             b.className = `modal-color-btn color-${color}`;
             b.textContent = Deck.COLOR_LABEL[color];
             b.onclick = async () => {
-                modal.classList.add('hidden');
+                hideGameModal();
                 playSound('click');
                 if (ids.length) {
                     await playCardsImmediate(ids, { chosenColor: color });
@@ -1199,7 +1232,7 @@
             };
             content.appendChild(b);
         });
-        modal.classList.remove('hidden');
+        revealGameModal();
     }
 
     function showTargetModal(pendingCardId, effect) {
@@ -1235,9 +1268,9 @@
             close.type = 'button';
             close.className = 'modal-target-btn';
             close.textContent = 'Chiudi';
-            close.onclick = () => modal.classList.add('hidden');
+            close.onclick = () => hideGameModal();
             content.appendChild(close);
-            modal.classList.remove('hidden');
+            revealGameModal();
             return;
         }
 
@@ -1248,7 +1281,7 @@
             if (isHeart) b.classList.add('modal-target-revive');
             b.textContent = isHeart ? `${nickname} (eliminato)` : nickname;
             b.onclick = async () => {
-                modal.classList.add('hidden');
+                hideGameModal();
                 playSound('click');
                 if (pendingCardId) {
                     await commitAction(() => Engine.playCards(gameState, myPlayerId, [pendingCardId], { targetId: id }));
@@ -1258,7 +1291,7 @@
             };
             content.appendChild(b);
         });
-        modal.classList.remove('hidden');
+        revealGameModal();
     }
 
     function wireControls() {
@@ -1341,8 +1374,12 @@
         const list = JSON.parse(localStorage.getItem('unoLobbyList') || '[]')
             .filter(r => r.id !== lobbyId);
         localStorage.setItem('unoLobbyList', JSON.stringify(list));
-        alert(message || ADMIN_LOBBY_MSG);
-        window.location.href = 'Menu_principale.html';
+        if (global.LobbyNotice?.showLobbyClosedByAdmin) {
+            global.LobbyNotice.showLobbyClosedByAdmin({ message: message || ADMIN_LOBBY_MSG });
+        } else {
+            alert(message || ADMIN_LOBBY_MSG);
+            window.location.href = 'Menu_principale.html';
+        }
     }
 
     function listenLobbyAdminClose() {
@@ -1391,8 +1428,12 @@
         const params = new URLSearchParams(window.location.search);
         lobbyId = params.get('stanzaId');
         if (!lobbyId) {
-            alert('Stanza non valida.');
-            window.location.href = 'Menu_principale.html';
+            if (global.LobbyNotice?.showLobbyNotFound) {
+                global.LobbyNotice.showLobbyNotFound({ message: 'Stanza non valida o link errato.' });
+            } else {
+                alert('Stanza non valida.');
+                window.location.href = 'Menu_principale.html';
+            }
             return;
         }
 

@@ -20,7 +20,7 @@ window.databaseCarte = [
     { id: "c_mari", nome: "Mariguana", quantita: "1", effetto: "Obbliga tutti a giocare Verde o pescare finché non lo si trova.", cat: "🌍 Evento (Verde)" },
     { id: "c_onde", nome: "Le ONDE", quantita: "2", effetto: "Tutti tranne chi la usa si scambiano le mani in modo casuale.", cat: "🌍 Evento (Blu)" },
     { id: "c_cuore", nome: "Cuore", quantita: "2", effetto: "Effettua la resurrezione immediata di un player precedentemente eliminato.", cat: "🌍 Evento (Verde)" },
-    { id: "c_comunismo", nome: "Comunismo", quantita: "1", defect: "Ruba e guarda le carte. Se intercetta Blobby attiva lo scontro 1vs1.", cat: "🌍 Evento (Rosso)" },
+    { id: "c_comunismo", nome: "Comunismo", quantita: "1", effetto: "Ruba e guarda le carte. Se intercetta Blobby attiva lo scontro 1vs1.", cat: "🌍 Evento (Rosso)" },
     { id: "c_nazismo", nome: "Nazismo", quantita: "1", effetto: "Seleziona una carta dalla tua mano e cedila forzatamente a un altro.", cat: "🌍 Evento (Rosso)" },
     { id: "c_proiettile", nome: "Proiettile", quantita: "6", effetto: "Parte una roulette russa: chi viene colpito perde 1 PistolHP (Max 2).", cat: "🔫 Sistema Proiettile" },
     { id: "c_quagruppo", nome: "QUA GRUPPO!", quantita: "1", effetto: "La metà esatta dei giocatori pesca una carta (arrotondato per eccesso).", cat: "🎯 Cutruzzolà Move" },
@@ -37,5 +37,5 @@ window.databaseCarte = [
     { id: "c_br_bobrini", nome: "Bobrini cactus merdini", quantita: "1", effetto: "90PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
     { id: "c_br_centralucci", nome: "Centralucci Sborralucci", quantita: "1", effetto: "55PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
     { id: "c_br_baccala", nome: "BACCALA' MAGGIOSBORR", quantita: "1", effetto: "75PT — Bianco: scarti 4 carte numero.", cat: "🧠 Brainrot" },
-    { id: "c_specchio", nome: "Specchio", quantita: "Da definire", effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente.", cat: "❓ Non Definita" }
+    { id: "c_specchio", nome: "Specchio", quantita: "1", effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente. Giocabile durante stack +2/+4.", cat: "⭐ Speciale UNO?" }
 ];

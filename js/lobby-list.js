@@ -31,10 +31,20 @@
         return lobbies.filter(isLobbyJoinable);
     }
 
+    /** ID documento Firestore = fonte di verità (il campo id nel body può essere errato o assente). */
+    function lobbyFromFirestoreDoc(docSnap) {
+        const data = typeof docSnap?.data === 'function' ? (docSnap.data() || {}) : (docSnap || {});
+        const docId = docSnap?.id != null ? String(docSnap.id) : '';
+        const bodyId = data.id != null ? String(data.id).trim() : '';
+        const id = docId || bodyId;
+        return { ...data, id };
+    }
+
     global.LobbyList = {
         CLOSED_STATUSES,
         countPlayers,
         isLobbyJoinable,
-        pruneLobbyList
+        pruneLobbyList,
+        lobbyFromFirestoreDoc
     };
 })(window);

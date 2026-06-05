@@ -23,14 +23,42 @@
 
     const LOBBY_CLOSED_BY_ADMIN_MESSAGE = 'Questa lobby è stata chiusa da un amministratore.';
 
+    const XP_PER_LEVEL = 100;
+    const MAX_LEVEL = 500;
+
     function calcolaLivelloDaXp(xp) {
         const xpVal = Math.max(0, parseInt(xp, 10) || 0);
-        let livello = 1;
-        while (xpVal >= livello * 100) {
-            livello += 1;
-            if (livello > 500) break;
-        }
-        return livello;
+        return Math.min(MAX_LEVEL, Math.floor(xpVal / XP_PER_LEVEL) + 1);
+    }
+
+    /** Progresso verso il livello successivo (100 XP per livello). */
+    function calcolaProgressoXp(xp) {
+        const xpTotale = Math.max(0, parseInt(xp, 10) || 0);
+        const livello = calcolaLivelloDaXp(xpTotale);
+        const xpMin = (livello - 1) * XP_PER_LEVEL;
+        const xpCorrente = Math.min(xpTotale - xpMin, XP_PER_LEVEL);
+        const xpRichiesto = XP_PER_LEVEL;
+        const alMassimo = livello >= MAX_LEVEL;
+        const percentuale = alMassimo
+            ? 100
+            : Math.min(100, Math.round((xpCorrente / xpRichiesto) * 100));
+        return {
+            livello,
+            xpTotale,
+            xpCorrente,
+            xpRichiesto,
+            percentuale,
+            alMassimo
+        };
+    }
+
+    function applicaGuadagnoXp(xpAttuale, guadagno) {
+        const xpTotale = Math.max(0, parseInt(xpAttuale, 10) || 0)
+            + Math.max(0, parseInt(guadagno, 10) || 0);
+        return {
+            xp: xpTotale,
+            livello: calcolaLivelloDaXp(xpTotale)
+        };
     }
 
     global.AdminConfig = {
@@ -39,6 +67,10 @@
         isAdminUser,
         BAN_DURATION_OPTIONS,
         LOBBY_CLOSED_BY_ADMIN_MESSAGE,
-        calcolaLivelloDaXp
+        XP_PER_LEVEL,
+        MAX_LEVEL,
+        calcolaLivelloDaXp,
+        calcolaProgressoXp,
+        applicaGuadagnoXp
     };
 })(window);

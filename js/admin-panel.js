@@ -4,7 +4,9 @@ const {
     isAdminUid,
     BAN_DURATION_OPTIONS,
     LOBBY_CLOSED_BY_ADMIN_MESSAGE,
-    calcolaLivelloDaXp
+    calcolaLivelloDaXp,
+    calcolaProgressoXp,
+    applicaGuadagnoXp
 } = window.AdminConfig || {};
 
 let ctx = null;
@@ -100,6 +102,32 @@ function filtraBan(list, query) {
     return filtraUtenti(list, query);
 }
 
+function normalizeLobbyId(id) {
+    return String(id || '').trim();
+}
+
+function lobbyFromSnap(docSnap) {
+    if (window.LobbyList?.lobbyFromFirestoreDoc) {
+        return window.LobbyList.lobbyFromFirestoreDoc(docSnap);
+    }
+    const data = docSnap.data?.() || {};
+    return { ...data, id: docSnap.id || data.id };
+}
+
+function findLobbyInCache(lobbyId) {
+    const key = normalizeLobbyId(lobbyId);
+    if (!key) return null;
+    return cacheLobbies.find(item => normalizeLobbyId(item.id) === key) || null;
+}
+
+function removeLobbyFromLocalStorage(lobbyId) {
+    const key = normalizeLobbyId(lobbyId);
+    if (!key) return;
+    const list = JSON.parse(localStorage.getItem('unoLobbyList') || '[]')
+        .filter(room => normalizeLobbyId(room.id) !== key);
+    localStorage.setItem('unoLobbyList', JSON.stringify(list));
+}
+
 function renderAdminLobbies() {
     const container = document.getElementById('admin-lobbies-list');
     const search = document.getElementById('admin-lobbies-search')?.value || '';
@@ -144,14 +172,13 @@ function renderAdminUsers() {
 
     container.innerHTML = users.map(user => {
         const xp = user.xp ?? 0;
-        const liv = user.livello ?? calcolaLivelloDaXp(xp);
-        const target = liv * 100;
+        const prog = calcolaProgressoXp ? calcolaProgressoXp(xp) : { livello: user.livello ?? 1, xpCorrente: xp, xpRichiesto: 100 };
         return `
             <button type="button" data-admin-open-give="${escapeHtml(user.uid)}"
                 class="w-full text-left bg-black/40 border border-slate-800 rounded-2xl p-3 hover:border-amber-500/40 cursor-pointer">
                 <div class="font-black text-white text-sm">${escapeHtml(user.nickname || 'Giocatore')}</div>
                 <div class="text-[10px] text-slate-500 font-bold uppercase mt-1">
-                    UID ${escapeHtml(user.uid)} • LIV ${liv} • ${xp}/${target} XP
+                    UID ${escapeHtml(user.uid)} • LIV ${prog.livello} • ${prog.xpCorrente}/${prog.xpRichiesto} XP (${xp} tot.)
                 </div>
             </button>`;
     }).join('');
@@ -206,7 +233,13 @@ function renderBanPickList() {
     });
 }
 
-function switchAdminTab(tab) {
+let adminTabCorrente = null;
+
+function adminSectionId(tab) {
+    return `admin-section-${tab}`;
+}
+
+function updateAdminTabButtons(tab) {
     document.querySelectorAll('[data-admin-tab]').forEach(btn => {
         const active = btn.getAttribute('data-admin-tab') === tab;
         btn.classList.toggle('bg-red-600', active);
@@ -214,18 +247,72 @@ function switchAdminTab(tab) {
         btn.classList.toggle('bg-slate-800', !active);
         btn.classList.toggle('text-slate-400', !active);
     });
-    document.getElementById('admin-section-lobbies')?.classList.toggle('hidden', tab !== 'lobbies');
-    document.getElementById('admin-section-gives')?.classList.toggle('hidden', tab !== 'gives');
-    document.getElementById('admin-section-ban')?.classList.toggle('hidden', tab !== 'ban');
-    document.getElementById('admin-section-security')?.classList.toggle('hidden', tab !== 'security');
 }
 
-function openAdminLobbyDetail(lobbyId) {
-    if (!lobbyId) return;
-    selectedLobbyId = lobbyId;
-    const lobby = cacheLobbies.find(item => item.id === lobbyId);
+function switchAdminTab(tab, options = {}) {
+    const { animate = true } = options;
+    const UI = globalThis.UITransitions;
+    const viewport = document.getElementById('admin-pages-viewport');
+    const run = async () => {
+        const toEl = document.getElementById(adminSectionId(tab));
+        const fromEl = adminTabCorrente ? document.getElementById(adminSectionId(adminTabCorrente)) : null;
+
+        updateAdminTabButtons(tab);
+
+        if (!toEl) return;
+
+        if (!animate || !fromEl || fromEl === toEl || adminTabCorrente === null) {
+            ['lobbies', 'gives', 'ban', 'security'].forEach(name => {
+                document.getElementById(adminSectionId(name))?.classList.toggle('hidden', name !== tab);
+            });
+        } else if (UI) {
+            await UI.sequentialPageSwap(viewport, fromEl, toEl, { direction: 'forward' });
+        } else {
+            fromEl.classList.add('hidden');
+            toEl.classList.remove('hidden');
+        }
+
+        adminTabCorrente = tab;
+    };
+
+    if (UI && animate) UI.withLock(run);
+    else run();
+}
+
+async function openAdminLobbyDetail(lobbyId) {
+    const key = normalizeLobbyId(lobbyId);
+    if (!key) return;
+    selectedLobbyId = key;
+
+    let lobby = findLobbyInCache(key);
+
+    if (!lobby && ctx.getDoc) {
+        try {
+            const snap = await ctx.getDoc(ctx.doc(adminDb(), 'lobbies', key));
+            if (snap.exists()) {
+                lobby = lobbyFromSnap(snap);
+                const idx = cacheLobbies.findIndex(item => normalizeLobbyId(item.id) === key);
+                if (idx >= 0) cacheLobbies[idx] = lobby;
+                else cacheLobbies.push(lobby);
+            }
+        } catch (err) {
+            console.error('openAdminLobbyDetail getDoc:', err);
+        }
+    }
+
     if (!lobby) {
-        alert('Lobby non trovata.');
+        cacheLobbies = cacheLobbies.filter(item => normalizeLobbyId(item.id) !== key);
+        removeLobbyFromLocalStorage(key);
+        renderAdminLobbies();
+        if (window.LobbyNotice?.showLobbyNotFound) {
+            window.LobbyNotice.showLobbyNotFound({
+                message: 'Questa lobby non esiste più su Firestore (probabilmente dati obsoleti).',
+                buttonLabel: 'OK'
+            });
+        } else {
+            alert('Lobby non trovata.');
+        }
+        selectedLobbyId = null;
         return;
     }
 
@@ -235,7 +322,7 @@ function openAdminLobbyDetail(lobbyId) {
     const delBtn = document.getElementById('admin-btn-delete-lobby');
     if (!title || !body) return;
 
-    if (title) title.innerText = lobby.nome || 'Lobby';
+    title.innerText = lobby.nome || 'Lobby';
     body.innerHTML = `
         <div class="space-y-2 text-sm">
             <div><span class="text-slate-500 font-bold">Codice:</span> <span class="text-amber-300 font-black">${escapeHtml(lobby.id)}</span></div>
@@ -253,17 +340,37 @@ async function adminDeleteLobby() {
     if (!selectedLobbyId) return;
     if (!confirm('Eliminare questa lobby? Tutti i giocatori verranno espulsi.')) return;
 
-    const lobbyId = selectedLobbyId;
+    const lobbyId = normalizeLobbyId(selectedLobbyId);
     const lobbyRef = ctx.doc(adminDb(), 'lobbies', lobbyId);
     const gameRef = ctx.doc(adminDb(), 'games', lobbyId);
 
     try {
-        await ctx.updateDoc(lobbyRef, {
-            status: 'closed_by_admin',
-            adminCloseMessage: LOBBY_CLOSED_BY_ADMIN_MESSAGE,
-            closedAt: new Date().toISOString(),
-            players: []
-        });
+        const snap = await ctx.getDoc(lobbyRef);
+        if (!snap.exists()) {
+            cacheLobbies = cacheLobbies.filter(item => normalizeLobbyId(item.id) !== lobbyId);
+            removeLobbyFromLocalStorage(lobbyId);
+            selectedLobbyId = null;
+            renderAdminLobbies();
+            ctx.closeModal();
+            if (window.LobbyNotice?.showLobbyNotFound) {
+                window.LobbyNotice.showLobbyNotFound({
+                    message: 'La lobby era già stata eliminata. Lista aggiornata.',
+                    buttonLabel: 'OK'
+                });
+            }
+            return;
+        }
+
+        try {
+            await ctx.updateDoc(lobbyRef, {
+                status: 'closed_by_admin',
+                adminCloseMessage: LOBBY_CLOSED_BY_ADMIN_MESSAGE,
+                closedAt: new Date().toISOString(),
+                players: []
+            });
+        } catch (updateErr) {
+            console.warn('Chiusura soft lobby fallita, elimino direttamente:', updateErr);
+        }
 
         try {
             await ctx.deleteDoc(gameRef);
@@ -273,13 +380,9 @@ async function adminDeleteLobby() {
 
         await ctx.deleteDoc(lobbyRef);
 
-        cacheLobbies = cacheLobbies.filter(item => item.id !== lobbyId);
+        cacheLobbies = cacheLobbies.filter(item => normalizeLobbyId(item.id) !== lobbyId);
         selectedLobbyId = null;
-
-        const list = JSON.parse(localStorage.getItem('unoLobbyList') || '[]')
-            .filter(room => room.id !== lobbyId);
-        localStorage.setItem('unoLobbyList', JSON.stringify(list));
-
+        removeLobbyFromLocalStorage(lobbyId);
         renderAdminLobbies();
 
         ctx.playSynth?.('bloop');
@@ -340,8 +443,11 @@ async function adminGiveXp() {
     }
 
     const user = cacheUsers.find(item => item.uid === selectedGiveUserId);
-    const nuovoXp = (user?.xp ?? 0) + amount;
-    const nuovoLivello = calcolaLivelloDaXp(nuovoXp);
+    const progresso = applicaGuadagnoXp
+        ? applicaGuadagnoXp(user?.xp ?? 0, amount)
+        : { xp: (user?.xp ?? 0) + amount, livello: calcolaLivelloDaXp((user?.xp ?? 0) + amount) };
+    const nuovoXp = progresso.xp;
+    const nuovoLivello = progresso.livello;
     const admin = getAdminProfile();
 
     try {
@@ -500,7 +606,7 @@ function startRealtimeListeners() {
     assertAdmin();
 
     unsubLobbies = ctx.onSnapshot(ctx.collection(adminDb(), 'lobbies'), snapshot => {
-        cacheLobbies = snapshot.docs.map(docSnap => ({ id: docSnap.id, ...docSnap.data() }));
+        cacheLobbies = snapshot.docs.map(docSnap => lobbyFromSnap(docSnap));
         renderAdminLobbies();
     });
 
@@ -585,7 +691,7 @@ function openAdminPanel() {
         alert('Accesso negato.');
         return;
     }
-    switchAdminTab('lobbies');
+    switchAdminTab('lobbies', { animate: false });
     startRealtimeListeners();
     ctx.openModal('modal-admin-panel');
 }

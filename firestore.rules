@@ -23,6 +23,28 @@ service cloud.firestore {
         || changed.hasOnly(['nickname', 'avatar']);
     }
 
+    function livelloDaXp(xp) {
+      let xpVal = xp is int ? xp : 0;
+      if (xpVal < 0) {
+        xpVal = 0;
+      }
+      return min(500, max(1, xpVal / 100 + 1));
+    }
+
+    // Ricompense partita: XP e livello coerenti, statistiche solo in aumento
+    function utenteUpdateProgressoPartita() {
+      let changed = request.resource.data.diff(resource.data).affectedKeys();
+      let prevXp = resource.data.get('xp', 0);
+      let prevPartite = resource.data.get('partiteGiocate', 0);
+      let prevVittorie = resource.data.get('vittorie', 0);
+      let nextXp = request.resource.data.get('xp', 0);
+      return changed.hasOnly(['xp', 'livello', 'partiteGiocate', 'vittorie'])
+        && nextXp >= prevXp
+        && request.resource.data.partiteGiocate >= prevPartite
+        && request.resource.data.vittorie >= prevVittorie
+        && request.resource.data.livello == livelloDaXp(nextXp);
+    }
+
     function lobbyGiocatoriValidi() {
       return request.resource.data.players is list
         && request.resource.data.players.size() <= request.resource.data.maxPlayers;
@@ -58,7 +80,9 @@ service cloud.firestore {
     match /utenti/{userId} {
       allow read: if isSignedIn();
       allow create: if isOwner(userId);
-      allow update: if isAdmin() || (isOwner(userId) && utenteUpdateSoloCosmetico());
+      allow update: if isAdmin()
+        || (isOwner(userId) && utenteUpdateSoloCosmetico())
+        || (isOwner(userId) && utenteUpdateProgressoPartita());
       allow delete: if isAdmin();
     }
 

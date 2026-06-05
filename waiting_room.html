@@ -266,6 +266,9 @@
             }
         }
     </style>
+    <script src="js/admin-config.js"></script>
+    <script src="js/ui-transitions.js"></script>
+    <script src="js/lobby-notice.js"></script>
     <script src="js/anti-cheat.js"></script>
     <script src="js/game-deck.js"></script>
     <script src="js/game-engine.js"></script>
@@ -489,8 +492,23 @@
             return me?.role === 'host';
         }
 
+        function loadingOverlayElements() {
+            const modal = document.getElementById('modal-loading-room');
+            return { modal, panel: modal?.querySelector(':scope > div') };
+        }
+
         function showLoadingOverlay() {
-            document.getElementById('modal-loading-room')?.classList.remove('hidden');
+            const { modal, panel } = loadingOverlayElements();
+            const UI = window.UITransitions;
+            if (UI && modal) UI.openOverlayModal(modal, panel);
+            else modal?.classList.remove('hidden');
+        }
+
+        function hideLoadingOverlay() {
+            const { modal, panel } = loadingOverlayElements();
+            const UI = window.UITransitions;
+            if (UI && modal) UI.closeOverlayModal(modal, panel);
+            else modal?.classList.add('hidden');
         }
         const databaseCarte = [
             { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: 20, effetto: "Nessuno. Giocabili solo se l'ultimo numero coincide o su carte speciali incolori.", cat: "⚪ Incolore" },
@@ -530,7 +548,7 @@
             { id: "c_br_bobrini", nome: "Bobrini cactus merdini", quantita: 1, effetto: "90PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
             { id: "c_br_centralucci", nome: "Centralucci Sborralucci", quantita: 1, effetto: "55PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
             { id: "c_br_baccala", nome: "BACCALA' MAGGIOSBORR", quantita: 1, effetto: "75PT — Bianco: scarti 4 carte numero.", cat: "🧠 Brainrot" },
-            { id: "c_specchio", nome: "Specchio", quantita: 1, effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente.", cat: "❓ Non Definita" }
+            { id: "c_specchio", nome: "Specchio", quantita: 1, effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente. Giocabile durante stack +2/+4.", cat: "⭐ Speciale UNO?" }
         ];
 
         function readLobbyList() {
@@ -887,7 +905,7 @@
                 const list = readLobbyList();
                 const index = list.findIndex(room => room.id === stanzaId);
                 if (index === -1) {
-                    document.getElementById('modal-loading-room')?.classList.add('hidden');
+                    hideLoadingOverlay();
                     alert('Impossibile uscire dalla lobby.');
                     return;
                 }
@@ -897,7 +915,7 @@
                 const myIndex = trovaIndiceGiocatore(players, lobby);
 
                 if (myIndex === -1) {
-                    document.getElementById('modal-loading-room')?.classList.add('hidden');
+                    hideLoadingOverlay();
                     alert('Impossibile identificare il tuo profilo nella lobby.');
                     return;
                 }
@@ -993,13 +1011,24 @@
             renderWaitingRoom();
         }
 
+        function cardSummaryElements() {
+            const modal = document.getElementById('card-summary-modal');
+            return { modal, panel: modal?.querySelector(':scope > div') };
+        }
+
         function openCardSummary() {
             renderCardSummary(document.getElementById('card-summary-search').value || '');
-            document.getElementById('card-summary-modal').classList.remove('hidden');
+            const { modal, panel } = cardSummaryElements();
+            const UI = window.UITransitions;
+            if (UI && modal) UI.openOverlayModal(modal, panel);
+            else modal?.classList.remove('hidden');
         }
 
         function closeCardSummary() {
-            document.getElementById('card-summary-modal').classList.add('hidden');
+            const { modal, panel } = cardSummaryElements();
+            const UI = window.UITransitions;
+            if (UI && modal) UI.closeOverlayModal(modal, panel);
+            else modal?.classList.add('hidden');
         }
 
         function cardIcon(carta) {
@@ -1064,8 +1093,12 @@
                 window.AntiCheat?.stopLobbyHeartbeat?.();
                 const list = readLobbyList().filter(room => room.id !== stanzaId);
                 saveLobbyList(list);
-                alert(messaggio || MESSAGGIO_CHIUSURA_ADMIN);
-                window.location.href = 'Menu_principale.html';
+                if (window.LobbyNotice?.showLobbyClosedByAdmin) {
+                    window.LobbyNotice.showLobbyClosedByAdmin({ message: messaggio || MESSAGGIO_CHIUSURA_ADMIN });
+                } else {
+                    alert(messaggio || MESSAGGIO_CHIUSURA_ADMIN);
+                    window.location.href = 'Menu_principale.html';
+                }
             }
 
             unsubscribeLobby = window.onSnapshot(
@@ -1134,8 +1167,12 @@
             await waitForFirebase();
 
             if (!stanzaId || !findLobby()) {
-                alert('Lobby non trovata. Torna alla lobby principale.');
-                window.location.href = 'Menu_principale.html';
+                if (window.LobbyNotice?.showLobbyNotFound) {
+                    window.LobbyNotice.showLobbyNotFound();
+                } else {
+                    alert('Lobby non trovata. Torna alla lobby principale.');
+                    window.location.href = 'Menu_principale.html';
+                }
                 return;
             }
 

@@ -37,7 +37,7 @@ export const databaseCarte = [
     { id: "c_br_bobrini", nome: "Bobrini cactus merdini", quantita: "1", effetto: "90PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
     { id: "c_br_centralucci", nome: "Centralucci Sborralucci", quantita: "1", effetto: "55PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
     { id: "c_br_baccala", nome: "BACCALA' MAGGIOSBORR", quantita: "1", effetto: "75PT — Bianco: scarti 4 carte numero.", cat: "🧠 Brainrot" },
-    { id: "c_specchio", nome: "Specchio", quantita: "Da definire", effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente.", cat: "❓ Non Definita" }
+    { id: "c_specchio", nome: "Specchio", quantita: "1", effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente. Giocabile durante stack +2/+4.", cat: "⭐ Speciale UNO?" }
 ];
 
 export const effettiBloccatiDaScudo = new Set(["blobby", "proiettile"]);
