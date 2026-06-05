@@ -1,0 +1,728 @@
+/* UNO? — Arena partita (mockup CARD GAME) */
+
+.uno-game {
+    --arena-bg-1: #2a1218;
+    --arena-bg-2: #12080c;
+    --arena-glow: #f97316;
+    --arena-gold: #facc15;
+    --player-dock-h: clamp(148px, 34vh, 220px);
+}
+
+.uno-game body,
+.uno-game.game-root {
+    background: radial-gradient(ellipse 120% 90% at 50% 20%, var(--arena-bg-1) 0%, var(--arena-bg-2) 62%, #050203 100%);
+    color: #f8fafc;
+}
+
+.uno-game .game-topbar {
+    flex-shrink: 0;
+    height: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 0.85rem;
+    background: rgba(8, 4, 6, 0.82);
+    border-bottom: 2px solid rgba(255, 255, 255, 0.06);
+    z-index: 30;
+}
+
+.uno-game .game-logo {
+    display: flex;
+    align-items: center;
+    gap: 0.45rem;
+    font-size: 0.95rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    color: #fde68a;
+    text-transform: uppercase;
+}
+
+.uno-game .game-logo-icon {
+    width: 1.65rem;
+    height: 1.65rem;
+    border-radius: 0.45rem;
+    background: linear-gradient(145deg, #ef4444, #991b1b);
+    border: 2px solid rgba(255, 255, 255, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.7rem;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+}
+
+.uno-game .topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.uno-game .topbar-icon-btn {
+    width: 2.15rem;
+    height: 2.15rem;
+    border-radius: 0.65rem;
+    border: 2px solid rgba(0, 0, 0, 0.25);
+    background: rgba(30, 16, 22, 0.9);
+    color: #e2e8f0;
+    font-size: 0.85rem;
+    font-weight: 900;
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.4);
+    cursor: pointer;
+}
+
+.uno-game #turn-alert {
+    max-width: 38vw;
+    font-size: 0.58rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    color: #fde68a;
+    background: rgba(120, 53, 15, 0.45);
+    border: 1px solid rgba(251, 191, 36, 0.45);
+    border-radius: 0.65rem;
+    padding: 0.25rem 0.5rem;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.uno-game #turn-alert.hidden { display: none; }
+
+/* Arena viewport */
+.uno-game .game-arena {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    padding-bottom: var(--player-dock-h);
+    position: relative;
+}
+
+.uno-game .arena-viewport {
+    flex: 1;
+    min-height: 0;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0.35rem 0.5rem 0.25rem;
+}
+
+/* Opponents ring */
+.uno-game #opponents-arena {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+    z-index: 4;
+}
+
+.uno-game .opp-seat {
+    position: absolute;
+    pointer-events: auto;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    width: min(28vw, 7.5rem);
+    transform: translate(-50%, 0);
+}
+
+.uno-game .opp-mini-fan {
+    position: relative;
+    width: 3.2rem;
+    height: 2.1rem;
+    margin-bottom: -0.35rem;
+    z-index: 0;
+}
+
+.uno-game .opp-mini-card {
+    position: absolute;
+    width: 1.35rem;
+    height: 1.9rem;
+    border-radius: 0.35rem;
+    border: 2px solid rgba(255, 255, 255, 0.75);
+    background: linear-gradient(145deg, #1f2937, #020617);
+    box-shadow: 0 3px 0 rgba(0, 0, 0, 0.35);
+    bottom: 0;
+}
+
+.uno-game .opp-mini-card::after {
+    content: 'UNO?';
+    position: absolute;
+    inset: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.32rem;
+    font-weight: 900;
+    color: #fca5a5;
+    transform: rotate(-10deg);
+}
+
+.uno-game .opp-mini-card:nth-child(1) { left: 0; transform: rotate(-14deg); }
+.uno-game .opp-mini-card:nth-child(2) { left: 0.85rem; transform: rotate(0deg); z-index: 1; }
+.uno-game .opp-mini-card:nth-child(3) { left: 1.7rem; transform: rotate(14deg); z-index: 2; }
+
+.uno-game .opp-dossier {
+    position: relative;
+    z-index: 2;
+    width: 100%;
+    padding: 0.4rem 0.45rem 0.45rem;
+    border-radius: 0.85rem;
+    border: 2px solid rgba(71, 45, 56, 0.9);
+    background: linear-gradient(180deg, rgba(36, 20, 28, 0.95), rgba(18, 10, 14, 0.98));
+    box-shadow: 0 5px 0 rgba(0, 0, 0, 0.38);
+    text-align: center;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.uno-game .opp-seat.opp-turn .opp-dossier {
+    border-color: var(--arena-gold);
+    box-shadow: 0 0 18px rgba(250, 204, 21, 0.45), 0 5px 0 rgba(0, 0, 0, 0.35);
+    animation: dossier-glow 1.3s ease-in-out infinite;
+}
+
+@keyframes dossier-glow {
+    0%, 100% { box-shadow: 0 0 12px rgba(250, 204, 21, 0.35), 0 5px 0 rgba(0, 0, 0, 0.35); }
+    50% { box-shadow: 0 0 24px rgba(250, 204, 21, 0.65), 0 5px 0 rgba(0, 0, 0, 0.35); }
+}
+
+.uno-game .opp-seat.opp-out { opacity: 0.4; filter: grayscale(0.45); }
+
+.uno-game .opp-avatar {
+    width: 2.1rem;
+    height: 2.1rem;
+    margin: 0 auto 0.2rem;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid #64748b;
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.05rem;
+}
+
+.uno-game .opp-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.uno-game .opp-name {
+    font-size: 0.58rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.uno-game .opp-badges {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.3rem;
+    margin-top: 0.25rem;
+}
+
+.uno-game .opp-badge {
+    font-size: 0.5rem;
+    font-weight: 900;
+    padding: 0.12rem 0.35rem;
+    border-radius: 0.4rem;
+    border: 1px solid rgba(0, 0, 0, 0.25);
+}
+
+.uno-game .opp-badge--cards {
+    background: rgba(51, 65, 85, 0.85);
+    color: #e2e8f0;
+}
+
+.uno-game .opp-badge--star {
+    background: rgba(120, 53, 15, 0.65);
+    color: #fde68a;
+}
+
+/* Middle row: status | piles | actions */
+.uno-game .arena-middle {
+    position: relative;
+    z-index: 6;
+    display: grid;
+    grid-template-columns: minmax(4.5rem, 1fr) auto minmax(4.5rem, 1fr);
+    align-items: center;
+    gap: 0.35rem;
+    width: min(100%, 42rem);
+    margin: 0 auto;
+}
+
+.uno-game .status-panel {
+    display: flex;
+    flex-direction: column;
+    gap: 0.35rem;
+}
+
+.uno-game .stat-box {
+    padding: 0.35rem 0.45rem;
+    border-radius: 0.65rem;
+    border: 2px solid rgba(0, 0, 0, 0.3);
+    background: rgba(12, 8, 10, 0.88);
+    box-shadow: 0 4px 0 rgba(0, 0, 0, 0.35);
+    text-align: center;
+}
+
+.uno-game .stat-box label {
+    display: block;
+    font-size: 0.42rem;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    color: #94a3b8;
+    margin-bottom: 0.15rem;
+}
+
+.uno-game .stat-box span,
+.uno-game .stat-box .stat-value {
+    font-size: 0.62rem;
+    font-weight: 900;
+    color: #fde68a;
+}
+
+.uno-game #active-color-dot {
+    display: inline-block;
+    width: 1.1rem;
+    height: 1.1rem;
+    border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.65);
+    box-shadow: 0 0 10px currentColor;
+    vertical-align: middle;
+}
+
+.uno-game #active-color-dot.color-red { background: #dc2626; color: #dc2626; }
+.uno-game #active-color-dot.color-yellow { background: #eab308; color: #eab308; }
+.uno-game #active-color-dot.color-green { background: #16a34a; color: #16a34a; }
+.uno-game #active-color-dot.color-blue { background: #2563eb; color: #2563eb; }
+.uno-game #active-color-dot.color-slate { background: #64748b; color: #64748b; }
+
+/* Pile stage + direction ring */
+.uno-game .pile-stage {
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 1.5rem;
+}
+
+.uno-game .dir-ring {
+    position: absolute;
+    width: min(52vw, 13.5rem);
+    height: min(52vw, 13.5rem);
+    border-radius: 50%;
+    border: 3px solid transparent;
+    background:
+        conic-gradient(from 0deg, transparent 0 12%, rgba(249, 115, 22, 0.15) 12% 20%, transparent 20% 32%,
+            rgba(249, 115, 22, 0.15) 32% 40%, transparent 40% 52%, rgba(249, 115, 22, 0.15) 52% 60%,
+            transparent 60% 72%, rgba(249, 115, 22, 0.15) 72% 80%, transparent 80% 100%);
+    box-shadow: 0 0 28px rgba(249, 115, 22, 0.25), inset 0 0 20px rgba(249, 115, 22, 0.08);
+    pointer-events: none;
+    animation: dir-spin 16s linear infinite;
+}
+
+.uno-game .dir-ring.dir-ccw { animation-direction: reverse; }
+
+@keyframes dir-spin {
+    to { transform: rotate(360deg); }
+}
+
+.uno-game .center-piles {
+    position: relative;
+    z-index: 2;
+    display: flex;
+    align-items: center;
+    gap: 1.1rem;
+}
+
+/* Action rail */
+.uno-game .action-rail {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.45rem;
+}
+
+.uno-game .action-tile {
+    width: 3.35rem;
+    min-height: 3.35rem;
+    border-radius: 0.85rem;
+    border: 3px solid rgba(0, 0, 0, 0.28);
+    font-size: 0.48rem;
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 0.15rem;
+    cursor: pointer;
+    transition: transform 0.1s, filter 0.1s;
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.38);
+}
+
+.uno-game .action-tile:active:not(:disabled) {
+    transform: translateY(4px);
+    box-shadow: 0 2px 0 rgba(0, 0, 0, 0.38);
+}
+
+.uno-game .action-tile:disabled {
+    opacity: 0.38;
+    cursor: not-allowed;
+    filter: grayscale(0.5);
+}
+
+.uno-game .action-tile--draw {
+    background: linear-gradient(180deg, #ef4444, #b91c1c);
+    color: #fff;
+}
+
+.uno-game .action-tile--shield {
+    background: linear-gradient(180deg, #64748b, #334155);
+    color: #f8fafc;
+}
+
+.uno-game .action-tile--shield.is-active {
+    background: linear-gradient(180deg, #f59e0b, #d97706);
+    color: #0f172a;
+    animation: shield-pulse 1s ease-in-out infinite;
+}
+
+@keyframes shield-pulse {
+    0%, 100% { box-shadow: 0 6px 0 rgba(0, 0, 0, 0.38), 0 0 0 rgba(245, 158, 11, 0); }
+    50% { box-shadow: 0 6px 0 rgba(0, 0, 0, 0.38), 0 0 16px rgba(245, 158, 11, 0.55); }
+}
+
+.uno-game .action-tile-icon { font-size: 1.1rem; line-height: 1; }
+
+.uno-game .timer-ring {
+    --timer-pct: 0;
+    position: relative;
+    width: 3.75rem;
+    height: 3.75rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
+.uno-game .timer-ring svg {
+    position: absolute;
+    inset: 0;
+    transform: rotate(-90deg);
+}
+
+.uno-game .timer-ring circle.track {
+    fill: none;
+    stroke: rgba(51, 65, 85, 0.8);
+    stroke-width: 4;
+}
+
+.uno-game .timer-ring circle.progress {
+    fill: none;
+    stroke: #ef4444;
+    stroke-width: 4;
+    stroke-linecap: round;
+    stroke-dasharray: 100;
+    stroke-dashoffset: calc(100 - var(--timer-pct));
+    transition: stroke-dashoffset 0.2s linear;
+}
+
+.uno-game .timer-ring.hidden { visibility: hidden; }
+
+.uno-game #counter-timer {
+    position: relative;
+    z-index: 1;
+    font-size: 0.95rem;
+    font-weight: 900;
+    line-height: 1;
+    color: #fecaca;
+    font-variant-numeric: tabular-nums;
+}
+
+.uno-game .timer-ring small {
+    position: relative;
+    z-index: 1;
+    font-size: 0.42rem;
+    font-weight: 900;
+    color: #94a3b8;
+    letter-spacing: 0.06em;
+}
+
+.uno-game #pending-banner {
+    text-align: center;
+    font-size: 0.58rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #fde68a;
+    padding: 0.2rem 0.75rem;
+    min-height: 1.1rem;
+}
+
+.uno-game #pending-banner:empty { display: none; }
+
+.uno-game #stack-alert {
+    text-align: center;
+    font-size: 0.6rem;
+    font-weight: 900;
+    color: #fecaca;
+    padding: 0.3rem 0.75rem;
+    margin: 0 auto 0.15rem;
+    border-radius: 999px;
+    border: 2px solid #f87171;
+    background: rgba(69, 10, 10, 0.75);
+    max-width: 92vw;
+}
+
+.uno-game #stack-alert.hidden { display: none; }
+
+/* Player dock */
+.uno-game .player-stage {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 40;
+    min-height: var(--player-dock-h);
+    padding: 0.35rem 0.5rem max(0.45rem, env(safe-area-inset-bottom));
+    display: grid;
+    grid-template-columns: auto 1fr auto;
+    align-items: end;
+    gap: 0.35rem;
+    background: linear-gradient(0deg, rgba(6, 3, 5, 0.98) 0%, rgba(6, 3, 5, 0.88) 70%, transparent 100%);
+    pointer-events: none;
+}
+
+.uno-game .player-stage > * { pointer-events: auto; }
+
+.uno-game .player-dossier {
+    align-self: end;
+    width: min(34vw, 8.5rem);
+    padding: 0.45rem 0.5rem 0.5rem;
+    border-radius: 0.9rem;
+    border: 2px solid rgba(71, 45, 56, 0.95);
+    background: linear-gradient(180deg, rgba(36, 20, 28, 0.96), rgba(14, 8, 10, 0.98));
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.4);
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.uno-game .player-dossier.my-turn {
+    border-color: var(--arena-gold);
+    box-shadow: 0 0 20px rgba(250, 204, 21, 0.5), 0 6px 0 rgba(0, 0, 0, 0.38);
+    animation: dossier-glow 1.3s ease-in-out infinite;
+}
+
+.uno-game .dossier-row {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+}
+
+.uno-game .dossier-avatar {
+    width: 2.35rem;
+    height: 2.35rem;
+    border-radius: 50%;
+    overflow: hidden;
+    border: 2px solid #64748b;
+    background: #0f172a;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.15rem;
+    flex-shrink: 0;
+}
+
+.uno-game .dossier-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+.uno-game .dossier-info { min-width: 0; flex: 1; }
+
+.uno-game .dossier-name {
+    font-size: 0.62rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.uno-game .dossier-badges {
+    display: flex;
+    gap: 0.25rem;
+    margin-top: 0.2rem;
+    flex-wrap: wrap;
+}
+
+.uno-game .dossier-badge {
+    font-size: 0.48rem;
+    font-weight: 900;
+    padding: 0.1rem 0.32rem;
+    border-radius: 0.35rem;
+}
+
+.uno-game .dossier-badge--cards { background: #334155; color: #f1f5f9; }
+.uno-game .dossier-badge--star { background: rgba(120, 53, 15, 0.7); color: #fde68a; }
+
+.uno-game .hand-fan-zone {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-end;
+    padding-bottom: 0.15rem;
+}
+
+.uno-game #play-selection-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    padding: 0 0.25rem 0.3rem;
+    width: 100%;
+}
+
+.uno-game #play-selection-bar.hidden { display: none; }
+
+.uno-game #play-selection-label {
+    font-size: 0.55rem;
+    font-weight: 800;
+    color: #7dd3fc;
+    text-transform: uppercase;
+}
+
+.uno-game .hand-fan-wrap {
+    width: 100%;
+    overflow-x: auto;
+    overflow-y: visible;
+    -webkit-overflow-scrolling: touch;
+    touch-action: pan-x;
+    padding: 0.25rem 0.15rem 0;
+    display: flex;
+    justify-content: center;
+}
+
+.uno-game #my-hand {
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    min-height: 7.5rem;
+    padding: 0.25rem 0.5rem 0;
+    transform-origin: bottom center;
+}
+
+.uno-game #my-hand.hand-fan-scroll {
+    justify-content: flex-start;
+    width: max-content;
+    min-width: 100%;
+}
+
+.uno-game #my-hand .gc-card-hand {
+    transform-origin: bottom center;
+    margin-left: 0;
+}
+
+.uno-game #my-hand:not(.hand-fan-scroll) .gc-card-hand + .gc-card-hand {
+    margin-left: -2rem;
+}
+
+.uno-game .btn-fine-turno {
+    align-self: end;
+    min-width: 5.5rem;
+    padding: 0.85rem 0.65rem;
+    border-radius: 1rem;
+    border: 3px solid rgba(0, 0, 0, 0.25);
+    background: linear-gradient(180deg, #facc15, #ca8a04);
+    color: #451a03;
+    font-size: 0.62rem;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    box-shadow: 0 8px 0 #92400e;
+    cursor: pointer;
+    transition: transform 0.1s;
+}
+
+.uno-game .btn-fine-turno:hover:not(:disabled) { filter: brightness(1.06); transform: translateY(-2px); }
+.uno-game .btn-fine-turno:active:not(:disabled) { transform: translateY(5px); box-shadow: 0 3px 0 #92400e; }
+.uno-game .btn-fine-turno:disabled { opacity: 0.38; cursor: not-allowed; box-shadow: 0 4px 0 #57534e; }
+
+.uno-game .btn-uno-mini {
+    margin-top: 0.35rem;
+    width: 100%;
+    padding: 0.35rem;
+    border-radius: 0.65rem;
+    border: 2px solid rgba(0, 0, 0, 0.25);
+    background: linear-gradient(180deg, #fbbf24, #d97706);
+    color: #451a03;
+    font-size: 0.55rem;
+    font-weight: 900;
+    box-shadow: 0 4px 0 #92400e;
+    cursor: pointer;
+}
+
+.uno-game .btn-uno-mini:disabled { opacity: 0.35; cursor: not-allowed; }
+.uno-game .btn-uno-mini.uno-flash { animation: uno-pulse 0.9s ease-in-out infinite; }
+
+@keyframes uno-pulse {
+    0%, 100% { transform: scale(1); filter: brightness(1); }
+    50% { transform: scale(1.05); filter: brightness(1.12); }
+}
+
+.uno-game #game-log-mini {
+    position: absolute;
+    bottom: calc(var(--player-dock-h) + 0.15rem);
+    left: 0.5rem;
+    right: 0.5rem;
+    max-height: 2rem;
+    overflow-y: auto;
+    font-size: 0.52rem;
+    font-family: monospace;
+    color: #64748b;
+    text-align: center;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.uno-game #game-toast {
+    position: fixed;
+    bottom: calc(var(--player-dock-h) + 12px);
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 60;
+    background: #1e293b;
+    border: 2px solid #fbbf24;
+    color: #fef3c7;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    font-size: 0.78rem;
+    font-weight: 700;
+}
+
+.uno-game #game-toast.hidden { display: none; }
+
+.uno-game #counter-overlay { display: none !important; }
+
+/* Card sizes in arena */
+.uno-game .gc-card-pile {
+    width: 6.5rem;
+    height: 9.25rem;
+}
+
+.uno-game .gc-card-hand {
+    width: 4.85rem;
+    height: 7rem;
+}
+
+.uno-game #my-hand.hand-size-many .gc-card-hand { width: 4rem; height: 5.85rem; }
+.uno-game #my-hand.hand-size-crowded .gc-card-hand { width: 3.35rem; height: 4.9rem; }
+
+.uno-game .gc-card-hand:hover:not(.gc-card-disabled) {
+    z-index: 20 !important;
+}
+
+.uno-game .gc-card-selected {
+    z-index: 25 !important;
+}
