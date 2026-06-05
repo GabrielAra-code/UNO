@@ -149,8 +149,10 @@
             .filter(Boolean)
             .join(' ');
         el.innerHTML = buildInnerHTML(card, opts);
-        if (card) {
+        if (card && opts.showNativeTitle !== false) {
             el.title = Deck?.cardDisplayName?.(card) || card.label || '';
+        } else {
+            el.removeAttribute('title');
         }
     }
 

@@ -1,16 +1,60 @@
 @import url('https://fonts.googleapis.com/css2?family=Nunito:wght=400;700;900&display=swap');
 
-/* --- DESIGN SYSTEM TOTAL DARK & COLORS --- */
+/* --- SFONDO GLOBALE (giallo acceso + vignetta centrale leggera) --- */
+:root {
+    --uno-bg-outer: #fff9c4;
+    --uno-bg-mid: #fde047;
+    --uno-bg-warm: #fbbf24;
+    --uno-bg-deep: #f59e0b;
+    --uno-bg-base: #fde047;
+    --uno-bg-vignette: rgba(161, 98, 7, 0.2);
+}
+
+html {
+    background-color: var(--uno-bg-base);
+}
+
 body {
     font-family: 'Nunito', sans-serif;
     overflow-x: hidden;
     user-select: none;
-    color: #94a3b8; /* Grigio ardesia di base, nessun bianco */
 }
 
-/* Sfondo index e globale totalmente nero */
+.uno-page {
+    background-color: var(--uno-bg-base);
+    background-image:
+        radial-gradient(ellipse 72% 68% at 50% 50%, var(--uno-bg-vignette) 0%, transparent 72%),
+        radial-gradient(ellipse 145% 115% at 50% 38%, var(--uno-bg-outer) 0%, var(--uno-bg-mid) 32%, var(--uno-bg-warm) 62%, var(--uno-bg-deep) 100%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+}
+
+.uno-index { color: #78350f; }
+.uno-waiting { color: #451a03; }
+
+/* Menu principale: blu acceso, più scuro al centro */
+.uno-menu {
+    --menu-bg-outer: #7dd3fc;
+    --menu-bg-mid: #3b82f6;
+    --menu-bg-deep: #1e40af;
+    --menu-bg-base: #2563eb;
+    --menu-bg-vignette: rgba(7, 15, 36, 0.38);
+    color: #e2e8f0;
+    background-color: var(--menu-bg-base);
+    background-image:
+        radial-gradient(ellipse 78% 72% at 50% 50%, var(--menu-bg-vignette) 0%, transparent 70%),
+        radial-gradient(ellipse 145% 115% at 50% 38%, var(--menu-bg-outer) 0%, var(--menu-bg-mid) 38%, var(--menu-bg-deep) 100%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+}
+
+/* Sfondo globale (alias legacy) */
 .gaming-dark-bg {
-    background-color: #000000;
+    background-color: var(--uno-bg-base);
+    background-image:
+        radial-gradient(ellipse 72% 68% at 50% 50%, var(--uno-bg-vignette) 0%, transparent 72%),
+        radial-gradient(ellipse 145% 115% at 50% 38%, var(--uno-bg-outer) 0%, var(--uno-bg-mid) 32%, var(--uno-bg-warm) 62%, var(--uno-bg-deep) 100%);
+    background-attachment: fixed;
 }
 
 /* Pannelli scuri digitali senza riflessi chiari */
@@ -64,6 +108,6 @@ body {
 
 /* Scrollbar scura a tema */
 .custom-scroll::-webkit-scrollbar { width: 8px; }
-.custom-scroll::-webkit-scrollbar-track { background: #000000; }
-.custom-scroll::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 10px; }
-.custom-scroll::-webkit-scrollbar-thumb:hover { background: #334155; }
+.custom-scroll::-webkit-scrollbar-track { background: rgba(251, 191, 36, 0.35); }
+.custom-scroll::-webkit-scrollbar-thumb { background: #d97706; border-radius: 10px; }
+.custom-scroll::-webkit-scrollbar-thumb:hover { background: #b45309; }

@@ -103,18 +103,18 @@
             if (Number.isNaN(qty) || qty <= 0) return;
 
             if (def.perColor) {
+                const copiesPerColor = Math.min(def.perColor, qty);
                 def.colors.forEach(color => {
-                    for (let i = 0; i < def.perColor && i < qty; i += 1) {
-                        if (cards.length >= qty * def.colors.length) break;
+                    for (let i = 0; i < copiesPerColor; i += 1) {
                         cards.push(makeCard(defId, color, def.value, def.kind, def.label));
                     }
                 });
                 return;
             }
 
-            const total = def.variants
-                ? Math.min(qty, def.variants.length)
-                : qty;
+            const variantCap = def.variants ? def.variants.length : null;
+            const countCap = def.count ?? variantCap;
+            const total = countCap != null ? Math.min(qty, countCap) : qty;
 
             for (let i = 0; i < total; i += 1) {
                 const color = def.colors[i % def.colors.length] || 'black';
@@ -209,9 +209,52 @@
         return `${label} (${COLOR_LABEL[card.color] || card.color})`;
     }
 
+    /** Crea una singola carta per il pannello test Preview (non mescola il mazzo). */
+    function spawnPreviewCard(spec = {}) {
+        if (spec.type === 'number' || spec.number != null) {
+            const color = spec.color || 'red';
+            const value = Number(spec.value ?? spec.number);
+            if (!COLORS.includes(color) || Number.isNaN(value) || value < 0 || value > 9) return null;
+            return makeCard('c_0_9', color, value, 'number', String(value));
+        }
+
+        const defId = spec.defId;
+        if (!defId) return null;
+
+        const def = SPECIAL_DEFS[defId];
+        if (def) {
+            const extra = {};
+            let label = def.label;
+            const color = spec.color || def.colors?.[0] || 'black';
+            if (defId === 'c_righello' && def.variants) {
+                const vi = spec.variantIndex ?? 0;
+                extra.righelloLabel = `Righello o ${def.variants[vi % def.variants.length]}`;
+                label = extra.righelloLabel;
+            } else if (defId === 'c_piani' && def.variants) {
+                const vi = spec.variantIndex ?? 0;
+                extra.planPart = def.variants[vi % def.variants.length];
+                label = `${def.label} ${extra.planPart}`.trim();
+            }
+            return makeCard(defId, color, def.value, def.kind, label, extra);
+        }
+
+        const br = BRAINROT_DEFS[defId];
+        if (br) {
+            return makeCard(defId, 'black', 'brainrot', 'brainrot', br.label, {
+                brainrotId: defId,
+                brainrotName: br.nome,
+                pt: br.pt,
+                battleColor: br.battleColor
+            });
+        }
+
+        return null;
+    }
+
     global.GameDeck = {
         COLORS,
         COLOR_LABEL,
+        SPECIAL_DEFS,
         BRAINROT_DEFS,
         BRAINROT_BATTLE_COLOR_LABEL,
         buildFromQuantities,
@@ -219,6 +262,7 @@
         cardDisplayName,
         colorStyle,
         isBrainrotCard,
-        makeCard
+        makeCard,
+        spawnPreviewCard
     };
 })(window);

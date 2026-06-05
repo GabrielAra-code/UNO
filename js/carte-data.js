@@ -11,7 +11,7 @@ window.databaseCarte = [
     { id: "c_piu16", nome: "Speciale: +16", quantita: "Da definire", effetto: "Il malcapitato subisce la pesca di 16 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
     { id: "c_scudo", nome: "Scudo", quantita: "4", effetto: "Protegge solo da Blobby e Proiettile. Si consuma quando salva il giocatore.", cat: "⭐ Speciale UNO?" },
     { id: "c_death", nome: "Death Note", quantita: "1", MD: true, effetto: "Eliminazione immediata di un giocatore a scelta.", cat: "⭐ Speciale UNO?" },
-    { id: "c_blobby", nome: "Blobby", quantita: "1", effetto: "Vittoria istantanea. Se il bersaglio ha Scudo, lo Scudo si consuma e il bersaglio sopravvive.", cat: "⭐ Speciale UNO?" },
+    { id: "c_blobby", nome: "Blobby", quantita: "1", effetto: "Giocabile solo con uno Scudo in mano: entrambe le carte vengono scartate. Vittoria istantanea se il bersaglio non contrasta. Se il bersaglio ha Scudo, lo consuma e sopravvive.", cat: "⭐ Speciale UNO?" },
     { id: "c_righello", nome: "Righello o X?", quantita: "4", effetto: "Giocabile fuori dal turno. Annulla interamente l'ultima mossa.", cat: "⭐ Speciale UNO?" },
     { id: "c_donna", nome: "Donna di Mazze", quantita: "1", effetto: "Resetta e annulla tutte le catene ed effetti attivi globali sul tavolo.", cat: "⭐ Speciale UNO?" },
     { id: "c_imprevisti", nome: "Imprevisti", quantita: "1", effetto: "Appena entra in mano si gioca da sola. Tutti pescano una carta.", cat: "⚪ Speciale Incolore" },
@@ -37,5 +37,5 @@ window.databaseCarte = [
     { id: "c_br_bobrini", nome: "Bobrini cactus merdini", quantita: "1", effetto: "90PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
     { id: "c_br_centralucci", nome: "Centralucci Sborralucci", quantita: "1", effetto: "55PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
     { id: "c_br_baccala", nome: "BACCALA' MAGGIOSBORR", quantita: "1", effetto: "75PT — Bianco: scarti 4 carte numero.", cat: "🧠 Brainrot" },
-    { id: "c_specchio", nome: "Specchio", quantita: "1", effetto: "Riflette l'effetto scagliato contro l'utilizzatore al mittente. Giocabile durante stack +2/+4.", cat: "⭐ Speciale UNO?" }
+    { id: "c_specchio", nome: "Specchio", quantita: "1", effetto: "Solo entro il tempo di contrasto su uno stack (+2/+4/+10/+16): riflette l'effetto sul mittente e inverte il giro (anche a catena).", cat: "⭐ Speciale UNO?" }
 ];

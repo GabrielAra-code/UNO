@@ -4,6 +4,7 @@
     const FS = global.GameFirestore;
     const Sounds = global.GameSounds;
     const CardUI = global.GameCardUI;
+    const CardInfo = global.CardInfo;
     const IS_PREVIEW = !!global.__UNO_PREVIEW__;
 
     let lobbyId = null;
@@ -19,10 +20,15 @@
     let counterResolveTimer = null;
     let counterTickTimer = null;
     let counterWindowKey = null;
+    let brainrotBattleCloseInFlight = false;
     let playSelection = null;
     let cardPickFlow = null;
+    let targetPickFlow = null;
+    let colorPickFlow = null;
+    let dirFlipTimer = null;
     let saveInFlight = false;
     let commitChain = Promise.resolve();
+    let unwiredCardInfo = null;
     const AvatarUI = global.AvatarUI;
 
     function leftGameKey(id) {
@@ -49,30 +55,78 @@
         return !!modal && !modal.classList.contains('hidden');
     }
 
+    let gameModalLock = Promise.resolve();
+    let modalOpId = 0;
+    let targetModalActivating = false;
+
     function withGameModalLock(fn) {
-        const UI = global.UITransitions;
-        if (UI) return UI.withLock(fn);
-        return fn();
+        const run = gameModalLock.then(() => fn());
+        gameModalLock = run.catch(() => {});
+        return run;
+    }
+
+    function clearTargetPickFlow() {
+        targetPickFlow = null;
+        targetModalActivating = false;
+    }
+
+    function targetFlowKey(pendingCardId, effect) {
+        return `${effect || 'pick'}:${pendingCardId || 'post'}`;
+    }
+
+    function isTargetPickFlowActive() {
+        return !!targetPickFlow;
+    }
+
+    function isProtectedGameModalFlow() {
+        return isTargetPickFlowActive()
+            || colorPickFlow?.type === 'pre'
+            || !!cardPickFlow;
+    }
+
+    function ensureGameModalInteractive() {
+        const { modal, panel } = gameModalElements();
+        if (!modal) return;
+        modal.getAnimations?.().forEach(anim => anim.cancel());
+        panel?.getAnimations?.().forEach(anim => anim.cancel());
+        modal.style.pointerEvents = 'auto';
+        if (panel) panel.style.pointerEvents = 'auto';
+        modal.style.opacity = '';
+        if (panel) {
+            panel.style.opacity = '';
+            panel.style.transform = '';
+        }
     }
 
     async function revealGameModal() {
+        const myOp = ++modalOpId;
         await withGameModalLock(async () => {
+            if (myOp !== modalOpId) return;
             const { modal, panel } = gameModalElements();
-            if (!modal || !modal.classList.contains('hidden')) return;
+            if (!modal) return;
+            if (!modal.classList.contains('hidden')) {
+                ensureGameModalInteractive();
+                return;
+            }
             const UI = global.UITransitions;
             if (UI) await UI.openOverlayModal(modal, panel);
             else modal.classList.remove('hidden');
+            ensureGameModalInteractive();
         });
     }
 
-    async function hideGameModal() {
+    async function hideGameModal(opts = {}) {
+        if (!opts.force && isProtectedGameModalFlow()) return;
+        const myOp = ++modalOpId;
         await withGameModalLock(async () => {
+            if (myOp !== modalOpId) return;
             const { modal, panel } = gameModalElements();
             if (!modal || modal.classList.contains('hidden')) return;
             const UI = global.UITransitions;
             if (UI) await UI.closeOverlayModal(modal, panel);
             else modal.classList.add('hidden');
             cardPickFlow = null;
+            if (!opts.keepTargetFlow) clearTargetPickFlow();
         });
     }
 
@@ -84,6 +138,8 @@
         buildContent(content);
         if (!isGameModalOpen()) {
             revealGameModal();
+        } else {
+            ensureGameModalInteractive();
         }
     }
 
@@ -193,6 +249,7 @@
         if (newPending && Engine.isPendingTimedWindow(newPending)
             && (!oldPending || pendingWindowKey(oldPending) !== pendingWindowKey(newPending))) {
             playSound('turn');
+            schedulePendingWindow(newPending);
         }
     }
 
@@ -281,7 +338,7 @@
                 return;
             }
             const resolvesAt = Number(cur.resolvesAt) || 0;
-            const left = Math.max(0, Math.ceil((resolvesAt - Date.now()) / 1000));
+            const left = Math.min(5, Math.max(0, Math.ceil((resolvesAt - Date.now()) / 1000)));
             updateTimerRing(left, true);
             if (left <= 0) hideCounterOverlayTick();
         };
@@ -298,7 +355,8 @@
             console.log('[COUNTER TIMER END]', { type: cur.type, key });
 
             const resolverId = pendingWindowResolverId(cur);
-            if (resolverId !== myPlayerId) {
+            const expired = Date.now() >= (Number(cur.resolvesAt) || 0) - 80;
+            if (resolverId !== myPlayerId && !expired) {
                 console.log('[COUNTER TIMER END] skipped — resolver:', resolverId);
                 clearCounterTimers();
                 hideCounterOverlay();
@@ -314,12 +372,7 @@
                 });
             }
 
-            if (cur.type === 'brainrotDiscard' && cur.winnerId === myPlayerId && playSelection?.mode === 'brainrotDiscard') {
-                const ids = playSelection.ids || [];
-                await commitAction(() => Engine.resolveBrainrotDiscard(gameState, myPlayerId, ids, { force: true }), { quiet: true });
-            } else {
-                await commitAction(() => resolvePendingWindowAction(cur, { force: true }), { quiet: true });
-            }
+            await commitAction(() => resolvePendingWindowAction(cur, { force: true }), { quiet: true });
             clearCounterTimers();
             hideCounterOverlay();
             clearPlaySelection();
@@ -339,7 +392,7 @@
             return;
         }
         ring.classList.remove('hidden');
-        const left = Math.max(0, secondsLeft);
+        const left = Math.min(5, Math.max(0, secondsLeft));
         el.textContent = String(left).padStart(2, '0');
         ring.style.setProperty('--timer-pct', String((left / 5) * 100));
     }
@@ -383,19 +436,27 @@
             label = pending.defenderId === myPlayerId
                 ? `Rispondi stack ${stackLabel} (${pending.drawStack}) — 5s`
                 : `Stack ${stackLabel} su ${def} (${pending.drawStack}) — 5s`;
-            canAct = pending.sourcePlayerId !== myPlayerId
+            canAct = pending.defenderId === myPlayerId
                 && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
         } else if (pending.type === 'brainrotDiscard') {
-            label = `Scarta fino a ${pending.maxDiscard} carte numero (5s)`;
-            canAct = pending.winnerId === myPlayerId;
+            if (banner) {
+                banner.textContent = pending.winnerId === myPlayerId
+                    ? `Tocca le carte numero in mano, poi «Scarta» o «Fine scarto»`
+                    : 'Scarto premio Brainrot…';
+            }
+            updateTimerRing(0, false);
+            if (btn) {
+                btn.disabled = true;
+                btn.classList.remove('is-active');
+            }
+            renderActionRail();
+            return;
         }
         if (banner) banner.textContent = '';
         updateTimerRing(5, true);
         if (btn) {
-            const showContrast = canAct
-                || (pending.type === 'brainrotDiscard' && pending.winnerId === myPlayerId);
-            btn.disabled = !showContrast;
-            btn.classList.toggle('is-active', showContrast);
+            btn.disabled = !canAct;
+            btn.classList.toggle('is-active', canAct);
         }
         renderActionRail();
     }
@@ -564,9 +625,37 @@
     }
 
     function renderDirection() {
+        const dir = typeof gameState?.direction === 'number' ? gameState.direction : 1;
+        const isClockwise = dir > 0;
+        const label = isClockwise ? 'Oraria' : 'Antioraria';
+        const symbol = isClockwise ? '↻' : '↺';
+
         const el = $('game-direction');
-        if (el) el.textContent = gameState?.direction > 0 ? '↻' : '↺';
-        $('dir-ring')?.classList.toggle('dir-ccw', (gameState?.direction || 1) < 0);
+        if (el) el.textContent = label;
+
+        const ringLabel = $('dir-ring-label');
+        if (ringLabel) ringLabel.textContent = `${symbol} ${label}`;
+
+        const ring = $('dir-ring');
+        if (ring) {
+            const wasCcw = ring.classList.contains('dir-ccw');
+            const isCcw = !isClockwise;
+            ring.classList.toggle('dir-ccw', isCcw);
+            ring.setAttribute('aria-label', `Direzione ${label.toLowerCase()}`);
+            if (prevGameState && typeof prevGameState.direction === 'number' && prevGameState.direction !== dir) {
+                ring.classList.remove('dir-flip');
+                void ring.offsetWidth;
+                ring.classList.add('dir-flip');
+                clearTimeout(dirFlipTimer);
+                dirFlipTimer = setTimeout(() => ring.classList.remove('dir-flip'), 550);
+            } else if (wasCcw !== isCcw) {
+                ring.classList.remove('dir-flip');
+                void ring.offsetWidth;
+                ring.classList.add('dir-flip');
+                clearTimeout(dirFlipTimer);
+                dirFlipTimer = setTimeout(() => ring.classList.remove('dir-flip'), 550);
+            }
+        }
     }
 
     function renderGameMode() {
@@ -667,16 +756,20 @@
             if (pending?.type === 'counterWindow') {
                 canAct = pending.sourcePlayerId !== myPlayerId && !!firstCounterCard();
             } else if (pending?.type === 'drawStackWindow') {
-                canAct = pending.sourcePlayerId !== myPlayerId
+                canAct = pending.defenderId === myPlayerId
                     && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
             } else if (pending?.type === 'brainrotBattle') {
                 canAct = Engine.canPlayBrainrotResponse(gameState, myPlayerId);
             } else if (pending?.type === 'brainrotDiscard') {
-                canAct = pending.winnerId === myPlayerId;
+                canAct = false;
             }
             const pendingTimed = pending && Engine.isPendingTimedWindow(pending);
             contrast.disabled = !canAct;
             contrast.classList.toggle('is-active', canAct && pendingTimed);
+            if (pending?.type === 'brainrotDiscard') {
+                contrast.disabled = true;
+                contrast.classList.remove('is-active');
+            }
         }
     }
 
@@ -804,11 +897,33 @@
         $('btn-play-ladder-alt')?.classList.add('hidden');
 
         if (playSelection.mode === 'ladder') {
-            const nums = playSelection.cards.map(c => c.value).join(' → ');
+            const nums = formatLadderLabel(playSelection.cards);
+            const n = playSelection.cards.length;
+            const clickedId = playSelection.cards[0]?.instanceId;
+            const fullLadder = clickedId
+                ? Engine.getLadderPlay?.(gameState, myPlayerId, clickedId)
+                : null;
+            const canFullScala = fullLadder?.length > 1;
             if (label) {
-                label.textContent = `Scala 0→${nums} (${playSelection.cards.length}) — tocca altra copia stesso valore`;
+                label.textContent = n === 1 && canFullScala
+                    ? `Singola o scala? «Gioca ${playSelection.cards[0].value}» = 1 carta · Scala completa o tocca le altre in sequenza`
+                    : n === 1
+                        ? `Scala: ${nums} — tocca altre copie (↔) o il prossimo numero, oppure gioca singola`
+                        : `Scala ${nums} (${n} carte) — tocca le altre copie (↔) per aggiungerle, poi il numero successivo`;
             }
-            if (btn) btn.textContent = 'Gioca scala';
+            if (btn) btn.textContent = n === 1 ? `Gioca ${playSelection.cards[0].value}` : 'Gioca scala';
+            const hand = myHand();
+            const anchor = playSelection.cards[playSelection.cards.length - 1];
+            const maxLadder = (canFullScala && n === 1 ? fullLadder : null)
+                || (anchor && Engine.buildMaxPlayableLadderFromHand?.(
+                    gameState, myPlayerId, hand, anchor
+                ));
+            if (maxLadder && maxLadder.length > n) {
+                const altBtn = $('btn-play-ladder-alt');
+                altBtn?.classList.remove('hidden');
+                if (altBtn) altBtn.textContent = `Scala completa (${maxLadder.length})`;
+                playSelection.maxLadder = maxLadder;
+            }
         } else if (playSelection.mode === 'duplicate') {
             const sample = playSelection.cards[0];
             const lbl = duplicateSelectionLabel(sample);
@@ -828,11 +943,12 @@
             }
         } else if (playSelection.mode === 'brainrotDiscard') {
             if (label) {
-                label.textContent = `Scarto Brainrot: ${playSelection.ids.length}/${playSelection.maxDiscard} (solo numeri)`;
+                label.textContent = `Vittoria Brainrot — seleziona fino a ${playSelection.maxDiscard} carte numero (${playSelection.ids.length} selezionate)`;
             }
             if (btn) {
-                btn.textContent = playSelection.ids.length ? `Scarta ${playSelection.ids.length}` : 'Passa';
+                btn.textContent = playSelection.ids.length ? `Scarta ${playSelection.ids.length}` : 'Fine scarto';
             }
+            $('btn-cancel-play')?.classList.remove('hidden');
         } else if (playSelection.mode === 'sixseven') {
             if (label) {
                 label.textContent = `SixSeven: 6+7 (${playSelection.cards.length} carte)`;
@@ -859,11 +975,32 @@
         startDuplicateSelection(playSelection.batch, n);
     }
 
+    function resolveLadderCardsFromHand(cards) {
+        const hand = myHand();
+        const resolved = (cards || []).map(c => hand.find(h => h.instanceId === c.instanceId) || c);
+        return resolved.filter(c => hand.some(h => h.instanceId === c.instanceId));
+    }
+
+    function formatLadderLabel(cards) {
+        const parts = [];
+        let i = 0;
+        while (i < cards.length) {
+            const v = cards[i].value;
+            let count = 1;
+            while (i + count < cards.length && cards[i + count].value === v) count += 1;
+            parts.push(count > 1 ? `${v}×${count}` : String(v));
+            i += count;
+        }
+        return parts.join(' → ');
+    }
+
     function startLadderSelection(cards) {
+        const resolved = resolveLadderCardsFromHand(cards);
+        if (!resolved.length) return;
         playSelection = {
             mode: 'ladder',
-            ids: cards.map(c => c.instanceId),
-            cards
+            ids: resolved.map(c => c.instanceId),
+            cards: resolved
         };
         updatePlaySelectionBar();
         renderHand();
@@ -871,13 +1008,19 @@
 
     function startDuplicateSelection(batch, count) {
         const slice = batch.slice(0, count);
+        const sample = batch[0];
+        const altLadder = sample?.kind === 'number'
+            && Engine.hasLadderOption?.(gameState, myPlayerId, sample.instanceId)
+            ? Engine.getLadderPlay(gameState, myPlayerId, sample.instanceId)
+            : null;
         playSelection = {
             mode: 'duplicate',
             key: Engine.cardDuplicateKey(batch[0]),
             ids: slice.map(c => c.instanceId),
             cards: slice,
             batchSize: batch.length,
-            batch
+            batch,
+            altLadder: altLadder?.length > 1 ? altLadder : null
         };
         updatePlaySelectionBar();
         renderHand();
@@ -896,28 +1039,34 @@
         startDuplicateSelection(pool, 1);
     }
 
-    function swapLadderRankInstance(instanceId) {
+    function onLadderCardClick(instanceId) {
         if (!playSelection || playSelection.mode !== 'ladder') return;
         const hand = myHand();
         const card = hand.find(c => c.instanceId === instanceId);
         if (!card || card.kind !== 'number') return;
 
-        const rank = Number(card.value);
-        const idx = playSelection.cards.findIndex(c => Number(c.value) === rank);
-        if (idx < 0 || playSelection.cards[idx].color !== card.color) return;
-
-        const nextCards = [...playSelection.cards];
-        nextCards[idx] = card;
-        playSelection.cards = nextCards;
-        playSelection.ids = nextCards.map(c => c.instanceId);
-        if (!Engine.isValidLadder(nextCards)) {
-            playSound('error');
-            showToast('Copia non valida per questa scala');
+        const next = Engine.tryIntegrateLadderCard?.(
+            gameState, myPlayerId, hand, playSelection.cards, card
+        );
+        if (next) {
+            playSound('click');
+            startLadderSelection(next);
             return;
         }
+
+        playSound('error');
+        showToast('Tocca un\'altra copia (↔) per inserirla nella scala, o il prossimo numero');
+    }
+
+    function onLadderBadgeClick(instanceId) {
+        if (!Engine.hasLadderOption?.(gameState, myPlayerId, instanceId)) return;
+        const hand = myHand();
+        const card = hand.find(c => c.instanceId === instanceId);
+        if (!card) return;
+        const initial = Engine.getInitialLadderFromCard?.(hand, card);
+        if (!initial?.length) return;
         playSound('click');
-        updatePlaySelectionBar();
-        renderHand();
+        startLadderSelection(initial);
     }
 
     function renderCenter() {
@@ -992,8 +1141,26 @@
         const mariMyTurn = mariActive && gameState.pendingAction?.currentId === myPlayerId;
 
         const selIds = new Set(playSelection?.ids || []);
-        const ladderHintIds = playSelection?.mode === 'ladder'
-            ? new Set(playSelection.ids)
+        const ladderHintIds = playSelection?.mode === 'ladder' && playSelection.cards?.length
+            ? (() => {
+                const hints = new Set(playSelection.ids);
+                const counts = {};
+                playSelection.cards.forEach(c => {
+                    const r = Number(c.value);
+                    counts[r] = (counts[r] || 0) + 1;
+                });
+                const nextRank = Engine.nextLadderAppendRank?.(playSelection.cards, hand)
+                    ?? playSelection.cards.length;
+                const dupRanks = new Set(
+                    Engine.unusedLadderDuplicateRanks?.(playSelection.cards, hand) || []
+                );
+                hand.forEach(c => {
+                    if (c.kind !== 'number') return;
+                    const r = Number(c.value);
+                    if (r === nextRank || dupRanks.has(r)) hints.add(c.instanceId);
+                });
+                return hints;
+            })()
             : null;
         const duplicateKey = playSelection?.mode === 'duplicate' ? playSelection.key : null;
 
@@ -1015,17 +1182,21 @@
             const multiBatchSize = myTurnPlay && Engine.allowsMultiDuplicatePlay?.(card)
                 ? Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId).length
                 : 0;
+            const hasLadderOption = myTurnPlay && Engine.hasLadderOption?.(gameState, myPlayerId, card.instanceId);
+            const inLadderSel = playSelection?.mode === 'ladder' && selIds.has(card.instanceId);
             const playableTurn = myTurnPlay && (
                 Engine.canPlayCardThisTurn(gameState, myPlayerId, card)
                 || multiBatchSize > 1
+                || hasLadderOption
             );
             const playableCounter = canCounter && Engine.canPlayCounter(gameState, myPlayerId, card);
             const playableBrainrot = brainrotBattle && Engine.canPlayBrainrotResponse(gameState, myPlayerId)
                 && Engine.isBrainrotCard(card);
             const playableStack = drawStackWin && Engine.canPlayDrawStackResponse(gameState, myPlayerId, card);
             const playableBrainrotDiscard = brainrotDiscardMine && Engine.canBrainrotDiscardCard(gameState, myPlayerId, card);
+            const ladderInteractive = playSelection?.mode === 'ladder' && card.kind === 'number';
             const playable = playableTurn || playableCounter || playableMari || playableBrainrot
-                || playableStack || playableBrainrotDiscard;
+                || playableStack || playableBrainrotDiscard || ladderInteractive;
             const showBattleColor = (brainrotBattle || brainrotDiscard) && card.battleColor;
             const dupKey = Engine.cardDuplicateKey(card);
             const dupSize = duplicateCounts[dupKey] || 0;
@@ -1035,6 +1206,7 @@
                 : 0;
             const dupHintSize = playableTurn && canDupPlay ? dupSize : 0;
             const showDupBadge = playableTurn && canDupPlay && playableDupSize > 1 && !playSelection;
+            const showLadderBadge = hasLadderOption && !playSelection;
             const dupCountSelected = duplicateKey === dupKey ? selIds.size : 0;
             const showSelBadge = duplicateKey === dupKey && dupCountSelected > 0;
             const effectiveDupSize = playableDupSize > 1 ? playableDupSize : dupHintSize;
@@ -1045,6 +1217,7 @@
                 playable ? '' : 'gc-card-disabled',
                 playableCounter || playableBrainrot || playableStack ? 'gc-card-counter' : '',
                 playableMari ? 'gc-card-mari' : '',
+                playableBrainrotDiscard ? 'gc-card-brainrot-pick' : '',
                 selIds.has(card.instanceId) ? 'gc-card-selected' : '',
                 ladderHintIds?.has(card.instanceId) ? 'gc-card-ladder-hint' : '',
                 duplicateKey === dupKey && !selIds.has(card.instanceId) && dupSize > 1 ? 'gc-card-dup-group' : ''
@@ -1055,17 +1228,38 @@
                 : (dupHintSize > 1 && !playSelection
                     ? `<span class="gc-dup-badge" style="opacity:0.65">×${fmtDup(dupHintSize)}</span>`
                     : '');
-            const selBadge = showSelBadge
-                ? `<span class="gc-dup-sel">${dupCountSelected}/${effectiveDupSize}</span>`
+            const ladderRankCopies = playSelection?.mode === 'ladder' && card.kind === 'number'
+                ? hand.filter(c => c.kind === 'number' && Number(c.value) === Number(card.value)).length
+                : 0;
+            const ladderRankUsed = playSelection?.mode === 'ladder' && card.kind === 'number'
+                ? playSelection.cards.filter(c => Number(c.value) === Number(card.value)).length
+                : 0;
+            const showLadderDupHint = playSelection?.mode === 'ladder'
+                && ladderRankCopies > 1
+                && ladderHintIds?.has(card.instanceId)
+                && (!selIds.has(card.instanceId) || ladderRankUsed < ladderRankCopies);
+            const ladderBadge = showLadderBadge
+                ? '<span class="gc-ladder-badge" role="button" tabindex="-1">Scala</span>'
                 : '';
+            const ladderDupHint = showLadderDupHint
+                ? '<span class="gc-ladder-dup-hint">↔</span>'
+                : '';
+            const brainrotSelBadge = playSelection?.mode === 'brainrotDiscard' && selIds.has(card.instanceId)
+                ? `<span class="gc-dup-sel">${playSelection.ids.indexOf(card.instanceId) + 1}/${playSelection.maxDiscard}</span>`
+                : '';
+            const selBadge = brainrotSelBadge || (showSelBadge
+                ? `<span class="gc-dup-sel">${dupCountSelected}/${effectiveDupSize}</span>`
+                : '');
 
+            btn.dataset.cardId = card.instanceId;
             if (CardUI) {
                 btn.type = 'button';
                 CardUI.applyCardFace(btn, card, {
                     baseClass: 'gc-card gc-card-hand',
                     extraClass: extra,
-                    badges: `${dupBadge}${selBadge}`,
-                    battleColor: showBattleColor
+                    badges: `${dupBadge}${ladderBadge}${ladderDupHint}${selBadge}`,
+                    battleColor: showBattleColor,
+                    showNativeTitle: false
                 });
             } else {
                 btn.type = 'button';
@@ -1080,8 +1274,8 @@
                 btn.addEventListener('click', () => onPlayDrawStackResponse(card.instanceId));
             } else if (playableCounter) {
                 btn.addEventListener('click', () => onPlayCounter(card.instanceId));
-            } else if (playSelection?.mode === 'ladder' && playableTurn && card.kind === 'number') {
-                btn.addEventListener('click', () => swapLadderRankInstance(card.instanceId));
+            } else if (playSelection?.mode === 'ladder' && card.kind === 'number') {
+                btn.addEventListener('click', () => onLadderCardClick(card.instanceId));
             } else if (playSelection?.mode === 'duplicate' && duplicateKey === dupKey && playableTurn) {
                 btn.addEventListener('click', () => {
                     playSound('click');
@@ -1090,6 +1284,11 @@
             } else if ((playableTurn || playableMari) && !playSelection) {
                 btn.addEventListener('click', () => onPlayCard(card.instanceId));
             }
+            btn.querySelector('.gc-ladder-badge')?.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onLadderBadgeClick(card.instanceId);
+            });
             const slot = document.createElement('div');
             slot.className = 'hand-card-slot';
             slot.appendChild(btn);
@@ -1116,10 +1315,29 @@
         await commitAction(() => Engine.playDrawStackResponse(gameState, myPlayerId, instanceId));
     }
 
-    function startBrainrotDiscardSelection(maxDiscard) {
-        playSelection = { mode: 'brainrotDiscard', ids: [], maxDiscard };
+    function brainrotDiscardPhaseKey(pending) {
+        if (!pending || pending.type !== 'brainrotDiscard') return null;
+        return `${pending.winnerId}-${pending.startedAt}`;
+    }
+
+    function startBrainrotDiscardSelection(maxDiscard, phaseKey) {
+        playSelection = {
+            mode: 'brainrotDiscard',
+            ids: [],
+            maxDiscard,
+            discardKey: phaseKey || brainrotDiscardPhaseKey(gameState?.pendingAction)
+        };
         updatePlaySelectionBar();
         renderHand();
+    }
+
+    function ensureBrainrotDiscardUi() {
+        const pending = gameState?.pendingAction;
+        if (pending?.type !== 'brainrotDiscard' || pending.winnerId !== myPlayerId) return;
+        const phaseKey = brainrotDiscardPhaseKey(pending);
+        if (!playSelection || playSelection.mode !== 'brainrotDiscard' || playSelection.discardKey !== phaseKey) {
+            startBrainrotDiscardSelection(pending.maxDiscard, phaseKey);
+        }
     }
 
     function startSixSevenSelection(cards) {
@@ -1134,22 +1352,42 @@
 
     function onToggleBrainrotDiscard(instanceId) {
         if (!playSelection || playSelection.mode !== 'brainrotDiscard') return;
+        const card = myHand().find(c => c.instanceId === instanceId);
+        if (!card || !Engine.canBrainrotDiscardCard(gameState, myPlayerId, card)) {
+            playSound('error');
+            showToast('Puoi scartare solo carte numeriche');
+            return;
+        }
         const idx = playSelection.ids.indexOf(instanceId);
         if (idx >= 0) {
             playSelection.ids.splice(idx, 1);
         } else if (playSelection.ids.length < playSelection.maxDiscard) {
             playSelection.ids.push(instanceId);
+        } else {
+            playSound('error');
+            showToast(`Puoi scartare al massimo ${playSelection.maxDiscard} carte`);
+            return;
         }
+        playSound('click');
         updatePlaySelectionBar();
         renderHand();
     }
 
     async function confirmBrainrotDiscard() {
         if (!playSelection || playSelection.mode !== 'brainrotDiscard') return;
+        const pending = gameState?.pendingAction;
+        if (pending?.type !== 'brainrotDiscard' || pending.winnerId !== myPlayerId) {
+            playSound('error');
+            showToast('Fase di scarto Brainrot non attiva');
+            return;
+        }
         const ids = [...playSelection.ids];
         clearPlaySelection();
-        playSound('cards');
-        await commitAction(() => Engine.resolveBrainrotDiscard(gameState, myPlayerId, ids));
+        clearCounterTimers();
+        playSound(ids.length ? 'cards' : 'click');
+        await commitAction(() => Engine.resolveBrainrotDiscard(
+            gameState, myPlayerId, ids, { force: true }
+        ));
     }
 
     function renderTurnBanner() {
@@ -1179,9 +1417,17 @@
         }
         if (pending?.type === 'brainrotBattle') {
             el.classList.remove('hidden');
-            el.textContent = Engine.canPlayBrainrotResponse(gameState, myPlayerId)
-                ? 'Brainrot Battle: gioca un Brainrot!'
-                : 'Brainrot Battle in corso…';
+            if (Engine.canPlayBrainrotResponse(gameState, myPlayerId)) {
+                el.textContent = 'Brainrot Battle: gioca un Brainrot per rispondere!';
+            } else if (pending.entries?.[myPlayerId]) {
+                const myPt = pending.entries[myPlayerId]?.pt ?? 0;
+                const maxPt = Math.max(0, ...Object.values(pending.entries || {}).map(e => e.pt || 0));
+                el.textContent = myPt >= maxPt
+                    ? 'Stai vincendo — altri hanno ancora 5s per rispondere con un Brainrot'
+                    : 'Hai giocato — attendi la chiusura della battaglia (5s)…';
+            } else {
+                el.textContent = 'Brainrot Battle in corso…';
+            }
             el.classList.toggle('animate-pulse', Engine.canPlayBrainrotResponse(gameState, myPlayerId));
             return;
         }
@@ -1191,14 +1437,15 @@
             el.textContent = pending.defenderId === myPlayerId
                 ? `Devi rispondere allo stack +${pending.drawStack}!`
                 : `Stack +${pending.drawStack} su ${def}`;
-            el.classList.toggle('animate-pulse', pending.sourcePlayerId !== myPlayerId
+            el.classList.toggle('animate-pulse', pending.defenderId === myPlayerId
                 && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true }));
             return;
         }
         if (pending?.type === 'brainrotDiscard') {
             el.classList.remove('hidden');
+            const colorLabel = Deck.BRAINROT_BATTLE_COLOR_LABEL?.[pending.battleColor] || pending.battleColor || '';
             el.textContent = pending.winnerId === myPlayerId
-                ? `Vittoria Brainrot: scarta fino a ${pending.maxDiscard} carte numero`
+                ? `Vittoria Brainrot (${colorLabel}): tocca fino a ${pending.maxDiscard} carte numero, poi conferma in basso`
                 : 'Scarto premio Brainrot…';
             el.classList.toggle('animate-pulse', pending.winnerId === myPlayerId);
             return;
@@ -1209,6 +1456,13 @@
                 ? 'Marijuana: gioca una carta Verde o pesca'
                 : 'Marijuana: in attesa degli altri…';
             el.classList.toggle('animate-pulse', pending.currentId === myPlayerId);
+            return;
+        }
+        if (gameState.stackPassPending && gameState.stackSourcePlayerId === myPlayerId
+            && (gameState.drawStack || 0) > 0) {
+            el.classList.remove('hidden');
+            el.textContent = `Stack +${gameState.drawStack} in sospeso — puoi giocare altre +carte o Fine turno`;
+            el.classList.add('animate-pulse');
             return;
         }
         el.classList.remove('hidden');
@@ -1293,8 +1547,11 @@
         }
         if (returnTimer) clearTimeout(returnTimer);
         if (IS_PREVIEW) {
+            global.GameModes?.handlePreviewWin?.(gameState, myPlayerId);
             const hint = document.querySelector('.end-overlay-hint');
-            if (hint) hint.textContent = 'Usa «Nuova partita» nella barra in alto o ricarica la pagina.';
+            if (hint && !hint.querySelector('a')) {
+                hint.textContent = 'Usa «Nuova partita» nella barra in alto o ricarica la pagina.';
+            }
             return;
         }
         returnTimer = setTimeout(async () => {
@@ -1311,6 +1568,46 @@
         }, 5000);
     }
 
+    function ensureColorModalOpen() {
+        if (!gameState || colorPickFlow?.type === 'pre') return;
+        const pending = gameState.pendingAction;
+        if (pending?.type === 'chooseColor'
+            && pending.playerId === myPlayerId
+            && !isGameModalOpen()) {
+            showColorModal(null);
+        }
+    }
+
+    function ensureTargetModalOpen() {
+        if (!gameState || colorPickFlow?.type === 'pre') return;
+        if (isGameModalOpen()) {
+            ensureGameModalInteractive();
+            if (isTargetPickFlowActive()) {
+                void activateTargetModalButtons();
+            }
+            return;
+        }
+        const pending = gameState.pendingAction;
+        if (pending?.type === 'chooseTarget' && pending.playerId === myPlayerId) {
+            showTargetModal(null, pending.effect);
+            return;
+        }
+        if (targetPickFlow?.type === 'pre' && targetPickFlow.cardId) {
+            showTargetModal(targetPickFlow.cardId, targetPickFlow.effect);
+        } else if (targetPickFlow?.type === 'post' && targetPickFlow.effect) {
+            showTargetModal(null, targetPickFlow.effect);
+        }
+    }
+
+    async function activateTargetModalButtons() {
+        if (!isTargetPickFlowActive()) return;
+        await revealGameModal();
+        await new Promise(resolve => setTimeout(resolve, 160));
+        if (!isTargetPickFlowActive()) return;
+        contentDisableTargetButtons(false);
+        ensureGameModalInteractive();
+    }
+
     function renderAll() {
         renderDirection();
         renderGameMode();
@@ -1324,13 +1621,23 @@
         renderUnoButton();
         renderTurnBanner();
         const pa = gameState?.pendingAction;
-        if (pa && Engine.isPendingTimedWindow(pa)) {
+        if (pa?.type === 'brainrotDiscard') {
+            updateTimerRing(0, false);
+            const contrast = $('btn-contrast');
+            if (contrast) {
+                contrast.disabled = true;
+                contrast.classList.remove('is-active');
+            }
+        } else if (pa && Engine.isPendingTimedWindow(pa)) {
             renderPendingOverlay(pa);
         } else if (!counterResolveTimer) {
             hideCounterOverlay();
         }
         renderLog();
         renderEndScreen();
+        ensureColorModalOpen();
+        ensureTargetModalOpen();
+        ensureBrainrotDiscardUi();
     }
 
     function showToast(msg) {
@@ -1434,14 +1741,51 @@
         }
     }
 
+    function maybeCloseBrainrotBattle() {
+        const pending = gameState?.pendingAction;
+        if (!pending || pending.type !== 'brainrotBattle') return;
+        if (!Engine.brainrotBattleCanClose?.(gameState)) return;
+        if (brainrotBattleCloseInFlight || saveInFlight) return;
+        brainrotBattleCloseInFlight = true;
+        void commitAction(() => Engine.finishBrainrotBattleIfReady(gameState), { quiet: true })
+            .finally(() => { brainrotBattleCloseInFlight = false; });
+    }
+
     function handlePending(state) {
-        if (state.pendingAction && Engine.isPendingTimedWindow(state.pendingAction)) {
-            schedulePendingWindow(state.pendingAction);
+        const pending = state.pendingAction;
+
+        if (pending && Engine.isPendingTimedWindow(pending)) {
+            const key = pendingWindowKey(pending);
+            if (counterWindowKey !== key) {
+                schedulePendingWindow(pending);
+            }
+            if (pending.type === 'brainrotBattle' && Engine.brainrotBattleCanClose?.(state)) {
+                maybeCloseBrainrotBattle();
+            }
+        } else if (pending?.type === 'brainrotDiscard') {
+            clearCounterTimers();
+            counterWindowKey = null;
+            updateTimerRing(0, false);
+        } else if (pending?.type === 'brainrotBattle' && Engine.brainrotBattleCanClose?.(state)) {
+            maybeCloseBrainrotBattle();
         }
-        if (state.pendingAction?.type === 'brainrotDiscard' && state.pendingAction.winnerId === myPlayerId) {
-            startBrainrotDiscardSelection(state.pendingAction.maxDiscard);
+
+        if (pending?.type === 'brainrotDiscard' && pending.winnerId === myPlayerId) {
+            const phaseKey = brainrotDiscardPhaseKey(pending);
+            const samePhase = playSelection?.mode === 'brainrotDiscard'
+                && playSelection.discardKey === phaseKey;
+            if (!samePhase) {
+                startBrainrotDiscardSelection(pending.maxDiscard, phaseKey);
+            } else if (playSelection.maxDiscard !== pending.maxDiscard) {
+                playSelection.maxDiscard = pending.maxDiscard;
+                updatePlaySelectionBar();
+            }
+        } else if (playSelection?.mode === 'brainrotDiscard') {
+            clearPlaySelection();
         }
-        if (cardPickFlow) return;
+
+        if (cardPickFlow || targetPickFlow) return;
+        if (colorPickFlow?.type === 'pre') return;
         if (state.pendingAction?.type === 'chooseColor' && state.pendingAction.playerId === myPlayerId) {
             if (!isGameModalOpen()) showColorModal(null);
         }
@@ -1469,6 +1813,24 @@
 
         playSound('click');
 
+        const pending = gameState.pendingAction;
+        if (pending?.type === 'brainrotDiscard' && pending.winnerId === myPlayerId) {
+            ensureBrainrotDiscardUi();
+            onToggleBrainrotDiscard(instanceId);
+            return;
+        }
+        if (pending?.type === 'brainrotBattle') {
+            if (Engine.canPlayBrainrotResponse(gameState, myPlayerId) && Engine.isBrainrotCard(card)) {
+                await onPlayBrainrotResponse(instanceId);
+                return;
+            }
+            playSound('error');
+            showToast(pending.entries?.[myPlayerId]
+                ? 'Battaglia in corso — attendi lo scarto premio'
+                : 'Gioca un Brainrot per rispondere, oppure attendi');
+            return;
+        }
+
         if (gameState.pendingAction?.type === 'mariGreen') {
             await onPlayMariCard(instanceId);
             return;
@@ -1481,20 +1843,14 @@
             return;
         }
 
-        const batch = Engine.getDuplicateBatch(gameState, myPlayerId, instanceId);
-        const ladder = Engine.getLadderPlay(gameState, myPlayerId, instanceId);
-        const hasLadder = ladder.length > 1 && Engine.isValidLadder(ladder);
-
-        if (batch.length > 1) {
-            cycleDuplicateSelection(batch, card);
-            if (hasLadder) {
-                playSelection.altLadder = ladder;
-            }
+        if (Engine.hasLadderOption?.(gameState, myPlayerId, instanceId)) {
+            startLadderSelection([card]);
             return;
         }
 
-        if (hasLadder) {
-            startLadderSelection(ladder);
+        const batch = Engine.getDuplicateBatch(gameState, myPlayerId, instanceId);
+        if (batch.length > 1) {
+            cycleDuplicateSelection(batch, card);
             return;
         }
 
@@ -1524,6 +1880,14 @@
     async function confirmLadderPlay() {
         if (!playSelection || playSelection.mode !== 'ladder') return;
         const ids = [...playSelection.ids];
+        const cards = [...playSelection.cards];
+        if (cards.length > 1
+            && (!Engine.isValidLadder?.(cards)
+                || !Engine.isValidPlayGroup(gameState, myPlayerId, cards))) {
+            playSound('error');
+            showToast('Scala non valida');
+            return;
+        }
         clearPlaySelection();
         playSound('cards');
         await playCardsImmediate(ids);
@@ -1587,19 +1951,24 @@
                         btn.type = 'button';
                         btn.className = 'modal-card-pick-btn';
                         if (CardUI) {
-                            CardUI.applyCardFace(btn, card, {
+                            const cardFace = document.createElement('span');
+                            cardFace.className = 'modal-card-pick-face';
+                            CardUI.applyCardFace(cardFace, card, {
                                 baseClass: 'gc-card gc-card-modal-pick',
                                 extraClass: ''
                             });
+                            btn.appendChild(cardFace);
                         } else {
                             btn.textContent = cardLabel(card);
                         }
-                        btn.onclick = async () => {
+                        btn.addEventListener('click', async (event) => {
+                            event.preventDefault();
+                            event.stopPropagation();
                             playSound('click');
                             cardPickFlow = null;
-                            await hideGameModal();
+                            await hideGameModal({ force: true });
                             await onPick(card);
-                        };
+                        });
                         list.appendChild(btn);
                     });
                 }
@@ -1639,54 +2008,146 @@
         });
     }
 
-    function showColorModal(pendingCardIdOrIds) {
-        const modal = $('game-modal');
+    async function onColorModalPick(event, btn, color, ids) {
+        event.preventDefault();
+        event.stopPropagation();
+        if (btn.disabled) return;
         const content = $('modal-content');
+        content?.querySelectorAll('.modal-color-btn').forEach(el => { el.disabled = true; });
+        colorPickFlow = null;
+        playSound('click');
+        await hideGameModal({ force: true });
+        if (ids.length) {
+            await playCardsImmediate(ids, { chosenColor: color });
+        } else {
+            await commitAction(() => Engine.chooseColor(gameState, myPlayerId, color));
+        }
+    }
+
+    function showColorModal(pendingCardIdOrIds) {
         const ids = Array.isArray(pendingCardIdOrIds)
             ? pendingCardIdOrIds
             : (pendingCardIdOrIds ? [pendingCardIdOrIds] : []);
-        $('modal-title').textContent = 'Scegli colore';
-        $('modal-description').textContent = 'Quale colore vuoi imporre?';
-        content.innerHTML = '';
-        Deck.COLORS.forEach(color => {
-            const b = document.createElement('button');
-            b.className = `modal-color-btn color-${color}`;
-            b.textContent = Deck.COLOR_LABEL[color];
-            b.onclick = async () => {
-                hideGameModal();
-                playSound('click');
-                if (ids.length) {
-                    await playCardsImmediate(ids, { chosenColor: color });
-                } else {
-                    await commitAction(() => Engine.chooseColor(gameState, myPlayerId, color));
-                }
-            };
-            content.appendChild(b);
+        colorPickFlow = ids.length ? { type: 'pre', ids: [...ids] } : { type: 'post' };
+
+        replaceGameModalContent({
+            title: 'Scegli colore',
+            description: 'Quale colore vuoi imporre?',
+            buildContent: (content) => {
+                Deck.COLORS.forEach(color => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = `modal-color-btn color-${color}`;
+                    b.textContent = Deck.COLOR_LABEL[color];
+                    b.disabled = true;
+                    b.addEventListener('click', (event) => onColorModalPick(event, b, color, ids), { once: true });
+                    content.appendChild(b);
+                });
+            }
         });
-        revealGameModal();
+
+        (async () => {
+            await revealGameModal();
+            await new Promise(resolve => setTimeout(resolve, 160));
+            if (!colorPickFlow) return;
+            const content = $('modal-content');
+            content?.querySelectorAll('.modal-color-btn').forEach(el => { el.disabled = false; });
+            ensureGameModalInteractive();
+        })();
+    }
+
+    async function onTargetModalPick(pendingCardId, effect, targetId, btn) {
+        if (btn?.disabled) return;
+        if (btn) btn.disabled = true;
+        contentDisableTargetButtons(true);
+        playSound('click');
+        try {
+            if (pendingCardId && effect === 'nazism') {
+                clearTargetPickFlow();
+                await hideGameModal({ force: true });
+                showNazismGiveModal(pendingCardId, targetId);
+                return;
+            }
+            if (pendingCardId && effect === 'communism') {
+                clearTargetPickFlow();
+                await hideGameModal({ force: true });
+                showCommunismStealModal(pendingCardId, targetId);
+                return;
+            }
+            clearTargetPickFlow();
+            await hideGameModal({ force: true });
+            if (pendingCardId) {
+                await commitAction(() => Engine.playCards(
+                    gameState, myPlayerId, [pendingCardId], { targetId }
+                ));
+            } else {
+                await commitAction(() => Engine.chooseTarget(gameState, myPlayerId, targetId));
+            }
+        } catch (err) {
+            console.error('onTargetModalPick:', err);
+            if (btn) btn.disabled = false;
+            contentDisableTargetButtons(false);
+            targetModalActivating = true;
+            targetPickFlow = pendingCardId
+                ? {
+                    type: 'pre',
+                    cardId: pendingCardId,
+                    effect,
+                    flowKey: targetFlowKey(pendingCardId, effect)
+                }
+                : { type: 'post', effect, flowKey: targetFlowKey(null, effect) };
+            showToast('Errore selezione bersaglio. Riprova.');
+            ensureTargetModalOpen();
+        }
+    }
+
+    function contentDisableTargetButtons(disabled) {
+        $('modal-content')?.querySelectorAll('.modal-target-btn').forEach(el => {
+            el.disabled = disabled;
+        });
     }
 
     function showTargetModal(pendingCardId, effect) {
-        const modal = $('game-modal');
-        const content = $('modal-content');
-        const isHeart = effect === 'heart';
-        const isNazism = effect === 'nazism';
-        const isCommunism = effect === 'communism';
-        $('modal-title').textContent = isHeart
+        const pickEffect = effect || 'pick';
+        const flowKey = targetFlowKey(pendingCardId, pickEffect);
+        if (targetPickFlow?.flowKey === flowKey && (isGameModalOpen() || targetModalActivating)) {
+            ensureGameModalInteractive();
+            void activateTargetModalButtons();
+            return;
+        }
+
+        targetModalActivating = true;
+        targetPickFlow = pendingCardId
+            ? { type: 'pre', cardId: pendingCardId, effect: pickEffect, flowKey }
+            : { type: 'post', effect: pickEffect, flowKey };
+
+        const isHeart = pickEffect === 'heart';
+        const isSwap = pickEffect === 'swap';
+        const isDeath = pickEffect === 'death';
+        const isNazism = pickEffect === 'nazism';
+        const isCommunism = pickEffect === 'communism';
+        const title = isHeart
             ? 'Cuore — Rianima'
-            : isNazism
-                ? 'Nazismo — Bersaglio'
-                : isCommunism
-                    ? 'Comunismo — Bersaglio'
-                    : 'Scegli bersaglio';
-        $('modal-description').textContent = isHeart
+            : isSwap
+                ? 'Scambio — Bersaglio'
+                : isDeath
+                    ? 'Death Note — Bersaglio'
+                    : isNazism
+                        ? 'Nazismo — Bersaglio'
+                        : isCommunism
+                            ? 'Comunismo — Bersaglio'
+                            : 'Scegli bersaglio';
+        const description = isHeart
             ? 'Scegli un giocatore eliminato da riportare in partita'
-            : isNazism
-                ? 'A chi vuoi cedere una carta?'
-                : isCommunism
-                    ? 'Da quale avversario vuoi rubare una carta?'
-                    : 'Seleziona un giocatore';
-        content.innerHTML = '';
+            : isSwap
+                ? 'Scegli con chi vuoi scambiare la mano'
+                : isDeath
+                    ? 'Scegli il giocatore da eliminare'
+                    : isNazism
+                        ? 'A chi vuoi cedere una carta?'
+                        : isCommunism
+                            ? 'Da quale avversario vuoi rubare una carta?'
+                            : 'Seleziona un giocatore';
 
         const targets = [];
         (gameState.turnOrder || []).forEach(id => {
@@ -1700,52 +2161,82 @@
             targets.push({ id, nickname: p?.nickname || id });
         });
 
-        if (!targets.length) {
-            const empty = document.createElement('p');
-            empty.className = 'text-sm text-slate-400 text-center py-2';
-            empty.textContent = isHeart
-                ? 'Nessun giocatore eliminato da rianimare.'
-                : 'Nessun bersaglio disponibile.';
-            content.appendChild(empty);
-            const close = document.createElement('button');
-            close.type = 'button';
-            close.className = 'modal-target-btn';
-            close.textContent = 'Chiudi';
-            close.onclick = () => hideGameModal();
-            content.appendChild(close);
-            revealGameModal();
-            return;
-        }
+        replaceGameModalContent({
+            title,
+            description,
+            buildContent: (content) => {
+                if (!targets.length) {
+                    const empty = document.createElement('p');
+                    empty.className = 'text-sm text-slate-400 text-center py-2';
+                    empty.textContent = isHeart
+                        ? 'Nessun giocatore eliminato da rianimare.'
+                        : 'Nessun bersaglio disponibile.';
+                    content.appendChild(empty);
+                    const close = document.createElement('button');
+                    close.type = 'button';
+                    close.className = 'modal-target-btn';
+                    close.textContent = 'Chiudi';
+                    close.addEventListener('click', async (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        clearTargetPickFlow();
+                        await hideGameModal({ force: true });
+                    });
+                    content.appendChild(close);
+                    return;
+                }
 
-        targets.forEach(({ id, nickname }) => {
-            const b = document.createElement('button');
-            b.type = 'button';
-            b.className = 'modal-target-btn';
-            if (isHeart) b.classList.add('modal-target-revive');
-            b.textContent = isHeart ? `${nickname} (eliminato)` : nickname;
-            b.onclick = async () => {
-                playSound('click');
-                if (pendingCardId && effect === 'nazism') {
-                    showNazismGiveModal(pendingCardId, id);
-                    return;
-                }
-                if (pendingCardId && effect === 'communism') {
-                    showCommunismStealModal(pendingCardId, id);
-                    return;
-                }
-                await hideGameModal();
+                targets.forEach(({ id, nickname }) => {
+                    const b = document.createElement('button');
+                    b.type = 'button';
+                    b.className = 'modal-target-btn';
+                    if (isHeart) b.classList.add('modal-target-revive');
+                    b.textContent = isHeart ? `${nickname} (eliminato)` : nickname;
+                    b.disabled = true;
+                    b.addEventListener('click', (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        onTargetModalPick(pendingCardId, pickEffect, id, b);
+                    }, { once: true });
+                    content.appendChild(b);
+                });
+
                 if (pendingCardId) {
-                    await commitAction(() => Engine.playCards(gameState, myPlayerId, [pendingCardId], { targetId: id }));
-                } else {
-                    await commitAction(() => Engine.chooseTarget(gameState, myPlayerId, id));
+                    const cancel = document.createElement('button');
+                    cancel.type = 'button';
+                    cancel.className = 'modal-target-btn modal-target-cancel';
+                    cancel.textContent = 'Annulla';
+                    cancel.addEventListener('click', async (event) => {
+                        event.preventDefault();
+                        event.stopPropagation();
+                        clearTargetPickFlow();
+                        await hideGameModal({ force: true });
+                    });
+                    content.appendChild(cancel);
                 }
-            };
-            content.appendChild(b);
+            }
         });
-        revealGameModal();
+
+        void activateTargetModalButtons();
+    }
+
+    function cardByInstanceId(instanceId) {
+        if (!instanceId) return null;
+        return myHand().find(c => c.instanceId === instanceId) || null;
+    }
+
+    function wireCardInfoHandlers() {
+        if (unwiredCardInfo) {
+            unwiredCardInfo();
+            unwiredCardInfo = null;
+        }
+        const handEl = $('my-hand');
+        if (!handEl || !CardInfo?.wireHandCardInfo) return;
+        unwiredCardInfo = CardInfo.wireHandCardInfo(handEl, { getCard: cardByInstanceId });
     }
 
     function wireControls() {
+        wireCardInfoHandlers();
         let handReflowTimer;
         const reflowHandLayout = () => {
             const handEl = $('my-hand');
@@ -1803,17 +2294,29 @@
             confirmDuplicatePlay();
         });
         $('btn-play-ladder-alt')?.addEventListener('click', () => {
+            if (playSelection?.mode === 'ladder' && playSelection.maxLadder?.length > 1) {
+                playSound('click');
+                startLadderSelection(playSelection.maxLadder);
+                return;
+            }
             if (!playSelection?.altLadder?.length) return;
             playSound('click');
             startLadderSelection(playSelection.altLadder);
         });
         $('btn-cancel-play')?.addEventListener('click', () => {
+            if (playSelection?.mode === 'brainrotDiscard') {
+                playSelection.ids = [];
+                updatePlaySelectionBar();
+                renderHand();
+                return;
+            }
             clearPlaySelection();
         });
         $('btn-contrast')?.addEventListener('click', async () => {
             const pending = gameState?.pendingAction;
-            if (pending?.type === 'brainrotDiscard' && pending.winnerId === myPlayerId) {
-                await confirmBrainrotDiscard();
+            if (pending?.type === 'brainrotDiscard') {
+                playSound('error');
+                showToast('Usa la barra in basso: tocca i numeri e premi Scarta');
                 return;
             }
             if (pending?.type === 'brainrotBattle') {

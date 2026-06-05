@@ -18,7 +18,7 @@
     }
 
     function isPendingTimedWindow(pending) {
-        return pending && ['counterWindow', 'brainrotBattle', 'drawStackWindow', 'brainrotDiscard'].includes(pending.type)
+        return pending && ['counterWindow', 'brainrotBattle', 'drawStackWindow'].includes(pending.type)
             && typeof pending.resolvesAt === 'number';
     }
 
@@ -143,6 +143,9 @@
             pendingColor: false,
             drawStack: 0,
             drawStackType: null,
+            stackPassPending: false,
+            stackDefenderId: null,
+            stackSourcePlayerId: null,
             forcedColor: null,
             log: [{ at: nowIso(), msg: 'Partita iniziata.' }],
             players,
@@ -201,7 +204,10 @@
             if (pending.type === 'chooseColor' || pending.type === 'chooseTarget') return true;
         }
         if (pending && pending.type !== 'bulletRoulette') return false;
-        if (state.drawStack > 0 && !isDrawStackWindow(state)) {
+        if (state.stackPassPending && state.stackSourcePlayerId === myId && !isDrawStackWindow(state)) {
+            return true;
+        }
+        if (state.drawStack > 0 && !isDrawStackWindow(state) && !state.stackPassPending) {
             return currentPlayerId(state) === myId;
         }
         return currentPlayerId(state) === myId;
@@ -270,6 +276,31 @@
         return (init || top[0]).playerId;
     }
 
+    function brainrotBattleCanClose(state) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'brainrotBattle') return false;
+
+        const timerExpired = !!(pending.resolvesAt && Date.now() >= pending.resolvesAt - 150);
+        const otherActive = activePlayers(state).filter(id => id !== pending.initiatorId);
+
+        // Con altri giocatori in campo: finestra fissa 5s (come contrasto/stack), anche se nessuno ha Brainrot
+        if (otherActive.length > 0) return timerExpired;
+
+        // Solo iniziatore rimasto attivo: nessuna risposta possibile
+        return true;
+    }
+
+    function finishBrainrotBattleIfReady(state) {
+        const pending = state.pendingAction;
+        if (!pending || pending.type !== 'brainrotBattle') {
+            return { ok: false, state };
+        }
+        if (!brainrotBattleCanClose(state)) {
+            return { ok: false, state };
+        }
+        return resolveBrainrotBattle(state, pending.initiatorId, { force: true });
+    }
+
     function startBrainrotDiscardPhase(state, winnerId, battleColor) {
         const maxDiscard = BRAINROT_DISCARD_BY_COLOR[battleColor] || 1;
         const winnerEntry = state.pendingAction?.entries?.[winnerId];
@@ -280,7 +311,6 @@
             battleColor,
             maxDiscard,
             startedAt: Date.now(),
-            resolvesAt: Date.now() + COUNTER_WINDOW_MS,
             winningPt: winnerEntry?.pt,
             winningName: winnerEntry?.nome
         };
@@ -328,15 +358,22 @@
         pending.entries[playerId] = brainrotEntryFromCard(playerId, card);
         syncHandCounts(s);
         addLog(s, `${s.players[playerId]?.nickname} risponde con ${card.brainrotName || card.label} (${card.pt}PT).`);
-        return { ok: true, state: s };
+        const finished = finishBrainrotBattleIfReady(s);
+        return finished.ok ? finished : { ok: true, state: s };
+    }
+
+    function isDiscardableNumberCard(card) {
+        if (!card) return false;
+        if (card.kind === 'number') return true;
+        const n = Number(card.value);
+        return !Number.isNaN(n) && n >= 0 && n <= 9 && card.kind !== 'brainrot' && card.kind !== 'action';
     }
 
     function canBrainrotDiscardCard(state, playerId, card) {
         const pending = state.pendingAction;
         if (!pending || pending.type !== 'brainrotDiscard') return false;
         if (pending.winnerId !== playerId) return false;
-        if (!card || card.kind !== 'number') return false;
-        return true;
+        return isDiscardableNumberCard(card);
     }
 
     function resolveBrainrotDiscard(state, playerId, instanceIds = [], options = {}) {
@@ -348,12 +385,7 @@
         if (playerId !== pending.winnerId) {
             return { ok: false, error: 'Solo il vincitore può scartare.' };
         }
-        const graceMs = options.force ? 150 : 0;
-        const expired = Date.now() >= pending.resolvesAt - graceMs;
         const ids = Array.isArray(instanceIds) ? instanceIds : [];
-        if (!options.force && !expired && ids.length === 0) {
-            return { ok: false, error: 'Seleziona carte da scartare o attendi il countdown.' };
-        }
 
         const hand = s.hands[playerId] || [];
         const toDiscard = [];
@@ -389,8 +421,50 @@
         return { ok: true, state: s };
     }
 
+    function isStackDrawValue(value) {
+        return value === 'draw2' || value === 'wild4' || value === 'draw10' || value === 'draw16';
+    }
+
+    function clearStackPassState(state) {
+        state.stackPassPending = false;
+        state.stackDefenderId = null;
+        state.stackSourcePlayerId = null;
+        state.drawStack = 0;
+        state.drawStackType = null;
+    }
+
+    /** Accumula +2/+4/+10/+16 in attesa di Fine turno (non apre subito la finestra 5s). */
+    function addToStackPass(state, playerId, amount, stackType) {
+        const defender = nextPlayerId(state);
+        if (state.stackPassPending && state.stackSourcePlayerId === playerId && state.settings?.stack) {
+            state.drawStack += amount;
+            state.drawStackType = stackType;
+            addLog(state, `Stack +${amount} (totale ${state.drawStack}).`);
+        } else {
+            state.drawStack = amount;
+            state.drawStackType = stackType;
+            state.stackPassPending = true;
+            state.stackDefenderId = defender;
+            state.stackSourcePlayerId = playerId;
+            addLog(state, `Stack +${amount} — premi Fine turno per passarlo.`);
+        }
+    }
+
+    function canStackOnOwnTurn(state, playerId, card) {
+        if (!state.settings?.stack || !state.stackPassPending) return false;
+        if (state.stackSourcePlayerId !== playerId) return false;
+        if (!isStackDrawValue(card?.value)) return false;
+        const top = state.topCard;
+        if (!top) return true;
+        if (isStackDrawValue(top.value)) return true;
+        return topMatches(card, state);
+    }
+
     function openDrawStackWindow(state, defenderId, sourcePlayerId) {
         if (state.drawStack <= 0) return;
+        state.stackPassPending = false;
+        state.stackDefenderId = null;
+        state.stackSourcePlayerId = null;
         state.pendingAction = {
             type: 'drawStackWindow',
             defenderId,
@@ -401,30 +475,38 @@
             resolvesAt: Date.now() + COUNTER_WINDOW_MS,
             responses: {}
         };
-        addLog(state, `Stack +${state.drawStack}: ${state.players[defenderId]?.nickname} ha 5s (+2/+4/Specchio).`);
+        addLog(state, `Stack +${state.drawStack}: ${state.players[defenderId]?.nickname} ha 5s (Specchio / +2 / +4 / +10 / +16).`);
+    }
+
+    function isTimedWindowOpen(pending, graceMs = 0) {
+        if (!pending?.resolvesAt) return true;
+        return Date.now() < pending.resolvesAt - graceMs;
     }
 
     function canPlayDrawStackResponse(state, playerId, cardOrProbe) {
         const pending = state.pendingAction;
         if (!pending || pending.type !== 'drawStackWindow') return false;
+        if (!isTimedWindowOpen(pending)) return false;
+        if (!state.settings?.stack) return false;
         if (state.players[playerId]?.eliminated) return false;
         if (pending.responses?.[playerId]) return false;
-        if (playerId === pending.sourcePlayerId) return false;
+        if (playerId !== pending.defenderId) return false;
 
         const card = cardOrProbe?.probe ? null : cardOrProbe;
+        const canMirror = (c) => c?.value === 'mirror';
+        const canStackOnDraw = (c) => {
+            if (!c) return false;
+            if (c.value === 'wild4' || c.value === 'draw10' || c.value === 'draw16') return true;
+            if (c.value === 'draw2' && pending.drawStackType === 'draw2') return true;
+            return false;
+        };
+
         if (cardOrProbe?.probe) {
             const hand = state.hands[playerId] || [];
-            return hand.some(c => {
-                if (c.value === 'mirror') return playerId !== pending.defenderId;
-                if (pending.drawStackType === 'draw2' && c.value === 'draw2') return playerId === pending.defenderId;
-                if (pending.drawStackType === 'wild4' && c.value === 'wild4') return playerId === pending.defenderId;
-                return false;
-            });
+            return hand.some(c => canMirror(c) || canStackOnDraw(c));
         }
         if (!card) return false;
-        if (card.value === 'mirror') return playerId !== pending.defenderId;
-        if (pending.drawStackType === 'draw2' && card.value === 'draw2') return playerId === pending.defenderId;
-        if (pending.drawStackType === 'wild4' && card.value === 'wild4') return playerId === pending.defenderId;
+        if (canMirror(card) || canStackOnDraw(card)) return true;
         return false;
     }
 
@@ -434,11 +516,14 @@
         if (!pending || pending.type !== 'drawStackWindow') {
             return { ok: false, error: 'Nessuna finestra stack attiva.' };
         }
+        if (!isTimedWindowOpen(pending)) {
+            return { ok: false, error: 'Tempo per contrastare scaduto.' };
+        }
         if (pending.responses?.[playerId]) {
             return { ok: false, error: 'Hai già risposto allo stack.' };
         }
-        if (playerId === pending.sourcePlayerId) {
-            return { ok: false, error: 'Chi ha giocato lo stack non può contrastare.' };
+        if (playerId !== pending.defenderId) {
+            return { ok: false, error: 'Solo chi subisce lo stack può rispondere.' };
         }
 
         const card = removeFromHand(s.hands, playerId, instanceId);
@@ -455,8 +540,12 @@
             const oldDef = pending.defenderId;
             pending.defenderId = pending.sourcePlayerId;
             pending.sourcePlayerId = oldDef;
-            pending.responses[playerId] = { action: 'mirror', cardValue: 'mirror' };
-            addLog(s, `${s.players[playerId]?.nickname} usa Specchio: stack rimandato!`);
+            s.direction *= -1;
+            pending.responses = { [playerId]: { action: 'mirror', cardValue: 'mirror' } };
+            addLog(
+                s,
+                `${s.players[playerId]?.nickname} usa Specchio: stack su ${s.players[pending.defenderId]?.nickname}! Direzione invertita.`
+            );
             pending.startedAt = Date.now();
             pending.resolvesAt = Date.now() + COUNTER_WINDOW_MS;
         } else if (card.value === 'draw2') {
@@ -475,6 +564,24 @@
             pending.drawStackType = 'wild4';
             pending.responses[playerId] = { action: 'stack', addAmount: 4, cardValue: 'wild4' };
             addLog(s, `Stack +4 (totale ${pending.drawStack}).`);
+        } else if (card.value === 'draw10') {
+            pending.drawStack += 10;
+            pending.defenderId = nextPlayerId(s, pending.defenderId);
+            pending.sourcePlayerId = playerId;
+            s.drawStack = pending.drawStack;
+            s.drawStackType = 'draw10';
+            pending.drawStackType = 'draw10';
+            pending.responses[playerId] = { action: 'stack', addAmount: 10, cardValue: 'draw10' };
+            addLog(s, `Stack +10 (totale ${pending.drawStack}).`);
+        } else if (card.value === 'draw16') {
+            pending.drawStack += 16;
+            pending.defenderId = nextPlayerId(s, pending.defenderId);
+            pending.sourcePlayerId = playerId;
+            s.drawStack = pending.drawStack;
+            s.drawStackType = 'draw16';
+            pending.drawStackType = 'draw16';
+            pending.responses[playerId] = { action: 'stack', addAmount: 16, cardValue: 'draw16' };
+            addLog(s, `Stack +16 (totale ${pending.drawStack}).`);
         }
 
         pending.startedAt = Date.now();
@@ -630,6 +737,19 @@
             return { ok: false, error: 'Non puoi terminare il turno ora.' };
         }
         applyUnoPenaltyIfNeeded(s, playerId);
+
+        if (s.stackPassPending && s.drawStack > 0) {
+            const defender = s.stackDefenderId || nextPlayerId(s);
+            const source = s.stackSourcePlayerId || playerId;
+            openDrawStackWindow(s, defender, source);
+            s.turnAdvanceSteps = (s.turnAdvanceSteps || 0) + 1;
+            addLog(
+                s,
+                `${s.players[playerId]?.nickname} passa lo stack +${s.drawStack} a ${s.players[defender]?.nickname}.`
+            );
+            return { ok: true, state: s, defer: true };
+        }
+
         const steps = 1 + (s.turnAdvanceSteps || 0);
         s.turnAdvanceSteps = 0;
         nextTurn(s, steps);
@@ -716,10 +836,42 @@
     /** Jolly, +4 e speciali nere/incolore: giocabili sul mazzo in tavola (salvo stack +2/+4). */
     function isFreePlayCard(card) {
         if (!card) return false;
+        if (card.value === 'mirror') return false;
         if (isBrainrotCard(card)) return true;
         if (card.value === 'wild' || card.value === 'wild4') return true;
         if (card.kind === 'wild') return true;
         if (card.kind === 'special' && card.color === 'black') return true;
+        return false;
+    }
+
+    /** Carta speciale incolore/jolly sul mazzo: le numeriche possono esserci giocate sopra. */
+    function isIncolorSpecialTop(top) {
+        if (!top) return false;
+        if (top.color === 'wild' || top.kind === 'wild') return true;
+        if (top.value === 'surprise') return true;
+        if (top.kind === 'special' && (top.color === 'black' || top.color === 'wild')) return true;
+        return false;
+    }
+
+    /** Gioco singolo di una numerica (stesso numero o mazzo incolore/speciale). */
+    function numberCardMatchesTop(state, card) {
+        const top = state.topCard;
+        if (!top || card?.kind !== 'number') return false;
+        if (String(card.value) === String(top.value)) return true;
+        if (isIncolorSpecialTop(top)) return true;
+        return false;
+    }
+
+    /** Ultima carta della scala: stesso numero, colore attivo, o mazzo incolore/speciale. */
+    function ladderAnchorMatchesTop(state, anchor) {
+        const top = state.topCard;
+        if (!top || anchor?.kind !== 'number') return false;
+        if (String(anchor.value) === String(top.value)) return true;
+        if (isIncolorSpecialTop(top)) return true;
+        const effectiveColor = effectiveTopColor(state);
+        if (effectiveColor && isValidPlayColor(anchor.color) && anchor.color === effectiveColor) {
+            return true;
+        }
         return false;
     }
 
@@ -731,6 +883,10 @@
 
         if (state.pendingAction?.type === 'mariGreen' && state.forcedColor) {
             return card.color === state.forcedColor || isFreePlayCard(card);
+        }
+
+        if (card.kind === 'number') {
+            return numberCardMatchesTop(state, card);
         }
 
         if (String(card.value) === String(top.value)) return true;
@@ -755,8 +911,29 @@
         }
     }
 
+    /** Solo le carte numeriche possono svuotare la mano e chiudere la partita. */
+    function isWinningFinishCard(card) {
+        return card?.kind === 'number';
+    }
+
+    function handSizeAfterPlay(state, playerId, cards) {
+        const handLen = (state.hands[playerId] || []).length;
+        let removed = cards.length;
+        if (cards.some(c => c.value === 'blobby') && hasShield(state, playerId)) {
+            removed += 1;
+        }
+        return handLen - removed;
+    }
+
+    function blocksFinishingPlay(state, playerId, cards) {
+        if (!cards?.length) return false;
+        if (handSizeAfterPlay(state, playerId, cards) !== 0) return false;
+        return !cards.every(isWinningFinishCard);
+    }
+
     function canPlayCard(state, card, playerId) {
         if (state.status !== 'playing') return false;
+        if (card?.value === 'mirror' && state.pendingAction?.type !== 'drawStackWindow') return false;
         const pending = state.pendingAction;
         const pid = playerId || currentPlayerId(state);
         if (pending?.type === 'counterWindow') {
@@ -771,7 +948,11 @@
         if (pending?.type === 'mariGreen') {
             return canPlayMariGreen(state, pid, card);
         }
-        if (state.drawStack > 0 && pending?.type !== 'drawStackWindow') {
+        if (state.stackPassPending && state.stackSourcePlayerId === pid && !isDrawStackWindow(state)) {
+            if (canStackOnOwnTurn(state, pid, card)) return true;
+            return topMatches(card, state);
+        }
+        if (state.drawStack > 0 && pending?.type !== 'drawStackWindow' && !state.stackPassPending) {
             if (!state.settings.stack) return false;
             if (state.drawStackType === 'draw2' && card.value === 'draw2') return true;
             if (state.drawStackType === 'wild4' && card.value === 'wild4') return true;
@@ -800,7 +981,9 @@
         if (currentPlayerId(state) !== playerId) return false;
         if (!canPlayCard(state, card)) return false;
         syncTurnFlags(state);
-        if (state.turnFlags.played) return false;
+        if (state.turnFlags.played && !canStackOnOwnTurn(state, playerId, card)) return false;
+        if (card.value === 'blobby' && !hasShield(state, playerId)) return false;
+        if (blocksFinishingPlay(state, playerId, [card])) return false;
         return true;
     }
 
@@ -903,6 +1086,11 @@
             drawn: false,
             played: false
         };
+        if (!state.pendingAction || state.pendingAction.type !== 'drawStackWindow') {
+            state.stackPassPending = false;
+            state.stackDefenderId = null;
+            state.stackSourcePlayerId = null;
+        }
     }
 
     function isGreenCard(card) {
@@ -1089,7 +1277,7 @@
         const v = card.value;
         if (v === 'cancel') return true;
         if (['skip', 'reverse', 'draw2'].includes(v) && card.kind === 'action') return true;
-        if (['reset', 'vaff', 'waves', 'halfdraw', 'reshuffle', 'draw10', 'draw16', 'mirror', 'jack'].includes(v)) {
+        if (['reset', 'vaff', 'waves', 'halfdraw', 'reshuffle', 'draw10', 'draw16', 'jack'].includes(v)) {
             return true;
         }
         return false;
@@ -1107,7 +1295,18 @@
         if (!card || !allowsMultiDuplicatePlay(card)) return card ? [card] : [];
         if (currentPlayerId(state) !== playerId) return [card];
         syncTurnFlags(state);
-        if (state.turnFlags.played) return [card];
+        if (state.turnFlags.played) {
+            if (isStackDrawValue(card.value)) {
+                const key = cardMultiPlayKey(card);
+                const stackBatch = hand.filter(c =>
+                    cardMultiPlayKey(c) === key
+                    && isStackDrawValue(c.value)
+                    && canStackOnOwnTurn(state, playerId, c)
+                );
+                return stackBatch.length ? stackBatch : [card];
+            }
+            return [card];
+        }
 
         const key = cardMultiPlayKey(card);
         const candidates = hand.filter(c =>
@@ -1130,46 +1329,312 @@
         return Number(card?.value);
     }
 
+    /** Scala 0→1→2… con eventuali copie multiple dello stesso numero (es. 4→5→5→6). */
     function isValidLadder(cards) {
-        if (!cards?.length) return false;
-        const sorted = [...cards].sort((a, b) => numberRank(a) - numberRank(b));
-        const color = sorted[0].color;
-        if (numberRank(sorted[0]) !== 0) return false;
-        for (let i = 0; i < sorted.length; i += 1) {
-            const c = sorted[i];
-            if (c.kind !== 'number' || c.color !== color || numberRank(c) !== i) return false;
+        if (!cards?.length || cards.length < 2) return false;
+        if (numberRank(cards[0]) !== 0 || cards[0].kind !== 'number') return false;
+
+        const rankCounts = { 0: 1 };
+        let maxRank = 0;
+
+        for (let i = 1; i < cards.length; i += 1) {
+            const c = cards[i];
+            if (!c || c.kind !== 'number') return false;
+            const r = numberRank(c);
+            const prev = numberRank(cards[i - 1]);
+            if (r < 0 || r > 9) return false;
+
+            if (r === prev) {
+                rankCounts[r] = (rankCounts[r] || 0) + 1;
+            } else if (r === prev + 1) {
+                maxRank = r;
+                rankCounts[r] = (rankCounts[r] || 0) + 1;
+            } else {
+                return false;
+            }
+        }
+
+        for (let r = 0; r <= maxRank; r += 1) {
+            if (!rankCounts[r]) return false;
         }
         return true;
+    }
+
+    function ladderRankCounts(cards) {
+        const counts = {};
+        (cards || []).forEach(c => {
+            const r = numberRank(c);
+            counts[r] = (counts[r] || 0) + 1;
+        });
+        return counts;
+    }
+
+    function maxRankInLadder(cards) {
+        if (!cards?.length) return -1;
+        return Math.max(...cards.map(numberRank));
+    }
+
+    /** Prossimo valore aggiungibile: altra copia al vertice o il numero successivo. */
+    function nextLadderAppendRank(cards, hand) {
+        if (!cards?.length) return 0;
+        const frontier = maxRankInLadder(cards);
+        const counts = ladderRankCounts(cards);
+        const inHand = ladderCardsAtRank(hand, frontier).length;
+        const inLadder = counts[frontier] || 0;
+        if (inLadder < inHand) return frontier;
+        for (let r = frontier + 1; r <= 9; r += 1) {
+            if (ladderCardsAtRank(hand, r).length) return r;
+        }
+        return frontier + 1;
+    }
+
+    function sortLadderPlayOrder(cards) {
+        return [...cards].sort((a, b) => {
+            const diff = numberRank(a) - numberRank(b);
+            return diff !== 0 ? diff : String(a.instanceId).localeCompare(String(b.instanceId));
+        });
+    }
+
+    function ladderCardsAtRank(hand, rank) {
+        return (hand || []).filter(c => c.kind === 'number' && numberRank(c) === rank);
+    }
+
+    /** Catena più lunga 0→1→2… presente in mano (colori misti ammessi sulle numeriche). */
+    function maxConsecutiveLadderRank(hand) {
+        if (!ladderCardsAtRank(hand, 0).length) return -1;
+        let max = 0;
+        while (ladderCardsAtRank(hand, max + 1).length) max += 1;
+        return max;
+    }
+
+    function buildLadderCards(hand, endRank, clickedCard) {
+        if (!ladderCardsAtRank(hand, 0).length || endRank < 1) return null;
+        const clickedRank = numberRank(clickedCard);
+        const ladder = [];
+        for (let v = 0; v <= endRank; v += 1) {
+            const options = ladderCardsAtRank(hand, v);
+            if (!options.length) return null;
+            if (v === clickedRank) {
+                const clicked = options.find(c => c.instanceId === clickedCard.instanceId) || clickedCard;
+                const rest = options.filter(c => c.instanceId !== clicked.instanceId);
+                ladder.push(clicked, ...rest);
+            } else {
+                ladder.push(...options);
+            }
+        }
+        return ladder;
+    }
+
+    function buildMaxLadderFromHand(hand, clickedCard, endRank) {
+        const maxRank = endRank ?? maxConsecutiveLadderRank(hand);
+        const rank = numberRank(clickedCard);
+        if (maxRank < 1 || rank < 0 || rank > maxRank) return null;
+        return buildLadderCards(hand, maxRank, clickedCard);
+    }
+
+    /** Selezione iniziale scala: solo la carta cliccata se è 0, altrimenti 0→… fino al suo valore. */
+    function getInitialLadderFromCard(hand, clickedCard) {
+        const rank = numberRank(clickedCard);
+        if (rank === 0) return [clickedCard];
+        if (rank < 1) return null;
+        return buildLadderCards(hand, rank, clickedCard);
+    }
+
+    /** Scala 0→… più lunga in mano che si può ancora giocare sul tavolo. */
+    function buildMaxPlayableLadderFromHand(state, playerId, hand, clickedCard) {
+        const maxRank = maxConsecutiveLadderRank(hand);
+        const rank = numberRank(clickedCard);
+        if (maxRank < 1 || rank < 0 || rank > maxRank) return null;
+        for (let end = maxRank; end >= 1; end -= 1) {
+            const ladder = buildLadderCards(hand, end, clickedCard);
+            if (ladder
+                && ladder.length >= 2
+                && isValidLadder(ladder)
+                && canPlayLadder(state, playerId, ladder)) {
+                return ladder;
+            }
+        }
+        return null;
+    }
+
+    /** La scala si ancora al tavolo con l'ultima carta giocata (es. 0→1 su un 3 blu: vale il 1 blu). */
+    function canPlayLadder(state, playerId, cards) {
+        if (!isValidLadder(cards)) return false;
+        if (currentPlayerId(state) !== playerId) return false;
+        syncTurnFlags(state);
+        if (state.turnFlags.played) return false;
+        if (blocksFinishingPlay(state, playerId, cards)) return false;
+        const anchor = cards[cards.length - 1];
+        return ladderAnchorMatchesTop(state, anchor);
+    }
+
+    function hasLadderOption(state, playerId, instanceId) {
+        const ladder = getLadderPlay(state, playerId, instanceId);
+        return ladder.length > 1 && isValidLadder(ladder);
     }
 
     function getLadderPlay(state, playerId, instanceId) {
         const hand = state.hands[playerId] || [];
         const card = hand.find(c => c.instanceId === instanceId);
         if (!card || card.kind !== 'number') return card ? [card] : [];
+        if (currentPlayerId(state) !== playerId) return [card];
+        syncTurnFlags(state);
+        if (state.turnFlags.played) return [card];
 
-        const color = card.color;
-        const idx = numberRank(card);
-        if (idx < 1) return [card];
+        const rank = numberRank(card);
+        const maxRank = maxConsecutiveLadderRank(hand);
+        if (maxRank < 1 || rank < 0 || rank > maxRank) return [card];
 
-        const atRank = rank => hand.filter(c =>
-            c.kind === 'number' && c.color === color && numberRank(c) === rank);
+        const ladder = buildMaxPlayableLadderFromHand(state, playerId, hand, card);
+        if (!ladder) return [card];
+        return ladder;
+    }
 
-        if (!atRank(0).length || !canPlayCard(state, atRank(0)[0])) return [card];
+    function ladderRankOptions(hand, rank) {
+        return (hand || []).filter(c => c.kind === 'number' && numberRank(c) === rank);
+    }
 
-        for (let v = 0; v <= idx; v += 1) {
-            if (!atRank(v).length) return [card];
+    function lastIndexOfLadderRank(cards, rank) {
+        for (let i = cards.length - 1; i >= 0; i -= 1) {
+            if (numberRank(cards[i]) === rank) return i;
+        }
+        return -1;
+    }
+
+    /** Inserisce un'altra copia dello stesso valore subito dopo l'ultima già in scala (es. 0→1→2 + 1 → 0→1→1→2). */
+    function tryInsertLadderDuplicate(cards, hand, card) {
+        if (!isValidLadder(cards) || !card || card.kind !== 'number') return null;
+        if (cards.some(c => c.instanceId === card.instanceId)) return null;
+
+        const rank = numberRank(card);
+        const counts = ladderRankCounts(cards);
+        if (!counts[rank]) return null;
+
+        const inHand = ladderCardsAtRank(hand, rank).length;
+        const inLadder = counts[rank] || 0;
+        if (inLadder >= inHand) return null;
+
+        const lastIdx = lastIndexOfLadderRank(cards, rank);
+        if (lastIdx < 0) return null;
+
+        const next = [...cards];
+        next.splice(lastIdx + 1, 0, card);
+        return isValidLadder(next) ? next : null;
+    }
+
+    function unusedLadderDuplicateRanks(cards, hand) {
+        const counts = ladderRankCounts(cards);
+        const ranks = [];
+        Object.keys(counts).forEach(key => {
+            const r = Number(key);
+            const inHand = ladderCardsAtRank(hand, r).length;
+            const inLadder = counts[r] || 0;
+            if (inLadder > 0 && inLadder < inHand) ranks.push(r);
+        });
+        return ranks;
+    }
+
+    function tryAppendLadderCard(state, playerId, cards, card, hand) {
+        if (!cards?.length || !card || card.kind !== 'number') return null;
+        if (cards.length === 1 && !isValidLadder(cards) && numberRank(cards[0]) === 0 && numberRank(card) === 1) {
+            const next = [...cards, card];
+            return isValidLadder(next) ? next : null;
+        }
+        if (!isValidLadder(cards)) return null;
+        if (cards.some(c => c.instanceId === card.instanceId)) return null;
+        const targetRank = nextLadderAppendRank(cards, hand || []);
+        if (numberRank(card) !== targetRank) return null;
+        const next = [...cards, card];
+        if (!isValidLadder(next)) return null;
+        if (next.length >= 2 && !canPlayLadder(state, playerId, next)) return null;
+        return next;
+    }
+
+    function cycleLadderRankCard(cards, hand, card) {
+        if (!isValidLadder(cards) || !card || card.kind !== 'number') return null;
+        const idx = cards.findIndex(c => c.instanceId === card.instanceId);
+        if (idx < 0) return null;
+        const rank = numberRank(card);
+        const options = ladderRankOptions(hand, rank);
+        if (options.length <= 1) return null;
+        const current = cards[idx];
+        const curIdx = options.findIndex(c => c.instanceId === current.instanceId);
+        const pick = options[(curIdx + 1) % options.length];
+        const next = [...cards];
+        next[idx] = pick;
+        return isValidLadder(next) ? next : null;
+    }
+
+    function trySwapLadderRankCard(cards, card, hand) {
+        if (!cards?.length || !isValidLadder(cards) || !card || card.kind !== 'number') return null;
+        const rank = numberRank(card);
+        if (cards.some(c => c.instanceId === card.instanceId)) {
+            return cycleLadderRankCard(cards, hand, card);
         }
 
-        const ladder = [];
-        for (let v = 0; v <= idx; v += 1) {
-            if (v === idx) {
-                ladder.push(card);
-            } else {
-                const options = atRank(v);
-                ladder.push(options.find(c => canPlayCard(state, c)) || options[0]);
+        const inserted = tryInsertLadderDuplicate(cards, hand, card);
+        if (inserted) return inserted;
+
+        const idx = cards.findIndex(c => numberRank(c) === rank);
+        if (idx < 0) return null;
+        const next = [...cards];
+        next[idx] = card;
+        return isValidLadder(next) ? next : null;
+    }
+
+    /** Aggiunge uno 0 davanti se la selezione partiva da 1, 2… */
+    function tryPrependLadderCard(cards, card) {
+        if (!card || card.kind !== 'number' || numberRank(card) !== 0) return null;
+        if (!cards?.length) return [card];
+        const minRank = Math.min(...cards.map(c => numberRank(c)));
+        if (minRank === 0) return null;
+        const next = [card, ...cards].sort((a, b) => numberRank(a) - numberRank(b));
+        return isValidLadder(next) ? next : null;
+    }
+
+    /** Tocca carte in sequenza: cambia copia, aggiungi 0, allunga o scala massima. */
+    function tryIntegrateLadderCard(state, playerId, hand, cards, card) {
+        if (!card || card.kind !== 'number' || !cards?.length) return null;
+
+        if (cards.length === 1 && !isValidLadder(cards)) {
+            const only = cards[0];
+            const onlyRank = numberRank(only);
+            const rank = numberRank(card);
+            if (rank === onlyRank) {
+                const options = ladderRankOptions(hand, rank);
+                if (options.length > 1) {
+                    const curIdx = options.findIndex(c => c.instanceId === only.instanceId);
+                    const pick = options[(curIdx + 1) % options.length];
+                    return [pick];
+                }
+            }
+            const prepended = tryPrependLadderCard(cards, card);
+            if (prepended) return prepended;
+        }
+
+        const inserted = tryInsertLadderDuplicate(cards, hand, card);
+        if (inserted) return inserted;
+
+        const swapped = trySwapLadderRankCard(cards, card, hand);
+        if (swapped) return swapped;
+
+        const prepended = tryPrependLadderCard(cards, card);
+        if (prepended) return prepended;
+
+        const extended = tryAppendLadderCard(state, playerId, cards, card, hand);
+        if (extended) return extended;
+
+        const maxLadder = buildMaxPlayableLadderFromHand(state, playerId, hand, card);
+        if (maxLadder && maxLadder.length > (cards?.length || 0)) return maxLadder;
+
+        if (isValidLadder(cards)) {
+            const dupRanks = unusedLadderDuplicateRanks(cards, hand);
+            if (dupRanks.includes(numberRank(card))) {
+                return tryInsertLadderDuplicate(cards, hand, card);
             }
         }
-        return ladder.length >= 2 ? ladder : [card];
+
+        return null;
     }
 
     function getSameNumberBatch(state, playerId, instanceId) {
@@ -1180,7 +1645,9 @@
         if (!cards?.length) return false;
         if (currentPlayerId(state) !== playerId) return false;
         syncTurnFlags(state);
-        if (state.turnFlags.played) return false;
+        if (state.turnFlags.played) {
+            return cards.every(c => canStackOnOwnTurn(state, playerId, c));
+        }
         const key = cardMultiPlayKey(cards[0]);
         const allMatch = cards.every(c =>
             cardMultiPlayKey(c) === key
@@ -1188,8 +1655,10 @@
         );
         if (!allMatch) return false;
         if (groupsMultiColorByValue(cards[0])) {
+            if (blocksFinishingPlay(state, playerId, cards)) return false;
             return cards.some(c => canPlayCard(state, c, playerId));
         }
+        if (blocksFinishingPlay(state, playerId, cards)) return false;
         return cards.every(c => canPlayCard(state, c, playerId));
     }
 
@@ -1205,8 +1674,7 @@
             return canPlaySixSevenBatch(state, playerId, cards);
         }
         if (isValidLadder(cards)) {
-            const sorted = [...cards].sort((a, b) => numberRank(a) - numberRank(b));
-            return numberRank(sorted[0]) === 0 && canPlayCard(state, sorted[0]);
+            return canPlayLadder(state, playerId, cards);
         }
         return canPlayDuplicateBatch(state, playerId, cards);
     }
@@ -1407,9 +1875,6 @@
             return { ok: false, error: 'Non è il tuo turno.' };
         }
         syncTurnFlags(s);
-        if (s.turnFlags.played) {
-            return { ok: false, error: 'Hai già giocato in questo turno. Premi Finisci Turno.' };
-        }
         if (!instanceIds?.length) {
             return { ok: false, error: 'Nessuna carta selezionata.' };
         }
@@ -1420,17 +1885,22 @@
             return { ok: false, error: 'Carta non in mano.' };
         }
 
-        if (cards.length > 1 && groupsMultiColorByValue(cards[0])) {
-            const playable = cards.filter(c => canPlayCard(s, c, playerId));
-            const rest = cards.filter(c => !playable.some(p => p.instanceId === c.instanceId));
-            if (playable.length) {
-                cards.splice(0, cards.length, ...playable, ...rest);
+        if (s.turnFlags.played) {
+            const canContinueStack = cards.every(c => canStackOnOwnTurn(s, playerId, c));
+            if (!canContinueStack) {
+                return { ok: false, error: 'Hai già giocato in questo turno. Premi Finisci Turno.' };
             }
         }
 
-        const first = cards[0];
-        if (!canPlayCardThisTurn(s, playerId, first)) {
-            return { ok: false, error: 'Carta non giocabile.' };
+        const playingBlobby = cards.some(c => c.value === 'blobby');
+        if (playingBlobby && !hasShield(s, playerId)) {
+            return { ok: false, error: 'Per giocare Blobby devi avere uno Scudo in mano.' };
+        }
+        if (cards.some(c => c.value === 'mirror')) {
+            return { ok: false, error: 'Specchio si gioca solo per contrastare uno stack entro il tempo.' };
+        }
+        if (blocksFinishingPlay(s, playerId, cards)) {
+            return { ok: false, error: 'Come ultima carta puoi giocare solo carte numeriche.' };
         }
 
         if (cards.length > 1) {
@@ -1438,11 +1908,26 @@
                 return { ok: false, error: 'Puoi giocare insieme copie uguali, scala 0→1→2… o SixSeven (6+7).' };
             }
             if (isValidLadder(cards)) {
-                cards.sort((a, b) => numberRank(a) - numberRank(b));
+                const ordered = sortLadderPlayOrder(cards);
+                cards.splice(0, cards.length, ...ordered);
             } else if (isValidSixSeven(cards)) {
                 cards.sort((a, b) => numberRank(a) - numberRank(b));
-            } else if (!canPlayDuplicateBatch(s, playerId, cards)) {
-                return { ok: false, error: 'Queste carte non possono essere giocate insieme.' };
+            } else {
+                if (groupsMultiColorByValue(cards[0])) {
+                    const playable = cards.filter(c => canPlayCard(s, c, playerId));
+                    const rest = cards.filter(c => !playable.some(p => p.instanceId === c.instanceId));
+                    if (playable.length) {
+                        cards.splice(0, cards.length, ...playable, ...rest);
+                    }
+                }
+                if (!canPlayDuplicateBatch(s, playerId, cards)) {
+                    return { ok: false, error: 'Queste carte non possono essere giocate insieme.' };
+                }
+            }
+        } else {
+            const first = cards[0];
+            if (!canPlayCardThisTurn(s, playerId, first)) {
+                return { ok: false, error: 'Carta non giocabile.' };
             }
         }
 
@@ -1460,6 +1945,14 @@
 
         cards.forEach(c => removeFromHand(s.hands, playerId, c.instanceId));
         cards.forEach(c => s.discardPile.push(c));
+        if (playingBlobby) {
+            const shield = takeShieldFromHand(s, playerId);
+            if (!shield) {
+                return { ok: false, error: 'Scudo richiesto per giocare Blobby.' };
+            }
+            s.discardPile.push(shield);
+            addLog(s, `${s.players[playerId]?.nickname} scarta Scudo insieme a Blobby.`);
+        }
         const card = cards[cards.length - 1];
         s.topCard = card;
         if (options.chosenColor) {
@@ -1470,11 +1963,21 @@
             s.activeColor = card.color;
         }
 
-        const stacking = s.drawStack > 0 && s.settings.stack
-            && (card.value === 'draw2' || card.value === 'wild4');
-        if (!stacking) {
-            s.drawStack = 0;
-            s.drawStackType = null;
+        const ownStackBuild = s.stackPassPending && s.stackSourcePlayerId === playerId
+            && isStackDrawValue(card.value);
+        const defenderStacking = s.drawStack > 0 && s.settings.stack
+            && (card.value === 'draw2' || card.value === 'wild4')
+            && isDrawStackWindow(s);
+        if (!ownStackBuild && !defenderStacking) {
+            if (!s.stackPassPending || s.stackSourcePlayerId !== playerId) {
+                s.drawStack = 0;
+                s.drawStackType = null;
+            }
+            if (!isStackDrawValue(card.value)) {
+                s.stackPassPending = false;
+                s.stackDefenderId = null;
+                s.stackSourcePlayerId = null;
+            }
         }
         const playLabel = cards.length > 1
             ? `${cards.length}× ${Deck.cardDisplayName(card)}`
@@ -1509,7 +2012,14 @@
         if (s.status === 'finished') {
             return { ok: true, state: s, outcome: 'win' };
         }
-        if (['counterWindow', 'brainrotBattle', 'drawStackWindow', 'brainrotDiscard', 'mariGreen', 'bulletRoulette'].includes(s.pendingAction?.type)) {
+        if (s.pendingAction?.type === 'brainrotBattle') {
+            const finished = finishBrainrotBattleIfReady(s);
+            if (finished.ok) {
+                return { ok: true, state: finished.state, defer: true };
+            }
+            return { ok: true, state: s, defer: true };
+        }
+        if (['counterWindow', 'drawStackWindow', 'brainrotDiscard', 'mariGreen', 'bulletRoulette', 'chooseColor', 'chooseTarget'].includes(s.pendingAction?.type)) {
             return { ok: true, state: s, defer: true };
         }
         const outcome = checkWinOrUnoPenalty(s, playerId);
@@ -1542,19 +2052,8 @@
                 }
                 return { ok: true };
             case 'draw2': {
-                const defender = nextPlayerId(state);
-                if (settings.stack && (state.drawStackType === 'draw2' || state.drawStack === 0)) {
-                    state.drawStack += 2;
-                    state.drawStackType = 'draw2';
-                    addLog(state, `Stack +2 (totale ${state.drawStack}).`);
-                    openDrawStackWindow(state, defender, playerId);
-                } else {
-                    state.drawStack = 2;
-                    state.drawStackType = 'draw2';
-                    openDrawStackWindow(state, defender, playerId);
-                }
-                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
-                return { ok: true, defer: true };
+                addToStackPass(state, playerId, 2, 'draw2');
+                return { ok: true };
             }
             case 'wild':
                 if (!options.chosenColor) {
@@ -1563,43 +2062,21 @@
                 }
                 return { ok: true };
             case 'wild4': {
-                const defender = nextPlayerId(state);
-                if (settings.stack && (state.drawStackType === 'wild4' || state.drawStack === 0)) {
-                    state.drawStack += 4;
-                    state.drawStackType = 'wild4';
-                    addLog(state, `Stack +4 (totale ${state.drawStack}).`);
-                    if (options.chosenColor) {
-                        openDrawStackWindow(state, defender, playerId);
-                        state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
-                    }
-                } else if (!options.chosenColor) {
-                    state.drawStack = 4;
-                    state.drawStackType = 'wild4';
+                if (!options.chosenColor) {
                     state.pendingColor = true;
-                    state.pendingAction = { type: 'chooseColor', playerId, drawStackDefender: defender };
-                } else {
-                    state.drawStack = 4;
-                    state.drawStackType = 'wild4';
-                    openDrawStackWindow(state, defender, playerId);
-                    state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
+                    state.pendingAction = { type: 'chooseColor', playerId };
+                    return { ok: true };
                 }
-                return { ok: true, defer: options.chosenColor || !options.chosenColor };
+                addToStackPass(state, playerId, 4, 'wild4');
+                return { ok: true };
             }
             case 'draw10': {
-                const defender = nextPlayerId(state);
-                state.drawStack = 10;
-                state.drawStackType = 'draw10';
-                openDrawStackWindow(state, defender, playerId);
-                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
-                return { ok: true, defer: true };
+                addToStackPass(state, playerId, 10, 'draw10');
+                return { ok: true };
             }
             case 'draw16': {
-                const defender = nextPlayerId(state);
-                state.drawStack = 16;
-                state.drawStackType = 'draw16';
-                openDrawStackWindow(state, defender, playerId);
-                state.turnAdvanceSteps = (state.turnAdvanceSteps || 0) + 1;
-                return { ok: true, defer: true };
+                addToStackPass(state, playerId, 16, 'draw16');
+                return { ok: true };
             }
             case 'death': {
                 const target = options.targetId || nextPlayerId(state);
@@ -1635,8 +2112,7 @@
                 return { ok: true };
             }
             case 'vaff':
-                state.drawStack = 0;
-                state.drawStackType = null;
+                clearStackPassState(state);
                 state.forcedColor = null;
                 addLog(state, 'Vaffanculo! Stack e vincoli annullati.');
                 return { ok: true };
@@ -1680,8 +2156,7 @@
                 return { ok: true };
             }
             case 'reset':
-                state.drawStack = 0;
-                state.drawStackType = null;
+                clearStackPassState(state);
                 state.forcedColor = null;
                 state.pendingColor = false;
                 if (state.pendingAction?.type !== 'defense') {
@@ -1747,8 +2222,7 @@
                 }
                 return { ok: true };
             case 'mirror':
-                addLog(state, 'Specchio: gioca durante stack +2/+4 o contrasto.');
-                return { ok: true };
+                return { ok: false, error: 'Specchio si usa solo per contrastare uno stack entro il tempo.' };
             case 'jack':
                 addLog(state, 'Jack: copia ultima azione.');
                 return { ok: true };
@@ -1790,11 +2264,17 @@
         return (state.hands[playerId] || []).some(c => c.value === 'shield');
     }
 
-    function consumeShield(state, playerId) {
+    function takeShieldFromHand(state, playerId) {
         const hand = state.hands[playerId] || [];
         const idx = hand.findIndex(c => c.value === 'shield');
-        if (idx !== -1) hand.splice(idx, 1);
+        if (idx === -1) return null;
+        const [shield] = hand.splice(idx, 1);
         syncHandCounts(state);
+        return shield;
+    }
+
+    function consumeShield(state, playerId) {
+        takeShieldFromHand(state, playerId);
     }
 
     function eliminatePlayer(state, playerId) {
@@ -1885,14 +2365,12 @@
         if (!isValidPlayColor(color)) {
             return { ok: false, error: 'Scegli Rosso, Giallo, Verde o Blu.' };
         }
-        const drawTarget = s.pendingAction?.drawStackDefender || nextPlayerId(s);
         s.activeColor = color;
         s.pendingColor = false;
         s.pendingAction = null;
         addLog(s, `Colore scelto: ${Deck.COLOR_LABEL[color] || color}`);
-        if (s.drawStack > 0) {
-            openDrawStackWindow(s, drawTarget, playerId);
-            s.turnAdvanceSteps = (s.turnAdvanceSteps || 0) + 1;
+        if (s.topCard?.value === 'wild4' && !s.stackPassPending) {
+            addToStackPass(s, playerId, 4, 'wild4');
         }
         return { ok: true, state: s };
     }
@@ -1983,6 +2461,9 @@
         canPlayDrawStackResponse,
         canBrainrotDiscardCard,
         isBrainrotCard,
+        isDiscardableNumberCard,
+        brainrotBattleCanClose,
+        finishBrainrotBattleIfReady,
         isPendingTimedWindow,
         canPlayCounter,
         canPlayCard,
@@ -2002,6 +2483,19 @@
         isValidSixSeven,
         canPlaySixSevenBatch,
         getLadderPlay,
+        hasLadderOption,
+        tryAppendLadderCard,
+        trySwapLadderRankCard,
+        tryPrependLadderCard,
+        tryIntegrateLadderCard,
+        tryInsertLadderDuplicate,
+        cycleLadderRankCard,
+        ladderRankOptions,
+        unusedLadderDuplicateRanks,
+        buildMaxLadderFromHand,
+        buildMaxPlayableLadderFromHand,
+        getInitialLadderFromCard,
+        nextLadderAppendRank,
         playMariGreenCard,
         canPlayMariGreen,
         isValidLadder,

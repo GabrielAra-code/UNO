@@ -3,8 +3,9 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#070f24">
+    <meta name="theme-color" content="#2563eb">
     <title>UNO? REVOLUTION - Hub</title>
+    <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/mobile.css">
     <script src="https://cdn.tailwindcss.com"></script>
 
@@ -13,7 +14,6 @@
 
         body {
             font-family: 'Nunito', sans-serif;
-            background: radial-gradient(circle at center, #0f1e43 0%, #070f24 100%) !important;
             user-select: none;
         }
 
@@ -39,6 +39,310 @@
         .btn-red { background-color: #ef4444; color: #ffffff; box-shadow: 0 8px 0 #b91c1c; }
         .btn-slate { background-color: #475569; color: #ffffff; box-shadow: 0 8px 0 #1e293b; }
         .btn-emerald { background-color: #10b981; color: #ffffff; box-shadow: 0 8px 0 #047857; }
+        .btn-orange { background-color: #f97316; color: #431407; box-shadow: 0 8px 0 #c2410c; }
+        .btn-amber { background-color: #f59e0b; color: #451a03; box-shadow: 0 8px 0 #b45309; }
+
+        .mode-picker-grid {
+            display: grid;
+            grid-template-columns: 1fr;
+            gap: 0.75rem;
+        }
+
+        .mode-picker-card {
+            display: flex;
+            align-items: center;
+            gap: 0.85rem;
+            width: 100%;
+            padding: 1rem 1.1rem;
+            border-radius: 1.25rem;
+            border: 2px solid rgba(30, 41, 59, 0.9);
+            background: rgba(0, 0, 0, 0.42);
+            text-align: left;
+            cursor: pointer;
+            transition: transform 0.12s ease, filter 0.12s ease;
+        }
+
+        .mode-picker-card:hover {
+            transform: translateY(-2px);
+            filter: brightness(1.08);
+        }
+
+        .mode-picker-icon {
+            font-size: 2rem;
+            line-height: 1;
+            flex-shrink: 0;
+        }
+
+        .mode-picker-title {
+            display: block;
+            font-size: 1rem;
+            font-weight: 900;
+            color: #fde68a;
+            text-transform: uppercase;
+        }
+
+        .mode-picker-sub {
+            display: block;
+            font-size: 0.68rem;
+            font-weight: 700;
+            color: #94a3b8;
+            margin-top: 0.15rem;
+        }
+
+        .story-map-wrap {
+            max-height: 62vh;
+            overflow-y: auto;
+            padding-right: 0.25rem;
+        }
+
+        .story-map-path-deco {
+            text-align: center;
+            font-size: 3rem;
+            margin-bottom: 0.5rem;
+            filter: drop-shadow(0 4px 0 rgba(0,0,0,0.35));
+        }
+
+        .story-map-track {
+            display: flex;
+            flex-direction: column;
+            gap: 0.55rem;
+            position: relative;
+            padding: 0.25rem 0 0.5rem;
+        }
+
+        .story-map-track::before {
+            content: '';
+            position: absolute;
+            left: 50%;
+            top: 0;
+            bottom: 0;
+            width: 4px;
+            transform: translateX(-50%);
+            background: repeating-linear-gradient(
+                180deg,
+                #f59e0b 0 10px,
+                transparent 10px 18px
+            );
+            opacity: 0.45;
+            border-radius: 4px;
+        }
+
+        .story-map-row {
+            display: flex;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        .story-map-row--left { justify-content: flex-start; padding-right: 42%; }
+        .story-map-row--right { justify-content: flex-end; padding-left: 42%; }
+
+        .story-map-node {
+            display: flex;
+            align-items: center;
+            gap: 0.65rem;
+            width: min(100%, 15.5rem);
+            padding: 0.65rem 0.75rem;
+            border-radius: 1rem;
+            border: 2px solid #334155;
+            background: linear-gradient(145deg, #1e293b, #0f172a);
+            color: #e2e8f0;
+            cursor: pointer;
+            transition: transform 0.12s ease, box-shadow 0.12s ease;
+        }
+
+        .story-map-node.is-unlocked:hover:not(:disabled) {
+            transform: translateY(-2px) scale(1.02);
+            box-shadow: 0 6px 0 rgba(0,0,0,0.35);
+        }
+
+        .story-map-node.is-locked {
+            opacity: 0.45;
+            cursor: not-allowed;
+        }
+
+        .story-map-node.is-done {
+            border-color: #10b981;
+        }
+
+        .story-map-node.is-current {
+            border-color: #f59e0b;
+            box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.35);
+        }
+
+        .story-map-node-num {
+            width: 2rem;
+            height: 2rem;
+            border-radius: 999px;
+            background: #f59e0b;
+            color: #451a03;
+            font-weight: 900;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .story-map-node-info {
+            flex: 1;
+            min-width: 0;
+            text-align: left;
+        }
+
+        .story-map-node-name {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 900;
+            color: #fef3c7;
+        }
+
+        .story-map-node-sub {
+            display: block;
+            font-size: 0.62rem;
+            font-weight: 700;
+            color: #94a3b8;
+        }
+
+        .story-map-node-badge {
+            font-size: 1rem;
+            flex-shrink: 0;
+        }
+
+        .tutorial-step-card {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+            width: 100%;
+            padding: 0.75rem 0.85rem;
+            border-radius: 1rem;
+            border: 2px solid #334155;
+            background: rgba(0, 0, 0, 0.38);
+            text-align: left;
+            cursor: pointer;
+        }
+
+        .tutorial-step-card.is-locked {
+            opacity: 0.42;
+            cursor: not-allowed;
+        }
+
+        .tutorial-step-card.is-done {
+            border-color: #10b981;
+        }
+
+        .tutorial-step-card:not(.is-locked):hover {
+            transform: translateY(-1px);
+            filter: brightness(1.06);
+        }
+
+        .tutorial-step-icon { font-size: 1.75rem; }
+        .tutorial-step-body { flex: 1; min-width: 0; }
+        .tutorial-step-title {
+            display: block;
+            font-size: 0.82rem;
+            font-weight: 900;
+            color: #fde68a;
+        }
+        .tutorial-step-summary {
+            display: block;
+            font-size: 0.65rem;
+            color: #94a3b8;
+            font-weight: 700;
+        }
+        .tutorial-step-go { font-size: 1rem; color: #67e8f9; }
+
+        .training-field {
+            display: flex;
+            flex-direction: column;
+            gap: 0.35rem;
+            margin-bottom: 0.85rem;
+        }
+
+        .training-field label {
+            font-size: 0.68rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            color: #94a3b8;
+        }
+
+        .training-range-row {
+            display: flex;
+            align-items: center;
+            gap: 0.75rem;
+        }
+
+        .training-range-row input[type="range"] {
+            flex: 1;
+            accent-color: #f59e0b;
+        }
+
+        .training-range-val {
+            min-width: 2.5rem;
+            text-align: center;
+            font-weight: 900;
+            color: #fde68a;
+        }
+
+        .training-select, .training-check-row {
+            width: 100%;
+            border-radius: 0.85rem;
+            border: 2px solid #334155;
+            background: #0f172a;
+            color: #e2e8f0;
+            padding: 0.55rem 0.75rem;
+            font-weight: 800;
+            font-size: 0.82rem;
+        }
+
+        .training-check-row {
+            display: flex;
+            align-items: center;
+            gap: 0.55rem;
+            cursor: pointer;
+        }
+
+        .hub-updates-side {
+            position: fixed;
+            right: max(1rem, env(safe-area-inset-right, 0px));
+            top: 50%;
+            transform: translateY(-50%);
+            z-index: 25;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 0.4rem;
+            padding: 1rem 0.9rem;
+            min-width: 4.75rem;
+            border-radius: 1.35rem;
+        }
+
+        .hub-updates-side .hub-updates-icon {
+            font-size: 1.65rem;
+            line-height: 1;
+        }
+
+        .hub-updates-side .hub-updates-label {
+            font-size: 0.62rem;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            text-align: center;
+            line-height: 1.15;
+        }
+
+        @media (max-width: 640px) {
+            .hub-updates-side {
+                right: max(0.5rem, env(safe-area-inset-right, 0px));
+                padding: 0.75rem 0.65rem;
+                min-width: 3.75rem;
+            }
+
+            .hub-updates-side .hub-updates-label {
+                font-size: 0.55rem;
+            }
+        }
 
         .success-check-icon,
         .confirm-announce-icon {
@@ -741,6 +1045,7 @@
     <script src="js/lobby-list.js"></script>
     <script src="js/announcements.js"></script>
     <script src="js/admin-panel.js"></script>
+    <script src="js/game-modes.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getAuth, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js";
@@ -966,6 +1271,10 @@
         <!-- Menu Principale -->
         <main class="hub-main flex-1 flex items-center justify-center">
             <div class="hub-menu-grid grid grid-cols-2 gap-4 max-w-xl w-full">
+                <button onclick="openModal('modal-modes')" class="col-span-2 btn-chunky btn-amber p-4 flex items-center justify-center gap-3 cursor-pointer" data-sound="bloop">
+                    <span class="text-2xl">🎯</span>
+                    <span class="text-lg font-black">Modalità</span>
+                </button>
                 <button onclick="openModal('modal-create')" class="btn-chunky btn-yellow p-5 flex flex-col items-center justify-center gap-1.5 cursor-pointer" data-sound="bloop">
                     <span class="text-3xl">🎮</span>
                     <span class="text-base font-black">Crea Stanza</span>
@@ -982,18 +1291,18 @@
                     <span class="text-3xl">⚙️</span>
                     <span class="text-base font-black">Opzioni</span>
                 </button>
-                
                 <button onclick="openModal('modal-rules')" class="col-span-2 btn-chunky btn-emerald p-4 flex items-center justify-center gap-3 cursor-pointer" data-sound="bloop">
                     <span class="text-2xl">📋</span>
                     <span class="text-lg font-black">Regole del Gioco</span>
                 </button>
-                <button onclick="openModal('modal-updates')" class="col-span-2 btn-chunky btn-emerald p-4 flex items-center justify-center gap-3 cursor-pointer" data-sound="bloop">
-                    <span class="text-2xl">📢</span>
-                    <span class="text-lg font-black">Updates</span>
-                </button>
             </div>
         </main>
     </div>
+
+    <button type="button" onclick="openModal('modal-updates')" class="hub-updates-side btn-chunky btn-orange cursor-pointer" data-sound="bloop" title="Updates e annunci">
+        <span class="hub-updates-icon" aria-hidden="true">📢</span>
+        <span class="hub-updates-label">Updates</span>
+    </button>
 
 <div id="modal-loading-room"
      class="hidden fixed inset-0 z-[9999] flex items-center justify-center bg-black/75 backdrop-blur-sm">
@@ -1389,6 +1698,86 @@
             <div id="public-lobbies-list" class="space-y-2 max-h-[68vh] overflow-y-auto custom-scroll pr-1"></div>
         </div>
 
+        <!-- MODALITÀ -->
+        <div id="modal-modes" class="modal-content hidden game-panel-dark w-full max-w-lg p-6 rounded-3xl relative">
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-2xl font-black text-amber-400 mb-4 tracking-wide text-center uppercase">🎯 Modalità</h2>
+            <p class="text-[11px] text-slate-400 font-bold text-center mb-4">Gioca offline contro i bot</p>
+            <div class="mode-picker-grid">
+                <button type="button" class="mode-picker-card" onclick="openModal('modal-story-map')" data-sound="bloop">
+                    <span class="mode-picker-icon">🗺️</span>
+                    <span>
+                        <span class="mode-picker-title">Storia</span>
+                        <span class="mode-picker-sub">10 tappe contro i bot — sblocca la mappa</span>
+                    </span>
+                </button>
+                <button type="button" class="mode-picker-card" onclick="openModal('modal-tutorial')" data-sound="bloop">
+                    <span class="mode-picker-icon">📖</span>
+                    <span>
+                        <span class="mode-picker-title">Tutorial</span>
+                        <span class="mode-picker-sub">Impara le carte passo dopo passo</span>
+                    </span>
+                </button>
+                <button type="button" class="mode-picker-card" onclick="openModal('modal-training')" data-sound="bloop">
+                    <span class="mode-picker-icon">⚔️</span>
+                    <span>
+                        <span class="mode-picker-title">Allenamento</span>
+                        <span class="mode-picker-sub">Scegli bot (1–14) e difficoltà</span>
+                    </span>
+                </button>
+            </div>
+        </div>
+
+        <div id="modal-story-map" class="modal-content hidden game-panel-dark w-full max-w-lg p-6 rounded-3xl relative">
+            <button type="button" onclick="openModal('modal-modes')" class="absolute -top-3 -left-3 w-10 h-10 btn-chunky btn-slate flex items-center justify-center text-sm cursor-pointer" data-sound="pop">←</button>
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-2xl font-black text-amber-400 mb-1 tracking-wide text-center uppercase">🗺️ Mappa Storia</h2>
+            <p id="story-map-progress" class="text-[10px] text-cyan-400 font-bold text-center uppercase tracking-wider mb-3">—</p>
+            <div class="story-map-wrap custom-scroll">
+                <div class="story-map-path-deco" aria-hidden="true">🗺️</div>
+                <div id="story-map-nodes" class="story-map-track"></div>
+            </div>
+        </div>
+
+        <div id="modal-tutorial" class="modal-content hidden game-panel-dark w-full max-w-lg p-6 rounded-3xl relative">
+            <button type="button" onclick="openModal('modal-modes')" class="absolute -top-3 -left-3 w-10 h-10 btn-chunky btn-slate flex items-center justify-center text-sm cursor-pointer" data-sound="pop">←</button>
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-2xl font-black text-cyan-400 mb-3 tracking-wide text-center uppercase">📖 Tutorial</h2>
+            <div id="tutorial-steps-list" class="space-y-2 max-h-[62vh] overflow-y-auto custom-scroll pr-1"></div>
+        </div>
+
+        <div id="modal-training" class="modal-content hidden game-panel-dark w-full max-w-md p-6 rounded-3xl relative">
+            <button type="button" onclick="openModal('modal-modes')" class="absolute -top-3 -left-3 w-10 h-10 btn-chunky btn-slate flex items-center justify-center text-sm cursor-pointer" data-sound="pop">←</button>
+            <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
+            <h2 class="text-2xl font-black text-pink-400 mb-4 tracking-wide text-center uppercase">⚔️ Allenamento</h2>
+            <div class="training-field">
+                <label for="training-bots">Numero bot (1–14)</label>
+                <div class="training-range-row">
+                    <input type="range" id="training-bots" min="1" max="14" value="2" step="1">
+                    <span id="training-bots-val" class="training-range-val">2</span>
+                </div>
+            </div>
+            <div class="training-field">
+                <label for="training-diff">Difficoltà bot</label>
+                <select id="training-diff" class="training-select">
+                    <option value="easy">Facile</option>
+                    <option value="medium" selected>Media</option>
+                    <option value="hard">Difficile</option>
+                </select>
+            </div>
+            <label class="training-check-row training-field">
+                <input type="checkbox" id="training-stack" checked>
+                <span>Modalità Stack attiva</span>
+            </label>
+            <label class="training-check-row training-field">
+                <input type="checkbox" id="training-brainrot" checked>
+                <span>Carte Brainrot attive</span>
+            </label>
+            <button type="button" id="training-start-btn" class="btn-chunky btn-yellow w-full py-3.5 text-sm font-black mt-2 cursor-pointer" data-sound="bloop">
+                Inizia partita
+            </button>
+        </div>
+
         <!-- 7b. POPUP UPDATES / ANNUNCI -->
         <div id="modal-updates" class="modal-content hidden game-panel-dark w-full max-w-2xl p-6 rounded-3xl relative">
             <button onclick="closeModal()" class="absolute -top-3 -right-3 w-10 h-10 btn-chunky btn-red flex items-center justify-center text-sm cursor-pointer" data-sound="pop">X</button>
@@ -1485,7 +1874,7 @@
                     <h3 class="text-cyan-400 font-black text-sm uppercase">👑 VITTORIE ISTANTANEE SPECIALI</h3>
                     <div class="bg-slate-950/60 text-[11px] p-2.5 rounded-xl border border-slate-800 text-slate-300 space-y-2">
                         <div>
-                            <span class="text-cyan-400">Blobby:</span> Tenta una vittoria istantanea contro il bersaglio. Se il bersaglio possiede uno <span class="text-emerald-400">Scudo</span>, lo Scudo viene consumato e il bersaglio sopravvive. 
+                            <span class="text-cyan-400">Blobby:</span> Puoi giocarla <span class="text-white font-black">solo se hai uno Scudo in mano</span>: Blobby e Scudo vengono scartati insieme. Tenta una vittoria istantanea contro il bersaglio. Se il bersaglio possiede uno <span class="text-emerald-400">Scudo</span>, lo Scudo viene consumato e il bersaglio sopravvive. 
                             <p class="text-[10px] text-red-400 mt-0.5">⚠️ Interazione Comunismo: Se un avversario risponde con Comunismo, la vittoria si blocca, appare il messaggio "NOI ABBIAMO VINTO" e la partita prosegue in un duello 1vs1.</p>
                         </div>
                         <hr class="border-slate-800">
@@ -1590,7 +1979,17 @@
             if (id === 'modal-updates') {
                 window.refreshUpdatesModal?.();
             }
+            if (id === 'modal-story-map') {
+                window.GameModes?.renderStoryMap?.();
+            }
+            if (id === 'modal-tutorial') {
+                window.GameModes?.renderTutorialList?.();
+            }
         }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            window.GameModes?.initMenu?.();
+        });
 
         window.openModal = function openModal(id) {
             const UI = window.UITransitions;

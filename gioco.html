@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#070f24">
+    <meta name="theme-color" content="#fde047">
     <title>UNO? REVOLUTION — Partita</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/mobile.css">
@@ -231,6 +231,34 @@
 
         .gc-dup-sel { color: #7dd3fc; }
         .gc-dup-badge { color: #fde68a; }
+        .gc-ladder-badge {
+            position: absolute;
+            top: 0.3rem;
+            right: 0.3rem;
+            font-size: 0.45rem;
+            font-weight: 900;
+            padding: 0.1rem 0.3rem;
+            border-radius: 0.35rem;
+            background: rgba(16, 185, 129, 0.85);
+            color: #ecfdf5;
+            z-index: 3;
+            cursor: pointer;
+            pointer-events: auto;
+        }
+        .gc-ladder-badge:hover { filter: brightness(1.12); }
+        .gc-ladder-dup-hint {
+            position: absolute;
+            bottom: 0.3rem;
+            right: 0.3rem;
+            font-size: 0.55rem;
+            font-weight: 900;
+            padding: 0.05rem 0.25rem;
+            border-radius: 0.3rem;
+            background: rgba(167, 139, 250, 0.9);
+            color: #f5f3ff;
+            z-index: 3;
+            pointer-events: none;
+        }
 
         .hand-empty-msg {
             color: #94a3b8;
@@ -337,7 +365,9 @@
     <script src="js/avatar-ui.js"></script>
     <script src="js/game-sounds.js"></script>
     <script src="js/game-deck.js"></script>
+    <script src="js/carte-data.js"></script>
     <script src="js/game-card-ui.js"></script>
+    <script src="js/card-info.js"></script>
     <script src="js/game-engine.js"></script>
     <script src="js/game-firestore.js"></script>
     <script src="js/admin-config.js"></script>
@@ -397,7 +427,7 @@
                     </div>
                     <div class="stat-box">
                         <label>Direzione</label>
-                        <span id="game-direction" class="stat-value">↻</span>
+                        <span id="game-direction" class="stat-value">Oraria</span>
                     </div>
                     <div class="stat-box">
                         <label>Colore attivo</label>
@@ -407,6 +437,7 @@
 
                 <div class="pile-stage">
                     <div id="dir-ring" class="dir-ring" aria-hidden="true"></div>
+                    <span id="dir-ring-label" class="dir-ring-label">Oraria</span>
                     <div class="center-piles">
                         <div id="deck-draw" class="gc-card gc-card-pile gc-card-draw-back" title="Pesca" role="button" tabindex="0" data-sound="draw">
                             <span id="draw-count" class="draw-count">0</span>
@@ -486,6 +517,17 @@
     </div>
 
     <div id="game-toast" class="hidden"></div>
+
+    <div id="card-info-tooltip" class="hidden" role="tooltip" aria-hidden="true"></div>
+
+    <div id="card-info-sheet" class="hidden" aria-hidden="true" role="dialog" aria-modal="true" aria-labelledby="card-info-sheet-body">
+        <div class="card-info-sheet-backdrop"></div>
+        <div class="card-info-sheet-panel">
+            <button type="button" class="card-info-sheet-close" aria-label="Chiudi scheda carta">×</button>
+            <div id="card-info-sheet-preview" class="card-info-sheet-preview"></div>
+            <div id="card-info-sheet-body"></div>
+        </div>
+    </div>
 
     <div id="game-modal" class="game-modal hidden">
         <div class="game-modal-panel">

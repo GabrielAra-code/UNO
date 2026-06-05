@@ -1,8 +1,8 @@
 /* UNO? — Arena partita (mockup CARD GAME) */
 
 .uno-game {
-    --arena-bg-1: #2a1218;
-    --arena-bg-2: #12080c;
+    --arena-bg-1: var(--uno-bg-mid, #fde047);
+    --arena-bg-2: var(--uno-bg-warm, #fbbf24);
     --arena-glow: #f97316;
     --arena-gold: #facc15;
     --player-dock-h: clamp(160px, 36vh, 240px);
@@ -21,8 +21,13 @@
 
 .uno-game body,
 .uno-game.game-root {
-    background: radial-gradient(ellipse 120% 90% at 50% 20%, var(--arena-bg-1) 0%, var(--arena-bg-2) 62%, #050203 100%);
-    color: #f8fafc;
+    background-color: var(--uno-bg-base, #fde047);
+    background-image:
+        radial-gradient(ellipse 72% 68% at 50% 50%, var(--uno-bg-vignette, rgba(161, 98, 7, 0.2)) 0%, transparent 72%),
+        radial-gradient(ellipse 145% 115% at 50% 38%, var(--uno-bg-outer, #fff9c4) 0%, var(--uno-bg-mid, #fde047) 32%, var(--uno-bg-warm, #fbbf24) 62%, var(--uno-bg-deep, #f59e0b) 100%);
+    background-attachment: fixed;
+    background-repeat: no-repeat;
+    color: #422006;
 }
 
 .uno-game .game-topbar {
@@ -334,8 +339,34 @@
 
 .uno-game .dir-ring.dir-ccw { animation-direction: reverse; }
 
+.uno-game .dir-ring {
+    transition: filter 0.35s ease, box-shadow 0.35s ease;
+}
+
+.uno-game .dir-ring.dir-flip {
+    filter: brightness(1.28);
+    box-shadow: 0 0 42px rgba(251, 191, 36, 0.55), inset 0 0 26px rgba(249, 115, 22, 0.18);
+}
+
 @keyframes dir-spin {
     to { transform: rotate(360deg); }
+}
+
+.uno-game .dir-ring-label {
+    position: absolute;
+    top: 0.1rem;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 2;
+    font-size: 0.58rem;
+    font-weight: 900;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: #fdba74;
+    text-shadow: 0 1px 8px rgba(0, 0, 0, 0.85);
+    pointer-events: none;
+    white-space: nowrap;
+    transition: color 0.25s ease, opacity 0.25s ease;
 }
 
 .uno-game .center-piles {
@@ -579,6 +610,11 @@
 }
 
 .uno-game #play-selection-bar.hidden { display: none; }
+
+.uno-game .gc-card-brainrot-pick {
+    outline: 3px solid #a78bfa;
+    box-shadow: 0 0 14px rgba(167, 139, 250, 0.55);
+}
 
 .uno-game #play-selection-label {
     font-size: 0.55rem;
@@ -969,6 +1005,7 @@
     padding: 1rem;
     background: rgba(0, 0, 0, 0.8);
     backdrop-filter: blur(4px);
+    pointer-events: auto;
 }
 
 .uno-game .game-modal-panel {
@@ -979,6 +1016,7 @@
     border-radius: 1rem;
     padding: 1.5rem;
     box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+    pointer-events: auto;
 }
 
 .uno-game .game-modal-title {
@@ -1025,6 +1063,13 @@
     cursor: pointer;
     flex-shrink: 0;
     transition: transform 0.12s ease;
+    pointer-events: auto;
+    touch-action: manipulation;
+}
+
+.uno-game .modal-card-pick-face {
+    display: block;
+    pointer-events: none;
 }
 
 .uno-game .modal-card-pick-btn:hover {
@@ -1078,4 +1123,237 @@
     padding: 0.75rem;
     margin-top: 0.75rem;
     font-size: 0.875rem;
+}
+
+/* —— Card info: tooltip PC + scheda mobile —— */
+.uno-game #card-info-tooltip {
+    position: fixed;
+    z-index: 65;
+    max-width: min(17rem, calc(100vw - 16px));
+    padding: 0.65rem 0.75rem;
+    border-radius: 0.75rem;
+    background: rgba(15, 23, 42, 0.96);
+    border: 2px solid rgba(250, 204, 21, 0.35);
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.06);
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(6px);
+    animation: card-info-tooltip-in 130ms ease-out forwards;
+}
+
+@keyframes card-info-tooltip-in {
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+.uno-game #card-info-tooltip .cit-name {
+    font-size: 0.9rem;
+    font-weight: 900;
+    color: #fde68a;
+    margin-bottom: 0.35rem;
+    line-height: 1.2;
+}
+
+.uno-game #card-info-tooltip .cit-row {
+    font-size: 0.7rem;
+    color: #cbd5e1;
+    margin-bottom: 0.2rem;
+}
+
+.uno-game #card-info-tooltip .cit-label {
+    font-weight: 800;
+    color: #94a3b8;
+}
+
+.uno-game #card-info-tooltip .cit-section {
+    margin-top: 0.35rem;
+    font-size: 0.68rem;
+    color: #e2e8f0;
+}
+
+.uno-game #card-info-tooltip .cit-effetto {
+    margin: 0.15rem 0 0;
+    line-height: 1.35;
+    color: #cbd5e1;
+}
+
+.uno-game #card-info-tooltip .cit-list,
+.uno-game #card-info-sheet .cit-list {
+    margin: 0.25rem 0 0;
+    padding-left: 1rem;
+    list-style: disc;
+}
+
+.uno-game #card-info-tooltip .cit-list li,
+.uno-game #card-info-sheet .cit-list li {
+    margin-bottom: 0.15rem;
+}
+
+.uno-game .hand-card-slot {
+    position: relative;
+}
+
+.uno-game .card-hold-ring {
+    position: absolute;
+    inset: -6px;
+    pointer-events: none;
+    z-index: 8;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.uno-game .card-hold-ring svg {
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.uno-game .card-hold-ring-track {
+    fill: none;
+    stroke: rgba(255, 255, 255, 0.15);
+    stroke-width: 3;
+}
+
+.uno-game .card-hold-ring-progress {
+    fill: none;
+    stroke: #facc15;
+    stroke-width: 3.5;
+    stroke-linecap: round;
+    stroke-dasharray: 113.1;
+    stroke-dashoffset: 113.1;
+}
+
+.uno-game .card-hold-ring.is-active .card-hold-ring-progress {
+    animation: card-hold-ring-fill 600ms linear forwards;
+}
+
+@keyframes card-hold-ring-fill {
+    to { stroke-dashoffset: 0; }
+}
+
+.uno-game #card-info-sheet {
+    position: fixed;
+    inset: 0;
+    z-index: 70;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: max(12px, env(safe-area-inset-top)) 12px max(12px, env(safe-area-inset-bottom));
+    opacity: 0;
+    transition: opacity 150ms ease;
+}
+
+.uno-game #card-info-sheet.is-open {
+    opacity: 1;
+}
+
+.uno-game #card-info-sheet.is-open .card-info-sheet-panel {
+    transform: scale(1);
+    opacity: 1;
+}
+
+.uno-game .card-info-sheet-backdrop {
+    position: absolute;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.72);
+}
+
+.uno-game .card-info-sheet-panel {
+    position: relative;
+    width: 100%;
+    max-width: 22rem;
+    max-height: min(88dvh, 640px);
+    overflow-y: auto;
+    border-radius: 1rem;
+    background: linear-gradient(165deg, #1e293b 0%, #0f172a 100%);
+    border: 2px solid rgba(250, 204, 21, 0.3);
+    box-shadow: 0 20px 50px rgba(0, 0, 0, 0.55);
+    padding: 1rem 1rem 1.15rem;
+    transform: scale(0.95);
+    opacity: 0;
+    transition: transform 150ms ease, opacity 150ms ease;
+}
+
+.uno-game .card-info-sheet-close {
+    position: absolute;
+    top: 0.5rem;
+    right: 0.5rem;
+    width: 2rem;
+    height: 2rem;
+    border: none;
+    border-radius: 0.5rem;
+    background: rgba(255, 255, 255, 0.08);
+    color: #f8fafc;
+    font-size: 1.35rem;
+    line-height: 1;
+    font-weight: 700;
+    cursor: pointer;
+    z-index: 2;
+}
+
+.uno-game .card-info-sheet-preview {
+    display: flex;
+    justify-content: center;
+    margin: 0.5rem 0 0.85rem;
+}
+
+.uno-game .gc-card-sheet-preview {
+    width: clamp(5.5rem, 28vw, 7.5rem);
+    min-height: clamp(7.5rem, 38vw, 10.5rem);
+    pointer-events: none;
+    transform: none !important;
+}
+
+.uno-game #card-info-sheet-body .cis-name {
+    font-size: 1.15rem;
+    font-weight: 900;
+    color: #fde68a;
+    margin: 0 2rem 0.5rem 0;
+    line-height: 1.25;
+}
+
+.uno-game #card-info-sheet-body .cis-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.35rem 0.75rem;
+    font-size: 0.78rem;
+    color: #94a3b8;
+    margin-bottom: 0.75rem;
+}
+
+.uno-game #card-info-sheet-body .cis-meta strong {
+    color: #cbd5e1;
+}
+
+.uno-game #card-info-sheet-body .cis-block {
+    margin-bottom: 0.75rem;
+}
+
+.uno-game #card-info-sheet-body .cis-block h3 {
+    font-size: 0.72rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    color: #f59e0b;
+    margin: 0 0 0.35rem;
+}
+
+.uno-game #card-info-sheet-body .cis-effetto {
+    margin: 0;
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: #e2e8f0;
+}
+
+body.card-info-sheet-open {
+    overflow: hidden;
+}
+
+@media (hover: hover) and (pointer: fine) {
+    .uno-game .hand-card-slot .gc-card-hand:hover {
+        z-index: 6;
+    }
 }

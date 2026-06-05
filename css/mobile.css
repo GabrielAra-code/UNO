@@ -35,6 +35,12 @@ html {
         touch-action: manipulation;
     }
 
+    .uno-game #my-hand .gc-card-hand {
+        touch-action: pan-x manipulation;
+        -webkit-user-select: none;
+        user-select: none;
+    }
+
     .uno-page .btn-chunky,
     .uno-page .toggle-switch {
         min-height: var(--touch-min);
