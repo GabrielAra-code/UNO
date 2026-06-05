@@ -183,14 +183,22 @@
         return `${pending.type}-${pending.startedAt}`;
     }
 
-    function resolvePendingWindowAction(pending) {
+    function pendingWindowResolverId(pending) {
+        const order = gameState?.turnOrder || [];
+        if (!order.length) return myPlayerId;
+        const preferred = pending?.sourcePlayerId || pending?.initiatorId;
+        if (preferred && order.includes(preferred)) return preferred;
+        return order[0];
+    }
+
+    function resolvePendingWindowAction(pending, options = {}) {
         switch (pending.type) {
             case 'counterWindow':
-                return Engine.resolveCounterWindow(gameState, myPlayerId);
+                return Engine.resolveCounterWindow(gameState, myPlayerId, options);
             case 'brainrotBattle':
-                return Engine.resolveBrainrotBattle(gameState, myPlayerId);
+                return Engine.resolveBrainrotBattle(gameState, myPlayerId, options);
             case 'drawStackWindow':
-                return Engine.resolveDrawStackWindow(gameState, myPlayerId);
+                return Engine.resolveDrawStackWindow(gameState, myPlayerId, options);
             case 'brainrotDiscard':
                 return Engine.resolveBrainrotDiscard(gameState, pending.winnerId, []);
             default:
@@ -204,6 +212,13 @@
         const key = pendingWindowKey(pending);
         clearCounterTimers();
         counterWindowKey = key;
+        console.log('[COUNTER TIMER START]', {
+            type: pending.type,
+            key,
+            resolvesAt: pending.resolvesAt,
+            drawStack: pending.drawStack,
+            drawStackType: pending.drawStackType
+        });
         renderPendingOverlay(pending);
 
         const tick = () => {
@@ -227,11 +242,31 @@
             if (counterWindowKey !== key) return;
             const cur = gameState?.pendingAction;
             if (!cur || pendingWindowKey(cur) !== key) return;
+
+            console.log('[COUNTER TIMER END]', { type: cur.type, key });
+
+            const resolverId = pendingWindowResolverId(cur);
+            if (resolverId !== myPlayerId) {
+                console.log('[COUNTER TIMER END] skipped — resolver:', resolverId);
+                clearCounterTimers();
+                hideCounterOverlay();
+                return;
+            }
+
+            const responseCount = cur.responses ? Object.keys(cur.responses).length : 0;
+            if (responseCount === 0) {
+                console.log('[NO COUNTER PLAYED]', {
+                    type: cur.type,
+                    drawStack: cur.drawStack,
+                    drawStackType: cur.drawStackType
+                });
+            }
+
             if (cur.type === 'brainrotDiscard' && cur.winnerId === myPlayerId && playSelection?.mode === 'brainrotDiscard') {
                 const ids = playSelection.ids || [];
                 await commitAction(() => Engine.resolveBrainrotDiscard(gameState, myPlayerId, ids), { quiet: true });
             } else {
-                await commitAction(() => resolvePendingWindowAction(cur), { quiet: true });
+                await commitAction(() => resolvePendingWindowAction(cur, { force: true }), { quiet: true });
             }
             clearCounterTimers();
             hideCounterOverlay();
@@ -1059,17 +1094,35 @@
         const snapshotState = gameState;
         const result = fn();
         if (!result.ok) {
-            playSound('error');
-            showToast(result.error || 'Mossa non valida');
+            if (!opts.quiet) {
+                playSound('error');
+                showToast(result.error || 'Mossa non valida');
+            } else {
+                console.log('[COUNTER TIMER END] resolve skipped:', result.error);
+            }
             return;
         }
 
         saveInFlight = true;
         try {
+            console.log('[FIREBASE SAVE]', {
+                lobbyId,
+                expectedVersion: baseVersion,
+                pendingType: result.state.pendingAction?.type || null,
+                drawStack: result.state.drawStack
+            });
             const newVersion = await FS.persistState(lobbyId, result.state, baseVersion);
             result.state.version = newVersion;
             prevGameState = snapshotState;
             gameState = result.state;
+            if (!snapshotState?.pendingAction && result.state.pendingAction) {
+                /* pending opened */
+            } else if (snapshotState?.pendingAction && !result.state.pendingAction) {
+                console.log('[NEXT TURN] pending window resolved', {
+                    currentPlayer: result.state.turnOrder?.[result.state.currentTurnIndex],
+                    turnAdvanceSteps: result.state.turnAdvanceSteps
+                });
+            }
             if (!opts.quiet) playResultSound(result);
             if (result.state.lastRoulette?.at !== lastRouletteAnimatedAt) {
                 animateBulletRouletteSpin(result.state.lastRoulette);
@@ -1078,6 +1131,7 @@
             renderAll();
             handlePending(result.state);
         } catch (err) {
+            console.error('[FIREBASE ERROR]', err);
             console.error('Salvataggio mossa fallito:', err);
             playSound('error');
             if (err instanceof FS.SaveConflictError && err.serverState) {

@@ -478,34 +478,47 @@
         return { ok: true, state: s };
     }
 
-    function resolveDrawStackWindow(state, playerId) {
+    function resolveDrawStackWindow(state, playerId, options = {}) {
         const s = clone(state);
         const pending = s.pendingAction;
         if (!pending || pending.type !== 'drawStackWindow') {
+            if (options.force) return { ok: true, state: s };
             return { ok: false, error: 'Nessuna finestra stack attiva.' };
         }
-        const expired = Date.now() >= pending.resolvesAt;
-        if (!expired) {
+        const graceMs = options.force ? 150 : 0;
+        const expired = Date.now() >= pending.resolvesAt - graceMs;
+        if (!expired && !options.force) {
             return { ok: false, error: 'Attendi la fine del countdown stack.' };
         }
 
-        s.drawStack = pending.drawStack;
-        s.drawStackType = pending.drawStackType;
         const defenderId = pending.defenderId;
+        const amount = pending.drawStack;
+        const drawStackType = pending.drawStackType;
         const responses = pending.responses || {};
-        const stacked = Object.values(responses).some(r => r.action === 'stack');
-        const mirrored = Object.values(responses).some(r => r.action === 'mirror');
+        const hadMirror = Object.values(responses).some(r => r.action === 'mirror');
+
+        console.log('[RESOLVING CARD EFFECT]', {
+            type: 'drawStackWindow',
+            drawStackType,
+            amount,
+            defenderId,
+            hadMirror,
+            responses: Object.keys(responses).length
+        });
 
         s.pendingAction = null;
+        s.drawStack = 0;
+        s.drawStackType = null;
 
-        if (!s.settings.stack && !stacked && !mirrored) {
-            const n = applyDrawToPlayer(s, defenderId, s.drawStack);
-            addLog(s, `${s.players[defenderId]?.nickname} pesca ${n} (stack risolto).`);
-            s.drawStack = 0;
-            s.drawStackType = null;
+        if (amount > 0) {
+            console.log(`[DRAWING ${amount} CARDS]`, defenderId);
+            const n = applyDrawToPlayer(s, defenderId, amount);
+            if (hadMirror) {
+                addLog(s, `Specchio: ${s.players[defenderId]?.nickname} pesca ${n} (stack risolto).`);
+            } else {
+                addLog(s, `${s.players[defenderId]?.nickname} pesca ${n} (stack risolto).`);
+            }
             s.turnAdvanceSteps = (s.turnAdvanceSteps || 0) + 1;
-        } else if (mirrored && !stacked) {
-            addLog(s, `Specchio: ${s.players[defenderId]?.nickname} deve pescare lo stack.`);
         }
 
         syncHandCounts(s);
