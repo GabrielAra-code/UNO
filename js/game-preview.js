@@ -196,6 +196,11 @@
     function botPickPlay(state, botId) {
         const hand = state.hands[botId] || [];
 
+        const surprise = hand.find(c => c.value === 'surprise');
+        if (surprise && Engine.mustPlaySurprise?.(state, botId)) {
+            return { fn: () => Engine.playCards(state, botId, [surprise.instanceId]) };
+        }
+
         for (const card of hand) {
             const batch = Engine.getDuplicateBatch(state, botId, card.instanceId);
             if (batch.length > 1 && Engine.canPlayDuplicateBatch(state, botId, batch)) {
@@ -264,7 +269,8 @@
             return Engine.spinBulletRoulette(state, pending.shooterId);
         }
         if (pending?.type === 'brainrotDiscard' && isBot(pending.winnerId)) {
-            return Engine.resolveBrainrotDiscard(state, pending.winnerId, [], { force: true });
+            const ids = Engine.pickBrainrotDiscardIds(state, pending.winnerId, pending.maxDiscard);
+            return Engine.resolveBrainrotDiscard(state, pending.winnerId, ids);
         }
         if (pending?.type === 'mariGreen' && pending.currentId && isBot(pending.currentId)) {
             const botId = pending.currentId;
@@ -302,25 +308,27 @@
             if (timerExpired && pending.type === 'brainrotBattle' && Engine.brainrotBattleCanClose?.(state)) {
                 return Engine.resolveBrainrotBattle(state, resolver, { force: true });
             }
-            if (isBot(resolver) && timerExpired) {
-                if (pending.type === 'counterWindow') {
-                    return Engine.resolveCounterWindow(state, resolver, { force: true });
+            if (timerExpired && pending.type === 'drawStackWindow') {
+                const def = pending.defenderId;
+                const stackCard = (state.hands[def] || []).find(c => Engine.canPlayDrawStackResponse(state, def, c));
+                if (stackCard && isBot(def)) {
+                    return Engine.playDrawStackResponse(state, def, stackCard.instanceId);
                 }
-                if (pending.type === 'drawStackWindow') {
-                    const def = pending.defenderId;
-                    const stackCard = (state.hands[def] || []).find(c => Engine.canPlayDrawStackResponse(state, def, c));
-                    if (stackCard) {
-                        return Engine.playDrawStackResponse(state, def, stackCard.instanceId);
-                    }
-                    return Engine.resolveDrawStackWindow(state, resolver, { force: true });
-                }
+                return Engine.resolveDrawStackWindow(state, def, { force: true });
             }
-            return null;
+            if (timerExpired && pending.type === 'counterWindow') {
+                return Engine.resolveCounterWindow(state, resolver, { force: true });
+            }
+            return { ok: false, wait: true, waitMs: Math.max(80, (Number(pending.resolvesAt) || 0) - Date.now() + 160) };
         }
 
         if (Engine.currentPlayerId(state) !== botIdLoop(state)) return null;
         const botId = Engine.currentPlayerId(state);
         if (!isBot(botId)) return null;
+
+        if (Engine.mustPlaySurprise?.(state, botId)) {
+            return Engine.autoPlayForcedSurprise(state, botId);
+        }
 
         if (state.stackPassPending && state.stackSourcePlayerId === botId) {
             const hand = state.hands[botId] || [];
@@ -386,16 +394,41 @@
                 }
 
                 if (!result?.ok) {
+                    if (result?.wait) {
+                        await sleep(Math.min(result.waitMs || 400, 6500));
+                        continue;
+                    }
                     const cur = Engine.currentPlayerId(state);
                     if (isBot(cur) && !humanMustAct(state)) {
-                        if (Engine.canDraw(state, cur)) {
+                        if (Engine.mustPlaySurprise?.(state, cur)) {
+                            result = Engine.autoPlayForcedSurprise(state, cur);
+                        } else if (Engine.canDraw(state, cur)) {
                             result = Engine.drawCard(state, cur);
                         } else if (Engine.canEndTurn(state, cur)) {
                             result = Engine.endTurn(state, cur);
                         }
                     }
                 }
-                if (!result?.ok) break;
+                if (!result?.ok) {
+                    const pending = state.pendingAction;
+                    if (pending && Engine.isPendingTimedWindow(pending)) {
+                        const left = (Number(pending.resolvesAt) || 0) - Date.now();
+                        if (left > -200) {
+                            await sleep(Math.min(Math.max(left + 180, 120), 6500));
+                            continue;
+                        }
+                        const resolver = pendingResolverId(state);
+                        if (pending.type === 'brainrotBattle' && Engine.brainrotBattleCanClose?.(state)) {
+                            result = Engine.resolveBrainrotBattle(state, resolver, { force: true });
+                        } else if (pending.type === 'counterWindow') {
+                            result = Engine.resolveCounterWindow(state, resolver, { force: true });
+                        } else if (pending.type === 'drawStackWindow') {
+                            result = Engine.resolveDrawStackWindow(state, pending.defenderId, { force: true });
+                        }
+                        if (result?.ok) continue;
+                    }
+                    break;
+                }
                 if (!result.state) {
                     console.warn('[PREVIEW BOT] mossa senza stato:', result);
                     break;
@@ -409,7 +442,17 @@
             console.error('[PREVIEW BOT] loop:', err);
         } finally {
             botLoopRunning = false;
+            ensureBotLoopIfNeeded();
         }
+    }
+
+    function ensureBotLoopIfNeeded() {
+        const state = global.__previewCurrentState__;
+        if (!state || state.status !== 'playing' || botLoopRunning || !applyStateFn) return;
+        if (humanMustAct(state)) return;
+        const cur = Engine.currentPlayerId(state);
+        if (!isBot(cur)) return;
+        queueMicrotask(() => runBotLoop());
     }
 
     async function persistState(_lobbyId, state, expectedVersion) {
@@ -531,39 +574,61 @@
         if (applyStateFn) applyStateFn(state, prev ?? null);
     }
 
-    function giveHumanCards(cards) {
+    function getGiveTargets() {
+        const state = global.__previewCurrentState__;
+        if (!state?.turnOrder?.length) {
+            return [{ id: HUMAN_ID, label: 'Tu', isBot: false }];
+        }
+        return state.turnOrder.map(id => ({
+            id,
+            label: id === HUMAN_ID
+                ? (state.players[id]?.nickname || 'Tu')
+                : (state.players[id]?.nickname || id),
+            isBot: isBot(id)
+        }));
+    }
+
+    function givePlayerCards(playerId, cards) {
         const prev = global.__previewCurrentState__;
-        if (!prev || !cards?.length) return false;
+        if (!prev || !playerId || !cards?.length) return false;
         const state = clonePreviewState(prev);
-        if (!state.hands[HUMAN_ID]) state.hands[HUMAN_ID] = [];
+        if (!state.hands[playerId]) state.hands[playerId] = [];
         cards.forEach(card => {
-            if (card) state.hands[HUMAN_ID].push(card);
+            if (card) state.hands[playerId].push(card);
         });
-        if (state.players[HUMAN_ID]) {
-            state.players[HUMAN_ID].handCount = state.hands[HUMAN_ID].length;
+        if (state.players[playerId]) {
+            state.players[playerId].handCount = state.hands[playerId].length;
         }
         state.version = (prev.version || 0) + 1;
         pushPreviewState(state, prev);
         return true;
+    }
+
+    function giveHumanCards(cards) {
+        return givePlayerCards(HUMAN_ID, cards);
     }
 
     function giveHumanCard(card) {
-        return giveHumanCards(card ? [card] : []);
+        return givePlayerCards(HUMAN_ID, card ? [card] : []);
     }
 
-    function clearHumanHand() {
+    function clearPlayerHand(playerId) {
         const prev = global.__previewCurrentState__;
-        if (!prev) return false;
+        if (!prev || !playerId) return false;
         const state = clonePreviewState(prev);
-        state.hands[HUMAN_ID] = [];
-        if (state.players[HUMAN_ID]) {
-            state.players[HUMAN_ID].handCount = 0;
-            state.players[HUMAN_ID].saidUno = false;
-            state.players[HUMAN_ID].unoRequired = false;
+        state.hands[playerId] = [];
+        if (state.players[playerId]) {
+            state.players[playerId].handCount = 0;
+            state.players[playerId].saidUno = false;
+            state.players[playerId].unoRequired = false;
         }
         state.version = (prev.version || 0) + 1;
         pushPreviewState(state, prev);
         return true;
+    }
+
+    function clearHumanHand() {
+        return clearPlayerHand(HUMAN_ID);
     }
 
     function setTopCard(card) {
@@ -591,14 +656,18 @@
         start,
         restart,
         runBotLoop,
+        ensureBotLoopIfNeeded,
         getHumanId: () => HUMAN_ID,
         getBotIds: () => [...botIds],
         getSettings: () => ({ ...settings }),
         getMode: () => previewMode,
         getDifficulty: () => previewDifficulty,
         getState,
+        getGiveTargets,
+        givePlayerCards,
         giveHumanCard,
         giveHumanCards,
+        clearPlayerHand,
         clearHumanHand,
         setTopCard,
         pushPreviewState,

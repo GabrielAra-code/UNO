@@ -331,8 +331,8 @@
     async function openOverlayModal(overlayEl, panelEl) {
         if (!overlayEl) return;
         overlayEl.classList.remove('hidden');
-        overlayEl.style.pointerEvents = 'none';
-        if (panelEl) panelEl.style.pointerEvents = 'none';
+        overlayEl.style.pointerEvents = 'auto';
+        if (panelEl) panelEl.style.pointerEvents = 'auto';
         if (reducedMotion()) {
             clearStyles(overlayEl);
             clearStyles(panelEl);

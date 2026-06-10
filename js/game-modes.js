@@ -48,7 +48,7 @@
             title: 'Scala & SixSeven',
             icon: '🪜',
             summary: 'Combo avanzate da tavolo',
-            body: 'La Scala parte dallo 0 e sale di numero in numero. SixSeven permette di giocare 6 e 7 insieme (anche copie multiple).',
+            body: 'La Scala parte dallo 0 (anche colori diversi). SixSeven: 6+7 insieme — il 6 deve agganciarsi al tavolo, il 7 può essere di altro colore. Se finisci con 6+7 non serve dire UNO.',
             packs: ['c_0_9', 'c_piu2', 'c_rev', 'c_bloc', 'c_cc', 'c_piu4']
         },
         {
@@ -80,7 +80,7 @@
             title: 'Vittorie speciali',
             icon: '👑',
             summary: 'Death, Blobby, Piani…',
-            body: 'Alcune carte possono chiudere la partita in modo spettacolare: Death Note, Blobby+Scudo, o i 4 Piani di Proiezione collezionati.',
+            body: 'Alcune carte possono chiudere la partita in modo spettacolare: Death Note, Blobby+Scudo, o i 3 Piani di Proiezione (P.V., P.L., P.O.) con «Invoca De Vito».',
             packs: ['c_0_9', 'c_death', 'c_blobby', 'c_scudo', 'c_piani']
         }
     ];
@@ -263,6 +263,40 @@
 
     let previewWinHandled = false;
 
+    function resetEndOverlayActions() {
+        const actions = document.getElementById('end-overlay-actions');
+        const hint = document.querySelector('.end-overlay-hint');
+        if (actions) {
+            actions.innerHTML = '';
+            actions.classList.add('hidden');
+        }
+        if (hint) {
+            hint.classList.remove('hidden');
+            hint.textContent = 'Usa «Nuova partita» nella barra in alto o ricarica la pagina.';
+        }
+    }
+
+    function renderEndOverlayButtons(buttons) {
+        const actions = document.getElementById('end-overlay-actions');
+        const hint = document.querySelector('.end-overlay-hint');
+        if (!actions) return;
+        actions.innerHTML = '';
+        actions.classList.remove('hidden');
+        if (hint) hint.classList.add('hidden');
+
+        buttons.forEach(({ label, onClick, variant }) => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = `btn-chunky end-overlay-btn end-overlay-btn--${variant || 'menu'}`;
+            btn.textContent = label;
+            btn.addEventListener('click', () => {
+                global.GameSounds?.play?.('click');
+                onClick();
+            });
+            actions.appendChild(btn);
+        });
+    }
+
     function handlePreviewWin(state, humanId) {
         if (!state || state.status !== 'finished' || previewWinHandled) return;
         if (state.winnerId !== humanId) return;
@@ -275,17 +309,26 @@
             const level = parseInt(params.get('level') || '1', 10);
             const next = setStoryProgress(level + 1);
             const title = document.getElementById('end-title');
-            const hint = document.querySelector('.end-overlay-hint');
             if (title) {
                 title.textContent = level >= STORY_LEVELS.length
                     ? 'Storia completata!'
                     : `Livello ${level} completato!`;
             }
-            if (hint) {
-                hint.innerHTML = level >= STORY_LEVELS.length
-                    ? '<a href="Menu_principale.html" class="text-amber-300 underline font-black">Torna al menu</a>'
-                    : `Sbloccato livello ${Math.min(next, STORY_LEVELS.length)}! <a href="Menu_principale.html" class="text-amber-300 underline font-black">Mappa storia</a>`;
+
+            const buttons = [{
+                label: 'Torna al Menu',
+                variant: 'menu',
+                onClick: () => { window.location.href = 'Menu_principale.html'; }
+            }];
+            if (level < STORY_LEVELS.length) {
+                const nextLevel = Math.min(next, STORY_LEVELS.length);
+                buttons.push({
+                    label: `Prosegui al livello ${nextLevel}`,
+                    variant: 'next',
+                    onClick: () => launchStoryLevel(nextLevel)
+                });
             }
+            renderEndOverlayButtons(buttons);
             return;
         }
 
@@ -305,6 +348,7 @@
 
     function resetPreviewWinFlag() {
         previewWinHandled = false;
+        resetEndOverlayActions();
     }
 
     function getTutorialCardQuantities(step, baseBuilder) {

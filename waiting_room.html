@@ -273,31 +273,24 @@
     <script src="js/game-deck.js"></script>
     <script src="js/game-engine.js"></script>
     <script src="js/game-firestore.js"></script>
+    <script src="js/carte-data.js"></script>
+    <script src="js/lobby-card-defaults.js"></script>
+    <script src="js/firebase-config.js"></script>
     <script src="js/avatar-ui.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
-         import {
-          getFirestore,
-           doc,
-          updateDoc,
-          setDoc,
-          deleteDoc,
-          onSnapshot,
-          runTransaction,
-          getDoc
+        import {
+            getFirestore,
+            doc,
+            updateDoc,
+            setDoc,
+            deleteDoc,
+            onSnapshot,
+            runTransaction,
+            getDoc
         } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
-            authDomain: "unoforse-a553d.firebaseapp.com",
-            databaseURL: "https://unoforse-a553d-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "unoforse-a553d",
-            storageBucket: "unoforse-a553d.firebasestorage.app",
-            messagingSenderId: "396941322053",
-            appId: "1:396941322053:web:86b8f596b4e05aac8ec02c",
-            measurementId: "G-9SEK0SY996"
-        };
-
+        const firebaseConfig = window.firebaseConfig;
         const app = initializeApp(firebaseConfig);
         window.db = getFirestore(app);
         window.doc = doc;
@@ -510,46 +503,7 @@
             if (UI && modal) UI.closeOverlayModal(modal, panel);
             else modal?.classList.add('hidden');
         }
-        const databaseCarte = [
-            { id: "c_0_9", nome: "Carte Numeriche (0-9)", quantita: 20, effetto: "Nessuno. Giocabili se coincide numero o colore con la carta in tavola, oppure su carte speciali incolori.", cat: "⚪ Incolore" },
-            { id: "c_piu2", nome: "Classico: +2", quantita: 2, effetto: "Il bersaglio pesca 2 carte e salta il turno corrente.", cat: "🟥🟨🟩🟦 Classico" },
-            { id: "c_rev", nome: "Classico: Reverse", quantita: 2, effetto: "Inverte istantaneamente la direzione dei turni di gioco.", cat: "🟥🟨🟩🟦 Classico" },
-            { id: "c_bloc", nome: "Classico: Blocco", quantita: 2, effetto: "Salto del turno immediato per il giocatore successivo.", cat: "🟥🟨🟩🟦 Classico" },
-            { id: "c_cc", nome: "Nero: Cambio Colore", quantita: 4, effetto: "Scegli il colore dominante del tavolo di gioco.", cat: "⚫ Nero" },
-            { id: "c_piu4", nome: "Nero: +4", quantita: 4, effetto: "Il bersaglio pesca 4 carte e perde il proprio turno.", cat: "⚫ Nero" },
-            { id: "c_jack", nome: "Jack Sparrow", quantita: 1, effetto: "Copia sul momento l'effetto di un +2, +4, Cambio Colore o Reverse.", cat: "⭐ Speciale UNO?" },
-            { id: "c_piu10", nome: "Speciale: +10", quantita: 1, effetto: "Il malcapitato subisce la pesca di 10 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
-            { id: "c_piu16", nome: "Speciale: +16", quantita: 1, effetto: "Il malcapitato subisce la pesca di 16 carte e perde il turno.", cat: "⭐ Speciale UNO?" },
-            { id: "c_scudo", nome: "Scudo", quantita: 4, effetto: "Protegge solo da Blobby e Proiettile. Si consuma quando salva il giocatore.", cat: "⭐ Speciale UNO?" },
-            { id: "c_death", nome: "Death Note", quantita: 1, effetto: "Eliminazione immediata di un giocatore a scelta.", cat: "⭐ Speciale UNO?" },
-            { id: "c_blobby", nome: "Blobby", quantita: 1, effetto: "Giocabile solo con Scudo in mano: entrambe scartate. Vittoria istantanea se il bersaglio non contrasta. Scudo del bersaglio lo salva.", cat: "⭐ Speciale UNO?" },
-            { id: "c_righello", nome: "Righello o X?", quantita: 4, effetto: "Giocabile fuori dal turno. Annulla interamente l'ultima mossa.", cat: "⭐ Speciale UNO?" },
-            { id: "c_donna", nome: "Donna di Mazze", quantita: 1, effetto: "Resetta e annulla tutte le catene ed effetti attivi globali sul tavolo.", cat: "⭐ Speciale UNO?" },
-            { id: "c_imprevisti", nome: "Imprevisti", quantita: 1, effetto: "Appena entra in mano si gioca da sola. Tutti pescano una carta.", cat: "⚪ Speciale Incolore" },
-            { id: "c_scambio", nome: "Scambio", quantita: 2, effetto: "Scambia l'intera mano di carte con un giocatore bersaglio.", cat: "⭐ Speciale UNO?" },
-            { id: "c_vaff", nome: "Vaffanculo", quantita: 2, effetto: "Annulla l'effetto e la streak attiva. Le carte tornano in mano.", cat: "🌍 Evento (Giallo)" },
-            { id: "c_mari", nome: "Mariguana", quantita: 1, effetto: "Obbliga tutti a giocare Verde o pescare finché non lo si trova.", cat: "🌍 Evento (Verde)" },
-            { id: "c_onde", nome: "Le ONDE", quantita: 2, effetto: "Tutti tranne chi la usa si scambiano le mani in modo casuale.", cat: "🌍 Evento (Blu)" },
-            { id: "c_cuore", nome: "Cuore", quantita: 2, effetto: "Effettua la resurrezione immediata di un player precedentemente eliminato.", cat: "🌍 Evento (Verde)" },
-            { id: "c_comunismo", nome: "Comunismo", quantita: 1, effetto: "Ruba e guarda le carte. Se intercetta Blobby attiva lo scontro 1vs1.", cat: "🌍 Evento (Rosso)" },
-            { id: "c_nazismo", nome: "Nazismo", quantita: 1, effetto: "Seleziona una carta dalla tua mano e cedila forzatamente a un altro.", cat: "🌍 Evento (Rosso)" },
-            { id: "c_proiettile", nome: "Proiettile", quantita: 6, effetto: "Parte una roulette russa: chi viene colpito perde 1 PistolHP (Max 2).", cat: "🔫 Sistema Proiettile" },
-            { id: "c_quagruppo", nome: "QUA GRUPPO!", quantita: 1, effetto: "La metà esatta dei giocatori pesca una carta (arrotondato per eccesso).", cat: "🎯 Cutruzzolà Move" },
-            { id: "c_messa", nome: "La Messa è Finita", quantita: 1, effetto: "Prende tutti i rifiuti e gli scarti accumulati e li rimescola nel deck.", cat: "🎯 Cutruzzolà Move" },
-            { id: "c_piani", nome: "Piani di Proiezione (P.V/P.L/P.O/L.T)", quantita: 1, effetto: "Chi unisce tutti e 4 i pezzi sblocca la vittoria suprema.", cat: "📐 Piani di Proiezione" },
-            { id: "c_br_ladro", nome: "Ladro delle Mezze CAPPELLE", quantita: 1, effetto: "165PT — Giallo: scarti 2 carte numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_pothot", nome: "Pot HotSborr", quantita: 1, effetto: "100PT — Giallo: scarti 2 carte numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_influen", nome: "Influensborrella", quantita: 1, effetto: "50PT — Giallo: scarti 2 carte numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_frocettini", nome: "FRR FRR FROCETTINI", quantita: 1, effetto: "70PT — Rosa: scarti 3 carte numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_popp", nome: "POPP SkibidiPOPP", quantita: 1, effetto: "65PT — Rosa: scarti 3 carte numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_papero", nome: "PaperoSborratico", quantita: 1, effetto: "125PT — Rosa: scarti 3 carte numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_budinaccio", nome: "Budinaccio dello spaccio", quantita: 1, effetto: "120PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_giraffa", nome: "Giraffa Celeste", quantita: 1, effetto: "75PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_bobrini", nome: "Bobrini cactus merdini", quantita: 1, effetto: "90PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_centralucci", nome: "Centralucci Sborralucci", quantita: 1, effetto: "55PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
-            { id: "c_br_baccala", nome: "BACCALA' MAGGIOSBORR", quantita: 1, effetto: "75PT — Bianco: scarti 4 carte numero.", cat: "🧠 Brainrot" },
-            { id: "c_specchio", nome: "Specchio", quantita: 1, effetto: "Solo entro il tempo di contrasto su uno stack (+2/+4/+10/+16): riflette l'effetto sul mittente e inverte il giro (anche a catena).", cat: "⭐ Speciale UNO?" }
-        ];
+        const databaseCarte = window.databaseCarte || [];
 
         function readLobbyList() {
             try {
@@ -582,10 +536,7 @@
             if (!currentLobby) return null;
             currentLobby.settings = currentLobby.settings || { brainrot: true, stack: true, pistolHp: 3 };
             if (!currentLobby.cardQuantities) {
-                currentLobby.cardQuantities = {};
-                databaseCarte.forEach(carta => {
-                    currentLobby.cardQuantities[carta.id] = carta.quantita || 1;
-                });
+                currentLobby.cardQuantities = window.LobbyCardDefaults.seedCardQuantities(databaseCarte);
                 saveLobbyList(readLobbyList());
             }
             return currentLobby;

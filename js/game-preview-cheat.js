@@ -24,6 +24,28 @@
     let activeGroup = 'all';
     let searchQuery = '';
     let panelOpen = false;
+    let activeTargetId = null;
+
+    function humanId() {
+        return Preview()?.getHumanId?.() || 'preview-human';
+    }
+
+    function ensureActiveTarget() {
+        const targets = Preview()?.getGiveTargets?.() || [];
+        if (!targets.length) {
+            activeTargetId = humanId();
+            return;
+        }
+        if (!activeTargetId || !targets.some(t => t.id === activeTargetId)) {
+            activeTargetId = humanId();
+        }
+    }
+
+    function activeTarget() {
+        ensureActiveTarget();
+        const targets = Preview()?.getGiveTargets?.() || [];
+        return targets.find(t => t.id === activeTargetId) || targets[0] || { id: humanId(), label: 'Tu', isBot: false };
+    }
 
     function mapGroup(entry) {
         const cat = entry.cat || '';
@@ -70,14 +92,32 @@
 
             if (VARIANT_IDS.has(entry.id) && def.variants?.length) {
                 def.variants.forEach((variant, i) => {
+                    const color = Deck.colorAtIndex(def, i);
+                    const label = entry.id === 'c_righello'
+                        ? Deck.righelloDisplayLabel(color)
+                        : `${entry.nome} · ${variant}`;
                     items.push({
                         key: `${entry.id}-${i}`,
                         group,
-                        label: `${entry.nome} · ${variant}`,
-                        color: def.colors?.[0] || 'black',
+                        label,
+                        color,
                         spawn: () => Deck.spawnPreviewCard({ defId: entry.id, variantIndex: i })
                     });
                 });
+                return;
+            }
+
+            if (entry.id === 'c_proiettile') {
+                const copies = Math.min(parseInt(entry.quantita, 10) || 6, def.count || 6);
+                for (let i = 0; i < copies; i += 1) {
+                    items.push({
+                        key: `${entry.id}-${i}`,
+                        group,
+                        label: `${entry.nome} (${Deck.COLOR_LABEL[Deck.colorAtIndex(def, i)]})`,
+                        color: Deck.colorAtIndex(def, i),
+                        spawn: () => Deck.spawnPreviewCard({ defId: entry.id, copyIndex: i })
+                    });
+                }
                 return;
             }
 
@@ -131,11 +171,11 @@
         });
     }
 
-    function handCount() {
+    function handCount(playerId) {
         const st = Preview()?.getState?.();
-        const hid = Preview()?.getHumanId?.();
-        if (!st || !hid) return 0;
-        return st.hands?.[hid]?.length ?? st.players?.[hid]?.handCount ?? 0;
+        const pid = playerId || activeTarget().id;
+        if (!st || !pid) return 0;
+        return st.hands?.[pid]?.length ?? st.players?.[pid]?.handCount ?? 0;
     }
 
     function toast(msg) {
@@ -153,12 +193,13 @@
             toast('Carta non disponibile');
             return;
         }
-        if (!Preview()?.giveHumanCard?.(card)) {
+        const target = activeTarget();
+        if (!Preview()?.givePlayerCards?.(target.id, [card])) {
             toast('Avvia prima una partita');
             return;
         }
         updateStatus();
-        toast(`+ ${item.label}`);
+        toast(`+ ${item.label} → ${target.label}`);
     }
 
     function setOnTable(item) {
@@ -202,7 +243,7 @@
             row.innerHTML = `
                 <span class="preview-cheat-dot ${colorClass(item.color)}" aria-hidden="true"></span>
                 <span class="preview-cheat-label" title="${item.label}">${item.label}</span>
-                <button type="button" class="preview-cheat-btn preview-cheat-btn--hand" title="Aggiungi alla mano">+</button>
+                <button type="button" class="preview-cheat-btn preview-cheat-btn--hand" title="Aggiungi alla mano del destinatario selezionato">+</button>
                 <button type="button" class="preview-cheat-btn preview-cheat-btn--table" title="Imposta come ultima carta sul tavolo">⬆</button>
             `;
             row.querySelector('.preview-cheat-btn--hand').addEventListener('click', () => addToHand(item));
@@ -210,6 +251,33 @@
             frag.appendChild(row);
         });
         list.appendChild(frag);
+    }
+
+    function renderTargets() {
+        const wrap = document.getElementById('preview-cheat-targets');
+        if (!wrap) return;
+        ensureActiveTarget();
+        const targets = Preview()?.getGiveTargets?.() || [];
+        wrap.innerHTML = '';
+        if (!targets.length) {
+            wrap.innerHTML = '<span class="preview-cheat-status">Avvia una partita</span>';
+            return;
+        }
+        targets.forEach(t => {
+            const btn = document.createElement('button');
+            btn.type = 'button';
+            btn.className = 'preview-cheat-target'
+                + (t.id === activeTargetId ? ' is-active' : '')
+                + (t.isBot ? ' is-bot' : '');
+            btn.textContent = t.label;
+            btn.title = `Dai carte a ${t.label}`;
+            btn.addEventListener('click', () => {
+                activeTargetId = t.id;
+                renderTargets();
+                updateStatus();
+            });
+            wrap.appendChild(btn);
+        });
     }
 
     function renderFilters() {
@@ -233,9 +301,10 @@
     function updateStatus() {
         const el = document.getElementById('preview-cheat-status');
         if (!el) return;
+        const target = activeTarget();
         const brainrotOn = Preview()?.getSettings?.()?.brainrot !== false;
         const deckNote = brainrotOn ? '' : ' · Brainrot OFF nel mazzo (puoi comunque aggiungerle qui)';
-        el.textContent = `Mano: ${handCount()} carte${deckNote}`;
+        el.textContent = `${target.label}: ${handCount(target.id)} carte${deckNote}`;
     }
 
     function setPanelOpen(open) {
@@ -246,6 +315,7 @@
         if (toggle) toggle.classList.toggle('is-active', open);
         document.body.classList.toggle('preview-cheat-open', open);
         if (open) {
+            renderTargets();
             refreshCatalog();
             updateStatus();
         }
@@ -267,17 +337,20 @@
         });
 
         clearBtn?.addEventListener('click', () => {
-            if (Preview()?.clearHumanHand?.()) {
+            const target = activeTarget();
+            if (Preview()?.clearPlayerHand?.(target.id)) {
                 updateStatus();
-                toast('Mano svuotata');
+                toast(`Mano di ${target.label} svuotata`);
             }
         });
 
         refreshBtn?.addEventListener('click', () => {
+            renderTargets();
             refreshCatalog();
             updateStatus();
         });
 
+        renderTargets();
         renderFilters();
 
         document.addEventListener('keydown', ev => {

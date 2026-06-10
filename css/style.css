@@ -8,6 +8,11 @@
     --uno-bg-deep: #f59e0b;
     --uno-bg-base: #fde047;
     --uno-bg-vignette: rgba(161, 98, 7, 0.2);
+    --menu-bg-outer: #7dd3fc;
+    --menu-bg-mid: #3b82f6;
+    --menu-bg-deep: #1e40af;
+    --menu-bg-base: #2563eb;
+    --menu-bg-vignette: rgba(7, 15, 36, 0.38);
 }
 
 html {
@@ -34,11 +39,6 @@ body {
 
 /* Menu principale: blu acceso, più scuro al centro */
 .uno-menu {
-    --menu-bg-outer: #7dd3fc;
-    --menu-bg-mid: #3b82f6;
-    --menu-bg-deep: #1e40af;
-    --menu-bg-base: #2563eb;
-    --menu-bg-vignette: rgba(7, 15, 36, 0.38);
     color: #e2e8f0;
     background-color: var(--menu-bg-base);
     background-image:

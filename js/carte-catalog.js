@@ -87,21 +87,17 @@
         c_cc: (pack) => expandSingleWithCount(pack, 4, 'Cambio Colore'),
         c_piu4: (pack) => expandSingleWithCount(pack, 4, '+4'),
         c_scudo: (pack) => expandSingleWithCount(pack, 4, 'Scudo'),
-        c_righello: (pack) => {
-            const variants = ['Tavolo?', 'Cane?', 'Centrale nucleare?', 'X?'];
-            return variants.map((variant, i) => entry(pack, {
-                id: `c_righello_${i + 1}`,
-                nome: `Righello o ${variant}`,
-                deckCount: 1,
-                colorHint: 'black'
-            }));
-        },
+        c_righello: (pack) => COLORS.map(color => entry(pack, {
+            id: `c_righello_${color}`,
+            nome: `Righello ${COLOR_LABEL[color]}`,
+            deckCount: 1,
+            colorHint: color
+        })),
         c_piani: (pack) => {
             const parts = [
                 { code: 'PV', nome: 'Piano P.V.', short: 'P.V.' },
                 { code: 'PL', nome: 'Piano P.L.', short: 'P.L.' },
-                { code: 'PO', nome: 'Piano P.O.', short: 'P.O.' },
-                { code: 'LT', nome: 'Piano L.T.', short: 'L.T.' }
+                { code: 'PO', nome: 'Piano P.O.', short: 'P.O.' }
             ];
             return parts.map(part => entry(pack, {
                 id: `c_piani_${part.code.toLowerCase()}`,
@@ -112,7 +108,15 @@
                 cat: '📐 Piani di Proiezione'
             }));
         },
-        c_proiettile: (pack) => expandSingleWithCount(pack, 6, 'Proiettile'),
+        c_proiettile: (pack) => {
+            const perColor = [2, 2, 1, 1];
+            return COLORS.map((color, i) => entry(pack, {
+                id: `c_proiettile_${color}`,
+                nome: `Proiettile ${COLOR_LABEL[color]}`,
+                deckCount: perColor[i],
+                colorHint: color
+            }));
+        },
         c_scambio: (pack) => expandSingleWithCount(pack, 2, 'Scambio'),
         c_vaff: (pack) => expandSingleWithCount(pack, 2, 'Vaffanculo'),
         c_cuore: (pack) => expandSingleWithCount(pack, 2, 'Cuore'),
@@ -149,6 +153,58 @@
         return out;
     }
 
+    /** Crea una carta di anteprima per la griglia INDEX dal record catalogo. */
+    function spawnFromCatalogEntry(carta) {
+        const Deck = global.GameDeck;
+        if (!carta || !Deck) return null;
+
+        const id = String(carta.id || '');
+        const packId = carta.packId || id;
+
+        const numMatch = id.match(/^c_num_(\d+)_(red|yellow|green|blue)$/);
+        if (numMatch) {
+            return Deck.spawnPreviewCard({
+                type: 'number',
+                color: numMatch[2],
+                value: Number(numMatch[1])
+            });
+        }
+
+        const colorSuffix = id.match(/^(c_[a-z0-9]+)_(red|yellow|green|blue)$/);
+        if (colorSuffix && Deck.SPECIAL_DEFS?.[colorSuffix[1]]) {
+            const defId = colorSuffix[1];
+            const color = colorSuffix[2];
+            if (defId === 'c_righello') {
+                const vi = COLORS.indexOf(color);
+                return Deck.spawnPreviewCard({ defId, variantIndex: vi >= 0 ? vi : 0 });
+            }
+            if (defId === 'c_proiettile') {
+                const ci = COLORS.indexOf(color);
+                return Deck.spawnPreviewCard({ defId, copyIndex: ci >= 0 ? ci : 0 });
+            }
+            return Deck.spawnPreviewCard({ defId, color });
+        }
+
+        const pianoMatch = id.match(/^c_piani_(pv|pl|po)$/i);
+        if (pianoMatch) {
+            const idx = { pv: 0, pl: 1, po: 2 }[pianoMatch[1].toLowerCase()];
+            return Deck.spawnPreviewCard({ defId: 'c_piani', variantIndex: idx ?? 0 });
+        }
+
+        if (id.startsWith('c_br_') && Deck.BRAINROT_DEFS?.[id]) {
+            return Deck.spawnPreviewCard({ defId: id });
+        }
+
+        if (Deck.SPECIAL_DEFS?.[packId]) {
+            const hint = carta.colorHint;
+            const playableColors = new Set([...COLORS, 'black', 'wild']);
+            const color = playableColors.has(hint) ? hint : undefined;
+            return Deck.spawnPreviewCard({ defId: packId, color });
+        }
+
+        return null;
+    }
+
     let cached = null;
 
     global.CarteCatalog = {
@@ -157,6 +213,7 @@
             if (!cached) cached = buildCatalogoIndex();
             return cached;
         },
+        spawnFromCatalogEntry,
         isPackExpanded(packId) {
             return EXPAND_PACK_IDS.has(packId);
         },

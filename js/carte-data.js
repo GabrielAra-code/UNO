@@ -12,9 +12,9 @@ window.databaseCarte = [
     { id: "c_scudo", nome: "Scudo", quantita: "4", effetto: "Protegge solo da Blobby e Proiettile. Si consuma quando salva il giocatore.", cat: "⭐ Speciale UNO?" },
     { id: "c_death", nome: "Death Note", quantita: "1", MD: true, effetto: "Eliminazione immediata di un giocatore a scelta.", cat: "⭐ Speciale UNO?" },
     { id: "c_blobby", nome: "Blobby", quantita: "1", effetto: "Giocabile solo con uno Scudo in mano: entrambe le carte vengono scartate. Vittoria istantanea se il bersaglio non contrasta. Se il bersaglio ha Scudo, lo consuma e sopravvive.", cat: "⭐ Speciale UNO?" },
-    { id: "c_righello", nome: "Righello o X?", quantita: "4", effetto: "Giocabile fuori dal turno. Annulla interamente l'ultima mossa.", cat: "⭐ Speciale UNO?" },
+    { id: "c_righello", nome: "Righello", quantita: "4 (1 per colore)", effetto: "Giocabile in qualsiasi momento (come carte nere). Annulla l'ultima mossa. La carta successiva deve rispettare il colore del Righello.", cat: "⭐ Speciale UNO?" },
     { id: "c_donna", nome: "Donna di Mazze", quantita: "1", effetto: "Resetta e annulla tutte le catene ed effetti attivi globali sul tavolo.", cat: "⭐ Speciale UNO?" },
-    { id: "c_imprevisti", nome: "Imprevisti", quantita: "1", effetto: "Appena entra in mano si gioca da sola. Tutti pescano una carta.", cat: "⚪ Speciale Incolore" },
+    { id: "c_imprevisti", nome: "Imprevisti", quantita: "1", effetto: "Appena è in mano va giocata obbligatoriamente. Chi la gioca pesca tante carte quanti sono gli avversari in partita.", cat: "⚪ Speciale Incolore" },
     { id: "c_scambio", nome: "Scambio", quantita: "2", effetto: "Scambia l'intera mano di carte con un giocatore bersaglio.", cat: "⭐ Speciale UNO?" },
     { id: "c_vaff", nome: "Vaffanculo", quantita: "2", effetto: "Annulla l'effetto e la streak attiva. Le carte tornano in mano.", cat: "🌍 Evento (Giallo)" },
     { id: "c_mari", nome: "Mariguana", quantita: "1", effetto: "Obbliga tutti a giocare Verde o pescare finché non lo si trova.", cat: "🌍 Evento (Verde)" },
@@ -22,10 +22,10 @@ window.databaseCarte = [
     { id: "c_cuore", nome: "Cuore", quantita: "2", effetto: "Effettua la resurrezione immediata di un player precedentemente eliminato.", cat: "🌍 Evento (Verde)" },
     { id: "c_comunismo", nome: "Comunismo", quantita: "1", effetto: "Ruba e guarda le carte. Se intercetta Blobby attiva lo scontro 1vs1.", cat: "🌍 Evento (Rosso)" },
     { id: "c_nazismo", nome: "Nazismo", quantita: "1", effetto: "Seleziona una carta dalla tua mano e cedila forzatamente a un altro.", cat: "🌍 Evento (Rosso)" },
-    { id: "c_proiettile", nome: "Proiettile", quantita: "6", effetto: "Parte una roulette russa: chi viene colpito perde 1 PistolHP (Max 2).", cat: "🔫 Sistema Proiettile" },
+    { id: "c_proiettile", nome: "Proiettile", quantita: "6 (2 per colore rosso/giallo, 1 verde, 1 blu)", effetto: "Giocabile in qualsiasi momento. Parte una roulette russa: chi viene colpito perde 1 PistolHP (Max 2).", cat: "🔫 Sistema Proiettile" },
     { id: "c_quagruppo", nome: "QUA GRUPPO!", quantita: "1", effetto: "La metà esatta dei giocatori pesca una carta (arrotondato per eccesso).", cat: "🎯 Cutruzzolà Move" },
     { id: "c_messa", nome: "La Messa è Finita", quantita: "1", effetto: "Prende tutti i rifiuti e gli scarti accumulati e li rimescola nel deck.", cat: "🎯 Cutruzzolà Move" },
-    { id: "c_piani", nome: "Piani di Proiezione (P.V/P.L/P.O/L.T)", quantita: "1 per tipo", effetto: "Chi unisce tutti e 4 i pezzi sblocca la vittoria suprema.", cat: "📐 Piani di Proiezione" },
+    { id: "c_piani", nome: "Piani di Proiezione (P.V./P.L./P.O.)", quantita: "1 per tipo", effetto: "Tieni in mano tutti e 3 i piani (P.V., P.L. e P.O.) per sbloccare «Invoca De Vito» e vincere la partita.", cat: "📐 Piani di Proiezione" },
     { id: "c_br_ladro", nome: "Ladro delle Mezze CAPPELLE", quantita: "1", effetto: "165PT — Giallo: vincendo scarti 2 carte numero.", cat: "🧠 Brainrot" },
     { id: "c_br_pothot", nome: "Pot HotSborr", quantita: "1", effetto: "100PT — Giallo: scarti 2 carte numero.", cat: "🧠 Brainrot" },
     { id: "c_br_influen", nome: "Influensborrella", quantita: "1", effetto: "50PT — Giallo: scarti 2 carte numero.", cat: "🧠 Brainrot" },
@@ -37,5 +37,5 @@ window.databaseCarte = [
     { id: "c_br_bobrini", nome: "Bobrini cactus merdini", quantita: "1", effetto: "90PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
     { id: "c_br_centralucci", nome: "Centralucci Sborralucci", quantita: "1", effetto: "55PT — Blu: scarti 1 carta numero.", cat: "🧠 Brainrot" },
     { id: "c_br_baccala", nome: "BACCALA' MAGGIOSBORR", quantita: "1", effetto: "75PT — Bianco: scarti 4 carte numero.", cat: "🧠 Brainrot" },
-    { id: "c_specchio", nome: "Specchio", quantita: "1", effetto: "Solo entro il tempo di contrasto su uno stack (+2/+4/+10/+16): riflette l'effetto sul mittente e inverte il giro (anche a catena).", cat: "⭐ Speciale UNO?" }
+    { id: "c_specchio", nome: "Specchio", quantita: "1", effetto: "In turno: cambia giro (come Inverti, senza colore). Su stack +2/+4/+10/+16 entro 5s: riflette le carte sul mittente e inverte il giro.", cat: "⭐ Speciale UNO?" }
 ];

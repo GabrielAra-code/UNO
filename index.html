@@ -49,6 +49,7 @@
         }
     </style>
 
+    <script src="js/firebase-config.js"></script>
     <script src="js/admin-config.js"></script>
     <script src="js/ban-service.js"></script>
     <script src="js/anti-cheat.js"></script>
@@ -58,17 +59,14 @@
         import { getFirestore, doc, setDoc, getDoc, collection, query, where, getDocs } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
         const { fetchBanForUser, formatBanMessage } = window.BanService;
+        const firebaseConfig = window.firebaseConfig;
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
-            authDomain: "unoforse-a553d.firebaseapp.com",
-            databaseURL: "https://unoforse-a553d-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "unoforse-a553d",
-            storageBucket: "unoforse-a553d.firebasestorage.app",
-            messagingSenderId: "396941322053",
-            appId: "1:396941322053:web:86b8f596b4e05aac8ec02c",
-            measurementId: "G-9SEK0SY996"
-        };
+        if (!firebaseConfig?.apiKey) {
+            console.error('Config Firebase non caricata — verifica js/firebase-config.js');
+            document.getElementById('loading-overlay')?.classList.add('hidden');
+            document.getElementById('screen-auth')?.classList.remove('hidden');
+            throw new Error('firebase-config mancante');
+        }
 
         const app = initializeApp(firebaseConfig);
         const auth = getAuth(app);

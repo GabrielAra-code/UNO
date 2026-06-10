@@ -57,6 +57,7 @@
 
     let gameModalLock = Promise.resolve();
     let modalOpId = 0;
+    let gameModalSession = 0;
     let targetModalActivating = false;
 
     function withGameModalLock(fn) {
@@ -65,9 +66,18 @@
         return run;
     }
 
+    function bumpGameModalSession() {
+        gameModalSession += 1;
+        return gameModalSession;
+    }
+
     function clearTargetPickFlow() {
         targetPickFlow = null;
         targetModalActivating = false;
+    }
+
+    function clearColorPickFlow() {
+        colorPickFlow = null;
     }
 
     function targetFlowKey(pendingCardId, effect) {
@@ -80,15 +90,13 @@
 
     function isProtectedGameModalFlow() {
         return isTargetPickFlowActive()
-            || colorPickFlow?.type === 'pre'
+            || !!colorPickFlow
             || !!cardPickFlow;
     }
 
     function ensureGameModalInteractive() {
         const { modal, panel } = gameModalElements();
         if (!modal) return;
-        modal.getAnimations?.().forEach(anim => anim.cancel());
-        panel?.getAnimations?.().forEach(anim => anim.cancel());
         modal.style.pointerEvents = 'auto';
         if (panel) panel.style.pointerEvents = 'auto';
         modal.style.opacity = '';
@@ -98,10 +106,10 @@
         }
     }
 
-    async function revealGameModal() {
+    async function revealGameModal(sessionId = gameModalSession) {
         const myOp = ++modalOpId;
         await withGameModalLock(async () => {
-            if (myOp !== modalOpId) return;
+            if (myOp !== modalOpId || sessionId !== gameModalSession) return;
             const { modal, panel } = gameModalElements();
             if (!modal) return;
             if (!modal.classList.contains('hidden')) {
@@ -111,21 +119,25 @@
             const UI = global.UITransitions;
             if (UI) await UI.openOverlayModal(modal, panel);
             else modal.classList.remove('hidden');
+            if (sessionId !== gameModalSession) return;
             ensureGameModalInteractive();
         });
     }
 
     async function hideGameModal(opts = {}) {
         if (!opts.force && isProtectedGameModalFlow()) return;
+        const sessionId = opts.sessionId ?? gameModalSession;
         const myOp = ++modalOpId;
         await withGameModalLock(async () => {
             if (myOp !== modalOpId) return;
+            if (opts.force && sessionId !== gameModalSession) return;
             const { modal, panel } = gameModalElements();
             if (!modal || modal.classList.contains('hidden')) return;
             const UI = global.UITransitions;
             if (UI) await UI.closeOverlayModal(modal, panel);
             else modal.classList.add('hidden');
             cardPickFlow = null;
+            if (!opts.keepColorFlow) clearColorPickFlow();
             if (!opts.keepTargetFlow) clearTargetPickFlow();
         });
     }
@@ -136,11 +148,17 @@
         const content = $('modal-content');
         content.innerHTML = '';
         buildContent(content);
-        if (!isGameModalOpen()) {
-            revealGameModal();
-        } else {
-            ensureGameModalInteractive();
-        }
+    }
+
+    async function openPickerModal({ title, description, buildContent, enableButtons }) {
+        const session = bumpGameModalSession();
+        replaceGameModalContent({ title, description, buildContent });
+        await revealGameModal(session);
+        await new Promise(resolve => setTimeout(resolve, 120));
+        if (session !== gameModalSession) return session;
+        if (typeof enableButtons === 'function') enableButtons();
+        ensureGameModalInteractive();
+        return session;
     }
 
     function formatDuration(ms) {
@@ -190,9 +208,11 @@
             const el = $('end-rewards');
             const levelUp = progresso.livello > prevLevel;
             if (el) {
-                el.textContent = levelUp
+                const xpText = levelUp
                     ? `+${xpGain} XP · LIV. ${progresso.livello}!`
                     : `+${xpGain} XP · Vittoria registrata`;
+                const prev = el.textContent?.trim();
+                el.textContent = prev ? `${prev}\n${xpText}` : xpText;
             }
         } catch (err) {
             console.error('Ricompense vittoria:', err);
@@ -345,23 +365,27 @@
         tick();
         counterTickTimer = setInterval(tick, 200);
 
-        const resolvesAt = Number(pending.resolvesAt) || Date.now() + 5000;
-        const delay = Math.max(0, resolvesAt - Date.now() + 80);
-        counterResolveTimer = setTimeout(async () => {
+        async function finishPendingWindow() {
             if (counterWindowKey !== key) return;
             const cur = gameState?.pendingAction;
             if (!cur || pendingWindowKey(cur) !== key) return;
 
-            console.log('[COUNTER TIMER END]', { type: cur.type, key });
+            const expired = Date.now() >= (Number(cur.resolvesAt) || 0) - 80;
+            if (cur.type === 'drawStackWindow' && !expired) {
+                const left = Math.max(120, (Number(cur.resolvesAt) || 0) - Date.now() + 80);
+                counterResolveTimer = setTimeout(() => { void finishPendingWindow(); }, left);
+                return;
+            }
 
             const resolverId = pendingWindowResolverId(cur);
-            const expired = Date.now() >= (Number(cur.resolvesAt) || 0) - 80;
-            if (resolverId !== myPlayerId && !expired) {
+            if (cur.type !== 'drawStackWindow' && resolverId !== myPlayerId && !expired) {
                 console.log('[COUNTER TIMER END] skipped — resolver:', resolverId);
                 clearCounterTimers();
                 hideCounterOverlay();
                 return;
             }
+
+            console.log('[COUNTER TIMER END]', { type: cur.type, key });
 
             const responseCount = cur.responses ? Object.keys(cur.responses).length : 0;
             if (responseCount === 0) {
@@ -381,7 +405,11 @@
             } else {
                 clearPlaySelection();
             }
-        }, delay);
+        }
+
+        const resolvesAt = Number(pending.resolvesAt) || Date.now() + 5000;
+        const delay = Math.max(0, resolvesAt - Date.now() + 80);
+        counterResolveTimer = setTimeout(() => { void finishPendingWindow(); }, delay);
     }
 
     function scheduleCounterWindow(pending) {
@@ -438,11 +466,14 @@
                 : pending.drawStackType === 'draw16' ? '+16'
                     : pending.drawStackType === 'wild4' ? '+4' : '+2';
             const def = gameState?.players?.[pending.defenderId]?.nickname || '—';
-            label = pending.defenderId === myPlayerId
-                ? `Rispondi stack ${stackLabel} (${pending.drawStack}) — 5s`
-                : `Stack ${stackLabel} su ${def} (${pending.drawStack}) — 5s`;
-            canAct = pending.defenderId === myPlayerId
+            const canStack = pending.defenderId === myPlayerId
                 && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
+            label = pending.defenderId === myPlayerId
+                ? (canStack
+                    ? `Stack ${stackLabel} (${pending.drawStack}) — +carta/Specchio o PESCA`
+                    : `Stack ${stackLabel} (${pending.drawStack}) — premi PESCA o attendi`)
+                : `Stack ${stackLabel} su ${def} (${pending.drawStack}) — 5s`;
+            canAct = canStack;
         } else if (pending.type === 'brainrotDiscard') {
             if (banner) {
                 banner.textContent = pending.winnerId === myPlayerId
@@ -756,7 +787,17 @@
         if (!gameState) return;
 
         if (pesca) {
+            const stackDef = gameState.pendingAction?.type === 'drawStackWindow'
+                && gameState.pendingAction.defenderId === myPlayerId;
             pesca.disabled = !Engine.canDraw(gameState, myPlayerId);
+            if (stackDef) {
+                const n = gameState.pendingAction.drawStack || 0;
+                pesca.title = `Subisci lo stack: pesca ${n} carte`;
+                pesca.setAttribute('aria-label', `Pesca ${n} carte (stack)`);
+            } else {
+                pesca.title = 'Pesca una carta dal mazzo';
+                pesca.setAttribute('aria-label', 'Pesca');
+            }
         }
 
         if (contrast) {
@@ -887,6 +928,17 @@
         const can = Engine.canDraw(gameState, myPlayerId);
         pile.classList.toggle('pile-draw-disabled', !can);
         pile.title = can ? 'Pesca dal mazzo' : 'Non puoi pescare ora';
+        renderDeVitoButton();
+    }
+
+    function renderDeVitoButton() {
+        const btn = $('btn-invoke-devito');
+        if (!btn || !gameState) return;
+        const show = Engine.canInvokeDeVito?.(gameState, myPlayerId);
+        btn.classList.toggle('hidden', !show);
+        btn.title = show
+            ? 'Hai P.V., P.L. e P.O. in mano — invoca la De Vito per vincere!'
+            : '';
     }
 
     function clearPlaySelection() {
@@ -1182,21 +1234,26 @@
             handEl.appendChild(empty);
         }
 
+        const forcedSurprise = Engine.mustPlaySurprise?.(gameState, myPlayerId);
+
         hand.forEach(card => {
             const btn = document.createElement('button');
             const playableMari = mariMyTurn && Engine.canPlayMariGreen(gameState, myPlayerId, card);
             const myTurnPlay = canPlay
                 && Engine.isMyTurn(gameState, myPlayerId)
                 && !mariActive && !brainrotBattle && !drawStackWin && !brainrotDiscard;
+            const forcedSurpriseCard = forcedSurprise && card.value === 'surprise';
             const multiBatchSize = myTurnPlay && Engine.allowsMultiDuplicatePlay?.(card)
                 ? Engine.getDuplicateBatch(gameState, myPlayerId, card.instanceId).length
                 : 0;
             const hasLadderOption = myTurnPlay && Engine.hasLadderOption?.(gameState, myPlayerId, card.instanceId);
+            const hasSixSevenOption = myTurnPlay && Engine.hasSixSevenOption?.(gameState, myPlayerId, card.instanceId);
             const inLadderSel = playSelection?.mode === 'ladder' && selIds.has(card.instanceId);
             const playableTurn = myTurnPlay && (
                 Engine.canPlayCardThisTurn(gameState, myPlayerId, card)
                 || multiBatchSize > 1
                 || hasLadderOption
+                || hasSixSevenOption
             );
             const playableCounter = canCounter && Engine.canPlayCounter(gameState, myPlayerId, card);
             const playableBrainrot = brainrotBattle && Engine.canPlayBrainrotResponse(gameState, myPlayerId)
@@ -1225,6 +1282,7 @@
 
             const extra = [
                 playable ? '' : 'gc-card-disabled',
+                forcedSurpriseCard ? 'gc-card-forced-surprise' : '',
                 playableCounter || playableBrainrot || playableStack ? 'gc-card-counter' : '',
                 playableMari ? 'gc-card-mari' : '',
                 playableBrainrotDiscard ? 'gc-card-brainrot-pick' : '',
@@ -1445,11 +1503,14 @@
         if (pending?.type === 'drawStackWindow') {
             el.classList.remove('hidden');
             const def = gameState.players[pending.defenderId]?.nickname || '—';
+            const canStack = pending.defenderId === myPlayerId
+                && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true });
             el.textContent = pending.defenderId === myPlayerId
-                ? `Devi rispondere allo stack +${pending.drawStack}!`
+                ? (canStack
+                    ? `Stack +${pending.drawStack}: rispondi con +carta/Specchio o premi PESCA`
+                    : `Stack +${pending.drawStack}: premi PESCA (+${pending.drawStack}) o attendi il timer`)
                 : `Stack +${pending.drawStack} su ${def}`;
-            el.classList.toggle('animate-pulse', pending.defenderId === myPlayerId
-                && Engine.canPlayDrawStackResponse(gameState, myPlayerId, { probe: true }));
+            el.classList.toggle('animate-pulse', pending.defenderId === myPlayerId);
             return;
         }
         if (pending?.type === 'brainrotDiscard') {
@@ -1473,6 +1534,12 @@
             && (gameState.drawStack || 0) > 0) {
             el.classList.remove('hidden');
             el.textContent = `Stack +${gameState.drawStack} in sospeso — solo altre +carte, poi Fine turno`;
+            el.classList.add('animate-pulse');
+            return;
+        }
+        if (Engine.mustPlaySurprise?.(gameState, myPlayerId)) {
+            el.classList.remove('hidden');
+            el.textContent = 'Imprevisti! Devi giocarla obbligatoriamente';
             el.classList.add('animate-pulse');
             return;
         }
@@ -1556,9 +1623,20 @@
             return;
         }
         $('end-overlay')?.classList.remove('hidden');
-        $('end-title').textContent = gameState.winnerId === myPlayerId
-            ? 'Hai vinto!'
-            : `${gameState.winnerName || '—'} vince!`;
+        const rewardsEl = $('end-rewards');
+        if (gameState.winReason === 'deVito') {
+            const msg = Engine.deVitoWinMessage?.(gameState.winnerName)
+                || `${gameState.winnerName || '—'} ha invocato la De Vito!`;
+            $('end-title').textContent = gameState.winnerId === myPlayerId
+                ? 'De Vito invocata!'
+                : 'Vittoria De Vito!';
+            if (rewardsEl) rewardsEl.textContent = msg;
+        } else {
+            $('end-title').textContent = gameState.winnerId === myPlayerId
+                ? 'Hai vinto!'
+                : `${gameState.winnerName || '—'} vince!`;
+            if (rewardsEl) rewardsEl.textContent = '';
+        }
         $('end-duration').textContent = `Durata partita: ${formatDuration(gameState.durationMs)}`;
         if (!IS_PREVIEW) {
             grantWinRewards();
@@ -1566,8 +1644,9 @@
         if (returnTimer) clearTimeout(returnTimer);
         if (IS_PREVIEW) {
             global.GameModes?.handlePreviewWin?.(gameState, myPlayerId);
+            const actions = document.getElementById('end-overlay-actions');
             const hint = document.querySelector('.end-overlay-hint');
-            if (hint && !hint.querySelector('a')) {
+            if (hint && !actions?.childElementCount && !hint.querySelector('a')) {
                 hint.textContent = 'Usa «Nuova partita» nella barra in alto o ricarica la pagina.';
             }
             return;
@@ -1587,7 +1666,7 @@
     }
 
     function ensureColorModalOpen() {
-        if (!gameState || colorPickFlow?.type === 'pre') return;
+        if (!gameState || isProtectedGameModalFlow()) return;
         const pending = gameState.pendingAction;
         if (pending?.type === 'chooseColor'
             && pending.playerId === myPlayerId
@@ -1597,12 +1676,9 @@
     }
 
     function ensureTargetModalOpen() {
-        if (!gameState || colorPickFlow?.type === 'pre') return;
+        if (!gameState || isProtectedGameModalFlow()) return;
         if (isGameModalOpen()) {
             ensureGameModalInteractive();
-            if (isTargetPickFlowActive()) {
-                void activateTargetModalButtons();
-            }
             return;
         }
         const pending = gameState.pendingAction;
@@ -1615,15 +1691,6 @@
         } else if (targetPickFlow?.type === 'post' && targetPickFlow.effect) {
             showTargetModal(null, targetPickFlow.effect);
         }
-    }
-
-    async function activateTargetModalButtons() {
-        if (!isTargetPickFlowActive()) return;
-        await revealGameModal();
-        await new Promise(resolve => setTimeout(resolve, 160));
-        if (!isTargetPickFlowActive()) return;
-        contentDisableTargetButtons(false);
-        ensureGameModalInteractive();
     }
 
     function renderAll() {
@@ -1656,6 +1723,9 @@
         ensureColorModalOpen();
         ensureTargetModalOpen();
         ensureBrainrotDiscardUi();
+        if (IS_PREVIEW) {
+            global.GamePreview?.ensureBotLoopIfNeeded?.();
+        }
     }
 
     function showToast(msg) {
@@ -1747,6 +1817,15 @@
             if (discardMine && (!playSelection || playSelection.mode !== 'brainrotDiscard')) {
                 ensureBrainrotDiscardUi();
             }
+            if (!opts.skipSurpriseAuto
+                && Engine.mustPlaySurprise?.(gameState, myPlayerId)
+                && Engine.currentPlayerId(gameState) === myPlayerId) {
+                await commitAction(
+                    () => Engine.autoPlayForcedSurprise(gameState, myPlayerId),
+                    { quiet: false, skipSurpriseAuto: true }
+                );
+                return;
+            }
             if (IS_PREVIEW) {
                 await global.GamePreview?.runBotLoop?.();
             }
@@ -1771,7 +1850,8 @@
         if (!pending || pending.type !== 'brainrotBattle') return;
         if (!Engine.brainrotBattleCanClose?.(gameState)) return;
         if (brainrotBattleCloseInFlight || saveInFlight) return;
-        if (counterResolveTimer && counterWindowKey === pendingWindowKey(pending)) return;
+        if (counterResolveTimer && counterWindowKey === pendingWindowKey(pending)
+            && !Engine.brainrotBattleCanClose?.(gameState)) return;
         brainrotBattleCloseInFlight = true;
         void commitAction(() => Engine.finishBrainrotBattleIfReady(gameState), { quiet: true })
             .finally(() => { brainrotBattleCloseInFlight = false; });
@@ -1782,7 +1862,7 @@
 
         if (pending && Engine.isPendingTimedWindow(pending)) {
             const key = pendingWindowKey(pending);
-            if (counterWindowKey !== key) {
+            if (counterWindowKey !== key || !counterResolveTimer) {
                 schedulePendingWindow(pending);
             }
             if (pending.type === 'brainrotBattle' && Engine.brainrotBattleCanClose?.(state)) {
@@ -1810,8 +1890,7 @@
             clearPlaySelection();
         }
 
-        if (cardPickFlow || targetPickFlow) return;
-        if (colorPickFlow?.type === 'pre') return;
+        if (isProtectedGameModalFlow()) return;
         if (state.pendingAction?.type === 'chooseColor' && state.pendingAction.playerId === myPlayerId) {
             if (!isGameModalOpen()) showColorModal(null);
         }
@@ -1862,15 +1941,15 @@
             return;
         }
 
-        const sixSeven = Engine.getSixSevenBatch(gameState, myPlayerId, instanceId);
-        const hasSixSeven = sixSeven.length > 1 && Engine.isValidSixSeven(sixSeven);
-        if (hasSixSeven) {
+        if (Engine.hasSixSevenOption?.(gameState, myPlayerId, instanceId)) {
+            const sixSeven = Engine.getSixSevenBatch(gameState, myPlayerId, instanceId);
             startSixSevenSelection(sixSeven);
             return;
         }
 
         if (Engine.hasLadderOption?.(gameState, myPlayerId, instanceId)) {
-            startLadderSelection([card]);
+            const initial = Engine.getInitialLadderFromCard?.(hand, card) || [card];
+            startLadderSelection(initial.length > 1 ? initial : [card]);
             return;
         }
 
@@ -1911,7 +1990,10 @@
             && (!Engine.isValidLadder?.(cards)
                 || !Engine.isValidPlayGroup(gameState, myPlayerId, cards))) {
             playSound('error');
-            showToast('Scala non valida');
+            const validSeq = Engine.isValidLadder?.(cards);
+            showToast(validSeq
+                ? 'Almeno una carta della scala deve agganciarsi al tavolo'
+                : 'Scala non valida — deve partire dallo 0 e salire senza buchi');
             return;
         }
         clearPlaySelection();
@@ -1959,7 +2041,7 @@
     function showCardPickModal({ title, description, cards, onPick, flowKey }) {
         if (flowKey) cardPickFlow = flowKey;
 
-        replaceGameModalContent({
+        void openPickerModal({
             title,
             description,
             buildContent: (content) => {
@@ -1991,8 +2073,9 @@
                             event.preventDefault();
                             event.stopPropagation();
                             playSound('click');
+                            const session = gameModalSession;
                             cardPickFlow = null;
-                            await hideGameModal({ force: true });
+                            await hideGameModal({ force: true, sessionId: session });
                             await onPick(card);
                         });
                         list.appendChild(btn);
@@ -2040,9 +2123,10 @@
         if (btn.disabled) return;
         const content = $('modal-content');
         content?.querySelectorAll('.modal-color-btn').forEach(el => { el.disabled = true; });
-        colorPickFlow = null;
+        const session = gameModalSession;
+        clearColorPickFlow();
         playSound('click');
-        await hideGameModal({ force: true });
+        await hideGameModal({ force: true, sessionId: session });
         if (ids.length) {
             await playCardsImmediate(ids, { chosenColor: color });
         } else {
@@ -2056,7 +2140,7 @@
             : (pendingCardIdOrIds ? [pendingCardIdOrIds] : []);
         colorPickFlow = ids.length ? { type: 'pre', ids: [...ids] } : { type: 'post' };
 
-        replaceGameModalContent({
+        void openPickerModal({
             title: 'Scegli colore',
             description: 'Quale colore vuoi imporre?',
             buildContent: (content) => {
@@ -2069,17 +2153,12 @@
                     b.addEventListener('click', (event) => onColorModalPick(event, b, color, ids), { once: true });
                     content.appendChild(b);
                 });
+            },
+            enableButtons: () => {
+                if (!colorPickFlow) return;
+                $('modal-content')?.querySelectorAll('.modal-color-btn').forEach(el => { el.disabled = false; });
             }
         });
-
-        (async () => {
-            await revealGameModal();
-            await new Promise(resolve => setTimeout(resolve, 160));
-            if (!colorPickFlow) return;
-            const content = $('modal-content');
-            content?.querySelectorAll('.modal-color-btn').forEach(el => { el.disabled = false; });
-            ensureGameModalInteractive();
-        })();
     }
 
     async function onTargetModalPick(pendingCardId, effect, targetId, btn) {
@@ -2088,20 +2167,21 @@
         contentDisableTargetButtons(true);
         playSound('click');
         try {
+            const session = gameModalSession;
             if (pendingCardId && effect === 'nazism') {
                 clearTargetPickFlow();
-                await hideGameModal({ force: true });
+                await hideGameModal({ force: true, sessionId: session });
                 showNazismGiveModal(pendingCardId, targetId);
                 return;
             }
             if (pendingCardId && effect === 'communism') {
                 clearTargetPickFlow();
-                await hideGameModal({ force: true });
+                await hideGameModal({ force: true, sessionId: session });
                 showCommunismStealModal(pendingCardId, targetId);
                 return;
             }
             clearTargetPickFlow();
-            await hideGameModal({ force: true });
+            await hideGameModal({ force: true, sessionId: session });
             if (pendingCardId) {
                 await commitAction(() => Engine.playCards(
                     gameState, myPlayerId, [pendingCardId], { targetId }
@@ -2138,7 +2218,7 @@
         const flowKey = targetFlowKey(pendingCardId, pickEffect);
         if (targetPickFlow?.flowKey === flowKey && (isGameModalOpen() || targetModalActivating)) {
             ensureGameModalInteractive();
-            void activateTargetModalButtons();
+            contentDisableTargetButtons(false);
             return;
         }
 
@@ -2187,7 +2267,7 @@
             targets.push({ id, nickname: p?.nickname || id });
         });
 
-        replaceGameModalContent({
+        void openPickerModal({
             title,
             description,
             buildContent: (content) => {
@@ -2240,10 +2320,13 @@
                     });
                     content.appendChild(cancel);
                 }
+            },
+            enableButtons: () => {
+                if (!isTargetPickFlowActive()) return;
+                contentDisableTargetButtons(false);
+                targetModalActivating = false;
             }
         });
-
-        void activateTargetModalButtons();
     }
 
     function cardByInstanceId(instanceId) {
@@ -2290,6 +2373,14 @@
         }
         $('deck-draw')?.addEventListener('click', onDrawClick);
         $('btn-pesca')?.addEventListener('click', onDrawClick);
+        $('btn-invoke-devito')?.addEventListener('click', async () => {
+            if (!Engine.canInvokeDeVito?.(gameState, myPlayerId)) {
+                playSound('error');
+                showToast('Servono P.V., P.L. e P.O. in mano');
+                return;
+            }
+            await commitAction(() => Engine.invokeDeVito(gameState, myPlayerId));
+        });
         $('btn-uno')?.addEventListener('click', async () => {
             const p = gameState?.players?.[myPlayerId];
             if (myHand().length !== 1 || p?.saidUno) return;

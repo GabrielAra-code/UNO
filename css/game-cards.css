@@ -1,0 +1,424 @@
+/* Carte, modali picker e roulette — pagine partita (gioco.html) */
+
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+.btn-purple { background-color: #a855f7; color: #fff; box-shadow: 0 8px 0 #7e22ce; }
+
+.uno-game .gc-card {
+    position: relative;
+    border-radius: 0.75rem;
+    border: none;
+    box-shadow: 0 6px 0 rgba(0, 0, 0, 0.38), 0 10px 22px rgba(0, 0, 0, 0.32);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    overflow: hidden;
+    user-select: none;
+    transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+
+.uno-game .gc-card-pile {
+    width: 7.25rem;
+    height: 10.25rem;
+    padding: 0.45rem 0.35rem 0.5rem;
+    cursor: pointer;
+}
+
+.uno-game .gc-card-pile:hover:not(.gc-card-disabled) {
+    transform: translateY(-4px) scale(1.03);
+    filter: brightness(1.05);
+}
+
+.uno-game .gc-card-hand {
+    flex: 0 0 auto;
+    width: 5.25rem;
+    height: 7.5rem;
+    padding: 0.35rem 0.3rem 0.4rem;
+    cursor: pointer;
+}
+
+.uno-game #my-hand.hand-size-many .gc-card-hand,
+.uno-game #my-hand.hand-size-crowded .gc-card-hand {
+    width: 4.35rem;
+    height: 6.25rem;
+}
+
+.uno-game .hand-card-slot:hover .gc-card-hand:not(.gc-card-disabled):not(:disabled) {
+    transform: translateY(-10px) scale(1.05);
+    box-shadow: 0 10px 0 rgba(0, 0, 0, 0.32), 0 16px 28px rgba(0, 0, 0, 0.38);
+    z-index: 5;
+}
+
+.uno-game .gc-card-disabled,
+.uno-game .gc-card-hand:disabled {
+    opacity: 1;
+    cursor: not-allowed;
+    filter: brightness(0.55) saturate(0.72);
+}
+
+.uno-game .gc-card-disabled::after,
+.uno-game .gc-card-hand:disabled::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: rgba(0, 0, 0, 0.42);
+    pointer-events: none;
+    z-index: 4;
+}
+
+.uno-game .gc-card-counter {
+    outline: 3px solid #f59e0b;
+    outline-offset: 3px;
+    box-shadow: 0 0 16px rgba(245, 158, 11, 0.5), 0 6px 0 rgba(0, 0, 0, 0.35);
+}
+
+.uno-game .gc-card-selected {
+    outline: 3px solid #38bdf8;
+    outline-offset: 3px;
+    transform: translateY(-14px) scale(1.06);
+    box-shadow: 0 0 20px rgba(56, 189, 248, 0.55), 0 8px 0 rgba(0, 0, 0, 0.32);
+    z-index: 6;
+}
+
+.uno-game .gc-card-mari {
+    outline: 3px solid #22c55e;
+    outline-offset: 3px;
+    box-shadow: 0 0 16px rgba(34, 197, 94, 0.45);
+}
+
+.uno-game .gc-card-forced-surprise {
+    outline: 3px solid #f59e0b;
+    outline-offset: 3px;
+    box-shadow: 0 0 18px rgba(245, 158, 11, 0.55);
+    animation: gc-surprise-pulse 1s ease-in-out infinite;
+}
+
+@keyframes gc-surprise-pulse {
+    0%, 100% { transform: scale(1); }
+    50% { transform: scale(1.04); }
+}
+
+.uno-game .gc-card-ladder-hint { outline: 2px dashed #a78bfa; outline-offset: 3px; }
+.uno-game .gc-card-dup-group { outline: 2px dashed rgba(56, 189, 248, 0.65); outline-offset: 3px; }
+
+.uno-game .gc-corner {
+    position: absolute;
+    font-weight: 900;
+    line-height: 1;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
+}
+
+.uno-game .gc-corner-tl { top: 0.35rem; left: 0.4rem; font-size: 0.85rem; }
+
+.uno-game .gc-corner-br {
+    bottom: 0.35rem;
+    right: 0.4rem;
+    font-size: 0.85rem;
+    transform: rotate(180deg);
+}
+
+.uno-game .gc-card.gc-card-art,
+.uno-game button.gc-card.gc-card-art {
+    padding: 0 !important;
+    overflow: visible;
+    background: transparent !important;
+    background-image: none !important;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    line-height: 0;
+    height: auto;
+}
+
+.uno-game .gc-card-hand.gc-card-art,
+.uno-game .gc-card-pile.gc-card-art,
+.uno-game button.gc-card-hand.gc-card-art,
+.uno-game button.gc-card-pile.gc-card-art {
+    display: block;
+    height: auto !important;
+    aspect-ratio: 321 / 443;
+    padding: 0 !important;
+}
+
+.uno-game .gc-card-art .gc-card-art-img {
+    display: block;
+    width: 100%;
+    height: auto;
+    aspect-ratio: 321 / 443;
+    object-fit: contain;
+    object-position: center;
+    border-radius: 0;
+    pointer-events: none;
+    user-select: none;
+    vertical-align: top;
+}
+
+.uno-game .gc-card-center {
+    font-size: 1.65rem;
+    font-weight: 900;
+    line-height: 1.05;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
+    word-break: break-word;
+    padding: 0 0.2rem;
+}
+
+.uno-game .gc-card-pile .gc-card-center { font-size: 1.85rem; }
+.uno-game .gc-card-hand .gc-card-center { font-size: 1.35rem; }
+.uno-game #my-hand.hand-size-crowded .gc-card-center { font-size: 1rem; }
+
+.uno-game .gc-card-sub {
+    position: absolute;
+    bottom: 0.38rem;
+    left: 0.25rem;
+    right: 0.25rem;
+    font-size: 0.42rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.03em;
+    opacity: 0.92;
+    line-height: 1.15;
+    max-height: 2.2em;
+    overflow: hidden;
+}
+
+.uno-game .gc-card-brainrot-name {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    padding: 0.15rem 0.2rem 1rem;
+    font-size: 0.48rem;
+    font-weight: 900;
+    line-height: 1.12;
+    word-break: break-word;
+}
+
+.uno-game .gc-card-pt {
+    position: absolute;
+    right: 0.35rem;
+    bottom: 0.35rem;
+    font-size: 0.52rem;
+    font-weight: 900;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
+}
+
+.uno-game .gc-card-red { background: #dc2626; color: #fff; }
+.uno-game .gc-card-yellow { background: #eab308; color: #0f172a; }
+.uno-game .gc-card-green { background: #16a34a; color: #fff; }
+.uno-game .gc-card-blue { background: #2563eb; color: #fff; }
+
+.uno-game .gc-card-black {
+    background: linear-gradient(145deg, #1f2937 0%, #020617 100%);
+    color: #f8fafc;
+}
+
+.uno-game .gc-card-wild {
+    background: linear-gradient(145deg, #64748b 0%, #334155 100%);
+    color: #fff;
+}
+
+.uno-game .gc-card-brainrot { background: linear-gradient(160deg, #312e81, #1e1b4b); color: #e0e7ff; }
+.uno-game .gc-card-battle-yellow { background: #eab308; color: #0f172a; }
+.uno-game .gc-card-battle-white { background: #f1f5f9; color: #0f172a; }
+.uno-game .gc-card-battle-pink { background: #ec4899; color: #fff; }
+.uno-game .gc-card-battle-blue { background: #2563eb; color: #fff; }
+
+.uno-game .gc-card-draw-back {
+    background: linear-gradient(145deg, #b91c1c 0%, #7f1d1d 55%, #450a0a 100%);
+    color: #fef3c7;
+    cursor: pointer;
+}
+
+.uno-game .gc-card-draw-back::after {
+    content: 'UNO?';
+    font-weight: 900;
+    font-size: 1.05rem;
+    letter-spacing: 0.08em;
+    transform: rotate(-8deg);
+    opacity: 0.95;
+}
+
+.uno-game .gc-card-draw-back.pile-draw-disabled {
+    opacity: 0.4;
+    filter: grayscale(0.35);
+    cursor: not-allowed;
+}
+
+.uno-game #deck-discard { transform: rotate(5deg); }
+
+.uno-game .draw-count {
+    position: absolute;
+    bottom: -0.45rem;
+    right: -0.45rem;
+    background: #0f172a;
+    border: 2px solid #facc15;
+    color: #facc15;
+    font-size: 0.62rem;
+    font-weight: 900;
+    padding: 0.15rem 0.45rem;
+    border-radius: 999px;
+    z-index: 2;
+}
+
+.uno-game .gc-dup-badge,
+.uno-game .gc-dup-sel {
+    position: absolute;
+    top: 0.3rem;
+    left: 0.3rem;
+    font-size: 0.48rem;
+    font-weight: 900;
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.35rem;
+    background: rgba(0, 0, 0, 0.35);
+    z-index: 2;
+}
+
+.uno-game .gc-dup-sel { color: #7dd3fc; }
+.uno-game .gc-dup-badge { color: #fde68a; }
+
+.uno-game .gc-ladder-badge {
+    position: absolute;
+    top: 0.3rem;
+    right: 0.3rem;
+    font-size: 0.45rem;
+    font-weight: 900;
+    padding: 0.1rem 0.3rem;
+    border-radius: 0.35rem;
+    background: rgba(16, 185, 129, 0.85);
+    color: #ecfdf5;
+    z-index: 3;
+    cursor: pointer;
+    pointer-events: auto;
+}
+
+.uno-game .gc-ladder-badge:hover { filter: brightness(1.12); }
+
+.uno-game .gc-ladder-dup-hint {
+    position: absolute;
+    bottom: 0.3rem;
+    right: 0.3rem;
+    font-size: 0.55rem;
+    font-weight: 900;
+    padding: 0.05rem 0.25rem;
+    border-radius: 0.3rem;
+    background: rgba(167, 139, 250, 0.9);
+    color: #f5f3ff;
+    z-index: 3;
+    pointer-events: none;
+}
+
+.uno-game .hand-empty-msg {
+    color: #94a3b8;
+    font-size: 0.75rem;
+    font-weight: 700;
+    padding: 1rem;
+}
+
+.uno-game .modal-target-revive {
+    border-color: #4ade80 !important;
+    background: linear-gradient(180deg, #166534, #14532d) !important;
+}
+
+.uno-game .modal-color-btn,
+.uno-game .modal-target-btn {
+    width: 100%;
+    padding: 0.75rem;
+    border-radius: 12px;
+    font-weight: 800;
+    margin-bottom: 0.5rem;
+    border: 2px solid #475569;
+    background: #1e293b;
+    color: #fff;
+}
+
+.uno-game .modal-color-btn.color-red { background: #dc2626; border-color: #fca5a5; }
+.uno-game .modal-color-btn.color-yellow { background: #eab308; color: #0f172a; border-color: #fef08a; }
+.uno-game .modal-color-btn.color-green { background: #16a34a; border-color: #86efac; }
+.uno-game .modal-color-btn.color-blue { background: #2563eb; border-color: #93c5fd; }
+
+.uno-game #bullet-roulette-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 80;
+    display: flex;
+    align-items: flex-end;
+    justify-content: center;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(4px);
+    pointer-events: none;
+}
+
+.uno-game #bullet-roulette-overlay.active { pointer-events: auto; }
+.uno-game #bullet-roulette-overlay.hidden { display: none; }
+
+.uno-game .roulette-panel {
+    width: min(92vw, 380px);
+    margin-bottom: 8vh;
+    padding: 1.5rem 1.25rem 1.75rem;
+    background: linear-gradient(165deg, #1e293b 0%, #0f172a 55%, #020617 100%);
+    border: 3px solid #fbbf24;
+    border-radius: 1.75rem 1.75rem 1rem 1rem;
+    box-shadow: 0 -12px 48px rgba(251, 191, 36, 0.22);
+    transform: translateY(110%);
+    transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
+    text-align: center;
+}
+
+.uno-game #bullet-roulette-overlay.active .roulette-panel { transform: translateY(0); }
+
+.uno-game .roulette-wheel-wrap {
+    position: relative;
+    width: min(72vw, 280px);
+    height: min(72vw, 280px);
+    margin: 0.75rem auto 0;
+}
+
+.uno-game .roulette-pointer-fixed {
+    position: absolute;
+    left: 50%;
+    top: -6px;
+    transform: translateX(-50%);
+    z-index: 12;
+    font-size: 2.25rem;
+    color: #fef08c;
+    pointer-events: none;
+}
+
+.uno-game .roulette-wheel {
+    position: relative;
+    width: 100%;
+    height: 100%;
+    border-radius: 50%;
+    border: 6px solid #78350f;
+    overflow: hidden;
+    will-change: transform;
+    background-color: #1e293b;
+}
+
+.uno-game .roulette-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.uno-game .roulette-hub {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 18%;
+    height: 18%;
+    transform: translate(-50%, -50%);
+    border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, #fde68a, #b45309 70%, #78350f);
+    border: 3px solid #fef3c7;
+    z-index: 5;
+}
+
+.uno-game .roulette-result {
+    margin-top: 0.75rem;
+    font-size: 0.9rem;
+    font-weight: 800;
+    color: #fca5a5;
+    min-height: 1.25rem;
+}

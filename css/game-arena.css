@@ -1,9 +1,9 @@
 /* UNO? — Arena partita (mockup CARD GAME) */
 
 .uno-game {
-    --arena-bg-1: var(--uno-bg-mid, #fde047);
-    --arena-bg-2: var(--uno-bg-warm, #fbbf24);
-    --arena-glow: #f97316;
+    --arena-bg-1: var(--menu-bg-mid, #3b82f6);
+    --arena-bg-2: var(--menu-bg-deep, #1e40af);
+    --arena-glow: #60a5fa;
     --arena-gold: #facc15;
     --player-dock-h: clamp(160px, 36vh, 240px);
 }
@@ -19,15 +19,19 @@
 
 .uno-game .hidden { display: none !important; }
 
+html:has(.uno-game) {
+    background-color: var(--menu-bg-base, #2563eb);
+}
+
 .uno-game body,
 .uno-game.game-root {
-    background-color: var(--uno-bg-base, #fde047);
+    background-color: var(--menu-bg-base, #2563eb);
     background-image:
-        radial-gradient(ellipse 72% 68% at 50% 50%, var(--uno-bg-vignette, rgba(161, 98, 7, 0.2)) 0%, transparent 72%),
-        radial-gradient(ellipse 145% 115% at 50% 38%, var(--uno-bg-outer, #fff9c4) 0%, var(--uno-bg-mid, #fde047) 32%, var(--uno-bg-warm, #fbbf24) 62%, var(--uno-bg-deep, #f59e0b) 100%);
+        radial-gradient(ellipse 78% 72% at 50% 50%, var(--menu-bg-vignette, rgba(7, 15, 36, 0.38)) 0%, transparent 70%),
+        radial-gradient(ellipse 145% 115% at 50% 38%, var(--menu-bg-outer, #7dd3fc) 0%, var(--menu-bg-mid, #3b82f6) 38%, var(--menu-bg-deep, #1e40af) 100%);
     background-attachment: fixed;
     background-repeat: no-repeat;
-    color: #422006;
+    color: #e2e8f0;
 }
 
 .uno-game .game-topbar {
@@ -375,6 +379,50 @@
     display: flex;
     align-items: center;
     gap: 1.1rem;
+}
+
+.uno-game .draw-pile-stack {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.uno-game .btn-invoke-devito {
+    border: none;
+    border-radius: 999px;
+    padding: 0.42rem 0.85rem;
+    font-size: 0.58rem;
+    font-weight: 900;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: #451a03;
+    background: linear-gradient(180deg, #fde68a 0%, #f59e0b 55%, #d97706 100%);
+    border: 2px solid #fef3c7;
+    box-shadow: 0 4px 0 #92400e, 0 0 18px rgba(251, 191, 36, 0.45);
+    cursor: pointer;
+    white-space: nowrap;
+    animation: devito-btn-pulse 1.4s ease-in-out infinite;
+    z-index: 6;
+}
+
+.uno-game .btn-invoke-devito:hover {
+    filter: brightness(1.08);
+    transform: translateY(-1px);
+}
+
+.uno-game .btn-invoke-devito:active {
+    transform: translateY(3px);
+    box-shadow: 0 1px 0 #92400e;
+}
+
+.uno-game .btn-invoke-devito.hidden {
+    display: none;
+}
+
+@keyframes devito-btn-pulse {
+    0%, 100% { box-shadow: 0 4px 0 #92400e, 0 0 14px rgba(251, 191, 36, 0.35); }
+    50% { box-shadow: 0 4px 0 #92400e, 0 0 24px rgba(251, 191, 36, 0.65); }
 }
 
 .uno-game .dir-ring {
@@ -959,6 +1007,13 @@
     color: #fff;
 }
 
+.uno-game button.gc-card.gc-card-art,
+.uno-game .gc-card.gc-card-art {
+    background: transparent !important;
+    background-image: none !important;
+    color: inherit;
+}
+
 .uno-game button.gc-card.gc-card-brainrot,
 .uno-game .gc-card.gc-card-brainrot {
     background: linear-gradient(160deg, #312e81, #1e1b4b) !important;
@@ -1114,9 +1169,50 @@
     color: #34d399;
     font-weight: 700;
     margin-bottom: 1rem;
+    white-space: pre-line;
+    line-height: 1.45;
 }
 
 .uno-game .end-overlay-hint { font-size: 0.875rem; color: #64748b; }
+
+.uno-game .end-overlay-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 0.65rem;
+    margin-top: 1.25rem;
+    width: 100%;
+}
+
+.uno-game .end-overlay-actions.hidden { display: none; }
+
+.uno-game .end-overlay-btn {
+    width: 100%;
+    padding: 0.85rem 1rem;
+    font-size: 0.95rem;
+    font-weight: 900;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-radius: 0.65rem;
+    border: 3px solid transparent;
+    cursor: pointer;
+}
+
+.uno-game .end-overlay-btn--menu {
+    background: #334155;
+    border-color: #64748b;
+    color: #f1f5f9;
+}
+
+.uno-game .end-overlay-btn--menu:hover { filter: brightness(1.08); }
+
+.uno-game .end-overlay-btn--next {
+    background: linear-gradient(180deg, #f59e0b 0%, #d97706 100%);
+    border-color: #fcd34d;
+    color: #1e293b;
+    box-shadow: 0 4px 0 #92400e;
+}
+
+.uno-game .end-overlay-btn--next:hover { filter: brightness(1.06); }
 
 .uno-game .roulette-spin-btn {
     width: 100%;

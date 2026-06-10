@@ -18,7 +18,7 @@
             value: 'cancel',
             kind: 'special',
             label: 'Righello',
-            colors: ['black'],
+            colors: COLORS,
             count: 4,
             variants: ['Tavolo?', 'Cane?', 'Centrale nucleare?', 'X?']
         },
@@ -31,10 +31,10 @@
         c_cuore: { value: 'heart', kind: 'special', label: 'Cuore', colors: ['green'], count: 2 },
         c_comunismo: { value: 'communism', kind: 'special', label: 'Comun.', colors: ['red'], count: 1 },
         c_nazismo: { value: 'nazism', kind: 'special', label: 'Naz.', colors: ['red'], count: 1 },
-        c_proiettile: { value: 'bullet', kind: 'special', label: '🔫', colors: ['black'], count: 6 },
+        c_proiettile: { value: 'bullet', kind: 'special', label: '🔫', colors: COLORS, count: 6 },
         c_quagruppo: { value: 'halfdraw', kind: 'special', label: 'Gruppo', colors: ['black'], count: 1 },
         c_messa: { value: 'reshuffle', kind: 'special', label: 'Messa', colors: ['black'], count: 1 },
-        c_piani: { value: 'plan', kind: 'special', label: 'Piano', colors: ['black'], count: 4, variants: ['PV', 'PL', 'PO', 'LT'] },
+        c_piani: { value: 'plan', kind: 'special', label: 'Piano', colors: ['black'], count: 3, variants: ['PV', 'PL', 'PO'] },
         c_specchio: { value: 'mirror', kind: 'special', label: 'Specchio', colors: ['black'], count: 1 }
     };
 
@@ -65,6 +65,16 @@
     function nextInstanceId() {
         instanceCounter += 1;
         return `inst_${Date.now()}_${instanceCounter}_${Math.random().toString(36).slice(2, 7)}`;
+    }
+
+    function colorAtIndex(def, index = 0) {
+        if (!def?.colors?.length) return 'black';
+        return def.colors[index % def.colors.length] || 'black';
+    }
+
+    function righelloDisplayLabel(color) {
+        const name = COLOR_LABEL[color];
+        return name ? `Righello ${name}` : 'Righello';
     }
 
     function makeCard(defId, color, value, kind, label, extra = {}) {
@@ -117,15 +127,18 @@
             const total = countCap != null ? Math.min(qty, countCap) : qty;
 
             for (let i = 0; i < total; i += 1) {
-                const color = def.colors[i % def.colors.length] || 'black';
+                const color = colorAtIndex(def, i);
                 const extra = {};
                 if (def.variants) {
                     const variantLabel = def.variants[i % def.variants.length];
                     if (defId === 'c_righello') {
-                        extra.righelloLabel = `Righello o ${variantLabel}`;
+                        extra.righelloLabel = righelloDisplayLabel(color);
+                        extra.righelloVariantIndex = i % def.variants.length;
                     } else if (defId === 'c_piani') {
                         extra.planPart = variantLabel;
                     }
+                } else if (defId === 'c_proiettile') {
+                    extra.bulletColorIndex = i % COLORS.length;
                 }
                 const displayLabel = extra.righelloLabel || def.label;
                 cards.push(makeCard(defId, color, def.value, def.kind, displayLabel, extra));
@@ -225,15 +238,19 @@
         if (def) {
             const extra = {};
             let label = def.label;
-            const color = spec.color || def.colors?.[0] || 'black';
+            const copyIndex = spec.copyIndex ?? spec.variantIndex ?? 0;
+            const color = spec.color || colorAtIndex(def, copyIndex);
             if (defId === 'c_righello' && def.variants) {
-                const vi = spec.variantIndex ?? 0;
-                extra.righelloLabel = `Righello o ${def.variants[vi % def.variants.length]}`;
+                const vi = spec.variantIndex ?? copyIndex;
+                extra.righelloVariantIndex = vi % def.variants.length;
+                extra.righelloLabel = righelloDisplayLabel(color);
                 label = extra.righelloLabel;
             } else if (defId === 'c_piani' && def.variants) {
-                const vi = spec.variantIndex ?? 0;
+                const vi = spec.variantIndex ?? copyIndex;
                 extra.planPart = def.variants[vi % def.variants.length];
                 label = `${def.label} ${extra.planPart}`.trim();
+            } else if (defId === 'c_proiettile') {
+                extra.bulletColorIndex = copyIndex % COLORS.length;
             }
             return makeCard(defId, color, def.value, def.kind, label, extra);
         }
@@ -254,6 +271,8 @@
     global.GameDeck = {
         COLORS,
         COLOR_LABEL,
+        colorAtIndex,
+        righelloDisplayLabel,
         SPECIAL_DEFS,
         BRAINROT_DEFS,
         BRAINROT_BATTLE_COLOR_LABEL,

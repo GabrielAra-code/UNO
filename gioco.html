@@ -3,365 +3,12 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-    <meta name="theme-color" content="#fde047">
+    <meta name="theme-color" content="#2563eb">
     <title>UNO? REVOLUTION — Partita</title>
     <link rel="stylesheet" href="css/style.css">
     <link rel="stylesheet" href="css/mobile.css">
     <link rel="stylesheet" href="css/game-arena.css">
-    <style>
-        .no-scrollbar::-webkit-scrollbar { display: none; }
-        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
-        .btn-purple { background-color: #a855f7; color: #fff; box-shadow: 0 8px 0 #7e22ce; }
-
-        /* Carte (stile Index / UNO) */
-        .gc-card {
-            position: relative;
-            border-radius: 0.75rem;
-            border: 3px solid rgba(255, 255, 255, 0.92);
-            box-shadow: 0 6px 0 rgba(0, 0, 0, 0.38), 0 10px 22px rgba(0, 0, 0, 0.32);
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            overflow: hidden;
-            user-select: none;
-            transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
-        }
-
-        .gc-card-pile {
-            width: 7.25rem;
-            height: 10.25rem;
-            padding: 0.45rem 0.35rem 0.5rem;
-            cursor: pointer;
-        }
-
-        .gc-card-pile:hover:not(.gc-card-disabled) {
-            transform: translateY(-4px) scale(1.03);
-            filter: brightness(1.05);
-        }
-
-        .gc-card-hand {
-            flex: 0 0 auto;
-            width: 5.25rem;
-            height: 7.5rem;
-            padding: 0.35rem 0.3rem 0.4rem;
-            cursor: pointer;
-        }
-
-        #my-hand.hand-size-many .gc-card-hand,
-        #my-hand.hand-size-crowded .gc-card-hand {
-            width: 4.35rem;
-            height: 6.25rem;
-        }
-
-        .hand-card-slot:hover .gc-card-hand:not(.gc-card-disabled):not(:disabled) {
-            transform: translateY(-10px) scale(1.05);
-            box-shadow: 0 10px 0 rgba(0, 0, 0, 0.32), 0 16px 28px rgba(0, 0, 0, 0.38);
-            z-index: 5;
-        }
-
-        .gc-card-disabled,
-        .gc-card-hand:disabled {
-            opacity: 1;
-            cursor: not-allowed;
-            filter: brightness(0.55) saturate(0.72);
-        }
-
-        .gc-card-disabled::after,
-        .gc-card-hand:disabled::after {
-            content: '';
-            position: absolute;
-            inset: 0;
-            border-radius: inherit;
-            background: rgba(0, 0, 0, 0.42);
-            pointer-events: none;
-            z-index: 4;
-        }
-
-        .gc-card-counter {
-            outline: 3px solid #f59e0b;
-            box-shadow: 0 0 16px rgba(245, 158, 11, 0.5), 0 6px 0 rgba(0, 0, 0, 0.35);
-        }
-
-        .gc-card-selected {
-            outline: 3px solid #38bdf8;
-            transform: translateY(-14px) scale(1.06);
-            box-shadow: 0 0 20px rgba(56, 189, 248, 0.55), 0 8px 0 rgba(0, 0, 0, 0.32);
-            z-index: 6;
-        }
-
-        .gc-card-mari { outline: 3px solid #22c55e; box-shadow: 0 0 16px rgba(34, 197, 94, 0.45); }
-        .gc-card-ladder-hint { outline: 2px dashed #a78bfa; }
-        .gc-card-dup-group { outline: 2px dashed rgba(56, 189, 248, 0.65); }
-
-        .gc-corner {
-            position: absolute;
-            font-weight: 900;
-            line-height: 1;
-            text-shadow: 0 1px 0 rgba(0, 0, 0, 0.25);
-        }
-
-        .gc-corner-tl { top: 0.35rem; left: 0.4rem; font-size: 0.85rem; }
-        .gc-corner-br {
-            bottom: 0.35rem;
-            right: 0.4rem;
-            font-size: 0.85rem;
-            transform: rotate(180deg);
-        }
-
-        .gc-card-center {
-            font-size: 1.65rem;
-            font-weight: 900;
-            line-height: 1.05;
-            text-shadow: 0 2px 0 rgba(0, 0, 0, 0.25);
-            word-break: break-word;
-            padding: 0 0.2rem;
-        }
-
-        .gc-card-pile .gc-card-center { font-size: 1.85rem; }
-        .gc-card-hand .gc-card-center { font-size: 1.35rem; }
-        #my-hand.hand-size-crowded .gc-card-center { font-size: 1rem; }
-
-        .gc-card-sub {
-            position: absolute;
-            bottom: 0.38rem;
-            left: 0.25rem;
-            right: 0.25rem;
-            font-size: 0.42rem;
-            font-weight: 800;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-            opacity: 0.92;
-            line-height: 1.15;
-            max-height: 2.2em;
-            overflow: hidden;
-        }
-
-        .gc-card-brainrot-name {
-            flex: 1;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            width: 100%;
-            padding: 0.15rem 0.2rem 1rem;
-            font-size: 0.48rem;
-            font-weight: 900;
-            line-height: 1.12;
-            word-break: break-word;
-        }
-
-        .gc-card-pt {
-            position: absolute;
-            right: 0.35rem;
-            bottom: 0.35rem;
-            font-size: 0.52rem;
-            font-weight: 900;
-            color: #fff;
-            text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
-        }
-
-        .gc-card-red { background: #dc2626; color: #fff; }
-        .gc-card-yellow { background: #eab308; color: #0f172a; }
-        .gc-card-green { background: #16a34a; color: #fff; }
-        .gc-card-blue { background: #2563eb; color: #fff; }
-        .gc-card-black {
-            background: linear-gradient(145deg, #1f2937 0%, #020617 100%);
-            color: #f8fafc;
-        }
-        .gc-card-wild {
-            background: linear-gradient(145deg, #64748b 0%, #334155 100%);
-            color: #fff;
-        }
-        .gc-card-brainrot { background: linear-gradient(160deg, #312e81, #1e1b4b); color: #e0e7ff; }
-        .gc-card-battle-yellow { background: #eab308; color: #0f172a; }
-        .gc-card-battle-white { background: #f1f5f9; color: #0f172a; }
-        .gc-card-battle-pink { background: #ec4899; color: #fff; }
-        .gc-card-battle-blue { background: #2563eb; color: #fff; }
-
-        .gc-card-draw-back {
-            background: linear-gradient(145deg, #b91c1c 0%, #7f1d1d 55%, #450a0a 100%);
-            color: #fef3c7;
-            cursor: pointer;
-        }
-
-        .gc-card-draw-back::after {
-            content: 'UNO?';
-            font-weight: 900;
-            font-size: 1.05rem;
-            letter-spacing: 0.08em;
-            transform: rotate(-8deg);
-            opacity: 0.95;
-        }
-
-        .gc-card-draw-back.pile-draw-disabled {
-            opacity: 0.4;
-            filter: grayscale(0.35);
-            cursor: not-allowed;
-        }
-
-        #deck-discard { transform: rotate(5deg); }
-
-        .draw-count {
-            position: absolute;
-            bottom: -0.45rem;
-            right: -0.45rem;
-            background: #0f172a;
-            border: 2px solid #facc15;
-            color: #facc15;
-            font-size: 0.62rem;
-            font-weight: 900;
-            padding: 0.15rem 0.45rem;
-            border-radius: 999px;
-            z-index: 2;
-        }
-
-        .gc-dup-badge,
-        .gc-dup-sel {
-            position: absolute;
-            top: 0.3rem;
-            left: 0.3rem;
-            font-size: 0.48rem;
-            font-weight: 900;
-            padding: 0.1rem 0.3rem;
-            border-radius: 0.35rem;
-            background: rgba(0, 0, 0, 0.35);
-            z-index: 2;
-        }
-
-        .gc-dup-sel { color: #7dd3fc; }
-        .gc-dup-badge { color: #fde68a; }
-        .gc-ladder-badge {
-            position: absolute;
-            top: 0.3rem;
-            right: 0.3rem;
-            font-size: 0.45rem;
-            font-weight: 900;
-            padding: 0.1rem 0.3rem;
-            border-radius: 0.35rem;
-            background: rgba(16, 185, 129, 0.85);
-            color: #ecfdf5;
-            z-index: 3;
-            cursor: pointer;
-            pointer-events: auto;
-        }
-        .gc-ladder-badge:hover { filter: brightness(1.12); }
-        .gc-ladder-dup-hint {
-            position: absolute;
-            bottom: 0.3rem;
-            right: 0.3rem;
-            font-size: 0.55rem;
-            font-weight: 900;
-            padding: 0.05rem 0.25rem;
-            border-radius: 0.3rem;
-            background: rgba(167, 139, 250, 0.9);
-            color: #f5f3ff;
-            z-index: 3;
-            pointer-events: none;
-        }
-
-        .hand-empty-msg {
-            color: #94a3b8;
-            font-size: 0.75rem;
-            font-weight: 700;
-            padding: 1rem;
-        }
-
-        .modal-target-revive {
-            border-color: #4ade80 !important;
-            background: linear-gradient(180deg, #166534, #14532d) !important;
-        }
-
-        .modal-color-btn, .modal-target-btn {
-            width: 100%;
-            padding: 0.75rem;
-            border-radius: 12px;
-            font-weight: 800;
-            margin-bottom: 0.5rem;
-            border: 2px solid #475569;
-            background: #1e293b;
-            color: #fff;
-        }
-
-        .modal-color-btn.color-red { background: #dc2626; border-color: #fca5a5; }
-        .modal-color-btn.color-yellow { background: #eab308; color: #0f172a; border-color: #fef08a; }
-        .modal-color-btn.color-green { background: #16a34a; border-color: #86efac; }
-        .modal-color-btn.color-blue { background: #2563eb; border-color: #93c5fd; }
-
-        /* Roulette */
-        #bullet-roulette-overlay {
-            position: fixed;
-            inset: 0;
-            z-index: 80;
-            display: flex;
-            align-items: flex-end;
-            justify-content: center;
-            background: rgba(0, 0, 0, 0.75);
-            backdrop-filter: blur(4px);
-            pointer-events: none;
-        }
-
-        #bullet-roulette-overlay.active { pointer-events: auto; }
-        #bullet-roulette-overlay.hidden { display: none; }
-
-        .roulette-panel {
-            width: min(92vw, 380px);
-            margin-bottom: 8vh;
-            padding: 1.5rem 1.25rem 1.75rem;
-            background: linear-gradient(165deg, #1e293b 0%, #0f172a 55%, #020617 100%);
-            border: 3px solid #fbbf24;
-            border-radius: 1.75rem 1.75rem 1rem 1rem;
-            box-shadow: 0 -12px 48px rgba(251, 191, 36, 0.22);
-            transform: translateY(110%);
-            transition: transform 0.55s cubic-bezier(0.22, 1, 0.36, 1);
-            text-align: center;
-        }
-
-        #bullet-roulette-overlay.active .roulette-panel { transform: translateY(0); }
-
-        .roulette-wheel-wrap {
-            position: relative;
-            width: min(72vw, 280px);
-            height: min(72vw, 280px);
-            margin: 0.75rem auto 0;
-        }
-
-        .roulette-pointer-fixed {
-            position: absolute;
-            left: 50%;
-            top: -6px;
-            transform: translateX(-50%);
-            z-index: 12;
-            font-size: 2.25rem;
-            color: #fef08c;
-            pointer-events: none;
-        }
-
-        .roulette-wheel {
-            position: relative;
-            width: 100%;
-            height: 100%;
-            border-radius: 50%;
-            border: 6px solid #78350f;
-            overflow: hidden;
-            will-change: transform;
-            background-color: #1e293b;
-        }
-
-        .roulette-svg { position: absolute; inset: 0; width: 100%; height: 100%; }
-        .roulette-hub {
-            position: absolute;
-            left: 50%; top: 50%;
-            width: 18%; height: 18%;
-            transform: translate(-50%, -50%);
-            border-radius: 50%;
-            background: radial-gradient(circle at 35% 30%, #fde68a, #b45309 70%, #78350f);
-            border: 3px solid #fef3c7;
-            z-index: 5;
-        }
-
-        .roulette-result { margin-top: 0.75rem; font-size: 0.9rem; font-weight: 800; color: #fca5a5; min-height: 1.25rem; }
-    </style>
+    <link rel="stylesheet" href="css/game-cards.css">
     <script src="js/avatar-ui.js"></script>
     <script src="js/game-sounds.js"></script>
     <script src="js/game-deck.js"></script>
@@ -373,20 +20,12 @@
     <script src="js/admin-config.js"></script>
     <script src="js/ui-transitions.js"></script>
     <script src="js/lobby-notice.js"></script>
+    <script src="js/firebase-config.js"></script>
     <script type="module">
         import { initializeApp } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js";
         import { getFirestore, doc, setDoc, getDoc, updateDoc, deleteDoc, onSnapshot, runTransaction } from "https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore.js";
 
-        const firebaseConfig = {
-            apiKey: "AIzaSyBT06wDHSxgTNhsYLHutUgxTtvj6IQ4HR8",
-            authDomain: "unoforse-a553d.firebaseapp.com",
-            databaseURL: "https://unoforse-a553d-default-rtdb.europe-west1.firebasedatabase.app",
-            projectId: "unoforse-a553d",
-            storageBucket: "unoforse-a553d.firebasestorage.app",
-            messagingSenderId: "396941322053",
-            appId: "1:396941322053:web:86b8f596b4e05aac8ec02c",
-            measurementId: "G-9SEK0SY996"
-        };
+        const firebaseConfig = window.firebaseConfig;
         const app = initializeApp(firebaseConfig);
         window.db = getFirestore(app);
         window.doc = doc;
@@ -439,8 +78,11 @@
                     <div id="dir-ring" class="dir-ring" aria-hidden="true"></div>
                     <span id="dir-ring-label" class="dir-ring-label">Oraria</span>
                     <div class="center-piles">
-                        <div id="deck-draw" class="gc-card gc-card-pile gc-card-draw-back" title="Pesca" role="button" tabindex="0" data-sound="draw">
-                            <span id="draw-count" class="draw-count">0</span>
+                        <div class="draw-pile-stack">
+                            <button type="button" id="btn-invoke-devito" class="btn-invoke-devito hidden" data-sound="win">Invoca De Vito</button>
+                            <div id="deck-draw" class="gc-card gc-card-pile gc-card-draw-back" title="Pesca" role="button" tabindex="0" data-sound="draw">
+                                <span id="draw-count" class="draw-count">0</span>
+                            </div>
                         </div>
                         <div id="deck-discard" class="gc-card gc-card-pile gc-card-blue" aria-label="Ultima carta giocata">
                             <span class="gc-card-center">—</span>
@@ -555,6 +197,7 @@
             <h2 id="end-title" class="end-overlay-title">—</h2>
             <p id="end-duration" class="end-overlay-duration">—</p>
             <p id="end-rewards" class="end-overlay-rewards"></p>
+            <div id="end-overlay-actions" class="end-overlay-actions hidden"></div>
             <p class="end-overlay-hint">Ritorno alla sala d'attesa tra pochi secondi…</p>
         </div>
     </div>
