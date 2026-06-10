@@ -284,9 +284,23 @@
         resetPanelBox(toEl);
 
         if (viewport) {
+            viewport.getAnimations().forEach((anim) => anim.cancel());
             viewport.style.height = '';
             viewport.style.overflow = '';
         }
+    }
+
+    function resetViewport(viewport) {
+        if (!viewport) return;
+        viewport.getAnimations().forEach((anim) => anim.cancel());
+        viewport.style.height = '';
+        viewport.style.overflow = '';
+    }
+
+    function resetSwapPanel(el) {
+        if (!el) return;
+        el.getAnimations().forEach((anim) => anim.cancel());
+        resetPanelBox(el);
     }
 
     async function swapPanels(fromEl, toEl, options = {}) {
@@ -404,6 +418,8 @@
         swapPanels,
         pulseStage,
         withLock,
+        resetViewport,
+        resetSwapPanel,
         isReducedMotion: reducedMotion
     };
 })(typeof window !== 'undefined' ? window : globalThis);
